@@ -1,0 +1,20 @@
+{
+  "should_match": true,
+  "event_type": "offering",
+  "event_date": null,
+  "drug_name": null,
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "1.01",
+    "3.02",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "DROR",
+    "accession": "0001213900-26-023642",
+    "filed_date": "2026-03-04",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1282980/000121390026023642/ea0279935-8k_dror.htm"
+  },
+  "notes": "Public offering announced"
+}

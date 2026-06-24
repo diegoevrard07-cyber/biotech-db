@@ -1,0 +1,20 @@
+{
+  "should_match": true,
+  "event_type": "crl",
+  "event_date": null,
+  "drug_name": "reproxalap",
+  "indication": null,
+  "confidence": "medium",
+  "items": [
+    "7.01",
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ALDX",
+    "accession": "0001193125-26-109511",
+    "filed_date": "2026-03-17",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1341235/000119312526109511/aldx-20260317.htm"
+  },
+  "notes": "2026 Complete Response Letter for reproxalap NDA; date not in truncated excerpt"
+}

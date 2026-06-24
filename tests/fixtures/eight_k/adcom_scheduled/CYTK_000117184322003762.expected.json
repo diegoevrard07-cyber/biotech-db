@@ -1,0 +1,18 @@
+{
+  "should_match": true,
+  "event_type": "adcom_scheduled",
+  "event_date": null,
+  "drug_name": null,
+  "indication": null,
+  "confidence": "medium",
+  "items": [
+    "8.01"
+  ],
+  "filing_metadata": {
+    "ticker": "CYTK",
+    "accession": "0001171843-22-003762",
+    "filed_date": "2022-05-17",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1061983/000117184322003762/f8k_051722.htm"
+  },
+  "notes": "FDA advisory committee date announced"
+}

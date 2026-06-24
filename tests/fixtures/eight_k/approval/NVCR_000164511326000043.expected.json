@@ -1,0 +1,16 @@
+{
+  "should_match": true,
+  "event_type": "approval",
+  "event_date": null,
+  "drug_name": "Optune Pax",
+  "indication": null,
+  "confidence": "medium",
+  "items": [],
+  "filing_metadata": {
+    "ticker": "NVCR",
+    "accession": "0001645113-26-000043",
+    "filed_date": "2026-04-30",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1645113/000164511326000043/nvcr-20260331xpr.htm"
+  },
+  "notes": "Optune/TTF FDA approval reference in 8-K excerpt"
+}

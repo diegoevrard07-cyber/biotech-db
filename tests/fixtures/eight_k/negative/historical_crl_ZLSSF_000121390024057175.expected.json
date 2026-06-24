@@ -1,0 +1,18 @@
+{
+  "should_match": false,
+  "event_type": "crl",
+  "drug_name": null,
+  "indication": null,
+  "confidence": null,
+  "items": [
+    "3.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ZLSSF",
+    "accession": "0001213900-24-057175",
+    "filed_date": "2024-06-28",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1853397/000121390024057175/ea0208706-8k425_zalat2.htm"
+  },
+  "notes": "Past CRL referenced in narrative, not new receipt"
+}

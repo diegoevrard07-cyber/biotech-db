@@ -1,0 +1,38 @@
+# Project: GBM Sentiment Arbitrage Database
+
+## Context
+This is a clinical trial and market data pipeline focused exclusively on glioblastoma (GBM) drug development. The goal is to identify mispricings between market sentiment and clinical/regulatory reality in small-cap biotech stocks with GBM programs.
+
+## Tech Stack (do not deviate)
+- Python 3.14
+- PostgreSQL 16, local on port 5432, user `postgres`, database `biotech`
+- Libraries: requests, certifi, psycopg2-binary, python-dotenv, yfinance, beautifulsoup4, pdfplumber, pandas, sqlalchemy, pydantic, tenacity, structlog, openai, rapidfuzz, pytest, pytest-mock
+- Config via .env file (never hardcode secrets)
+
+## Code Standards
+- Every script must use `verify=certifi.where()` on requests calls (Windows SSL fix)
+- Every DB write must use ON CONFLICT upsert logic (idempotent)
+- Every script prints clear progress messages and exits non-zero on failure
+- Every script catches network errors and retries once with backoff
+- Use .get() with safe defaults on all nested JSON/dict access
+- All dates stored as DATE or TIMESTAMP, never strings
+- All scripts independently runnable (no hidden ordering dependencies beyond explicit init)
+
+## Database Schema (single source of truth)
+Tables: companies, trials, catalysts, price_history, press_releases, documents
+See README.md for full column definitions. Never add columns without updating README.
+
+## Scope Discipline
+- This database covers GBM only. Filter aggressively at ingestion, never store off-topic data.
+- Do not add features outside the master plan without confirmation.
+- Do not over-engineer. Prefer simple scripts over frameworks.
+
+## Verification Requirement
+After making any change, the agent must:
+1. Run the affected scripts
+2. Report what actually happened (not what should have happened)
+3. Show row counts, sample data, or query results as proof
+4. Flag any silent failures or fallback paths
+
+## What I Want From You
+Speed and correctness. I do not want to learn. I want working code. But I want to know when something failed silently. Always tell me when you took a shortcut, made an assumption, or skipped verification.

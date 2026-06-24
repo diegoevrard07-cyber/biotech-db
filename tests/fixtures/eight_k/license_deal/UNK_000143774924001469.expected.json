@@ -1,0 +1,18 @@
+{
+  "should_match": true,
+  "event_type": "license_deal",
+  "event_date": null,
+  "drug_name": null,
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "1.01"
+  ],
+  "filing_metadata": {
+    "ticker": "UNK",
+    "accession": "0001437749-24-001469",
+    "filed_date": "2024-01-17",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/946486/000143774924001469/wint20240116_8k.htm"
+  },
+  "notes": "License agreement in 8-K"
+}

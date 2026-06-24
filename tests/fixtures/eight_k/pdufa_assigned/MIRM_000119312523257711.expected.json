@@ -1,0 +1,18 @@
+{
+  "should_match": true,
+  "event_type": "pdufa_assigned",
+  "event_date": "2024-03-13",
+  "drug_name": "Livmarli",
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "8.01"
+  ],
+  "filing_metadata": {
+    "ticker": "MIRM",
+    "accession": "0001193125-23-257711",
+    "filed_date": "2023-10-17",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1759425/000119312523257711/d548350d8k.htm"
+  },
+  "notes": "PDUFA date assignment for BAL1157-004 sNDA"
+}

@@ -1,0 +1,18 @@
+{
+  "should_match": true,
+  "event_type": "adcom_scheduled",
+  "event_date": null,
+  "drug_name": null,
+  "indication": null,
+  "confidence": "medium",
+  "items": [
+    "7.01"
+  ],
+  "filing_metadata": {
+    "ticker": "CYTK",
+    "accession": "0000950170-25-035914",
+    "filed_date": "2025-03-10",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1061983/000095017025035914/cytk-20250310.htm"
+  },
+  "notes": "Advisory committee meeting scheduled"
+}

@@ -1,0 +1,19 @@
+{
+  "should_match": true,
+  "event_type": "license_deal",
+  "event_date": null,
+  "drug_name": null,
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "1.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ELAB",
+    "accession": "0001213900-26-014285",
+    "filed_date": "2026-02-10",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1840563/000121390026014285/ea0276135-8k_pmgc.htm"
+  },
+  "notes": "License agreement announced"
+}

@@ -1,0 +1,16 @@
+{
+  "should_match": true,
+  "event_type": "approval",
+  "event_date": null,
+  "drug_name": "Dupixent as the first and only medicine",
+  "indication": null,
+  "confidence": "medium",
+  "items": [],
+  "filing_metadata": {
+    "ticker": "REGN",
+    "accession": "0000872589-26-000014",
+    "filed_date": "2026-04-29",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/872589/000087258926000014/exhibit991q12026.htm"
+  },
+  "notes": "Dupixent label expansion; approval language without event date in excerpt"
+}

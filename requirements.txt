@@ -1,0 +1,22 @@
+requests==2.32.3
+psycopg2-binary==2.9.12
+python-dotenv==1.1.0
+pandas==2.3.3
+beautifulsoup4==4.12.3
+lxml==6.1.1
+sqlalchemy==2.0.36
+pydantic==2.13.4
+tenacity==9.0.0
+structlog==24.4.0
+openai==1.57.4
+rapidfuzz==3.14.5
+pytest==9.0.3
+pytest-mock==3.15.1
+# statsmodels optional on Python 3.14+; Wilson CI implemented in compute_utils.py
+
+# Market data (price, positioning) — Rung 2
+yfinance==1.4.1
+
+# Dashboard (scripts/dashboard.py, scripts/terminal.py)
+streamlit==1.40.0
+plotly==5.24.1

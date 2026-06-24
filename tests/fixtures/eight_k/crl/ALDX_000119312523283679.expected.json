@@ -1,0 +1,20 @@
+{
+  "should_match": true,
+  "event_type": "crl",
+  "event_date": "2023-11-27",
+  "drug_name": "reproxalap",
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "7.01",
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ALDX",
+    "accession": "0001193125-23-283679",
+    "filed_date": "2023-11-28",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1341235/000119312523283679/d723036d8k.htm"
+  },
+  "notes": "CRL for reproxalap dry eye NDA"
+}

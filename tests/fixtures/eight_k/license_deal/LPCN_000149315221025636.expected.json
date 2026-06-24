@@ -1,0 +1,20 @@
+{
+  "should_match": true,
+  "event_type": "license_deal",
+  "event_date": null,
+  "drug_name": null,
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "1.01",
+    "7.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "LPCN",
+    "accession": "0001493152-21-025636",
+    "filed_date": "2021-10-18",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1535955/000149315221025636/form8-k.htm"
+  },
+  "notes": "Collaboration/license agreement"
+}

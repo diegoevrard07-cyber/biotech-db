@@ -1,0 +1,20 @@
+{
+  "should_match": true,
+  "event_type": "adcom_scheduled",
+  "event_date": null,
+  "drug_name": null,
+  "indication": null,
+  "confidence": "medium",
+  "items": [
+    "7.01",
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ZVRA",
+    "accession": "0001437749-24-022362",
+    "filed_date": "2024-07-09",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1434647/000143774924022362/zvra20240614_8k.htm"
+  },
+  "notes": "Advisory committee meeting scheduled"
+}
