@@ -1,0 +1,28 @@
+# Pinned to the versions the pipeline is developed, tested, and run against
+# (Python 3.12; also verified on 3.14 — see docs/DATA.md "Python version notes").
+requests==2.32.3
+certifi==2026.4.22        # explicit TLS bundle for SEC/CT.gov calls (verify=certifi.where())
+psycopg2-binary==2.9.12
+python-dotenv==1.1.0
+pandas==2.3.3
+numpy==2.4.4              # pure-numpy models (logreg, returns regression) — no sklearn
+tqdm==4.70.0              # progress bars in the long ingest scripts
+beautifulsoup4==4.12.3    # 8-K HTML parsing (uses stdlib html.parser)
+sqlalchemy==2.0.36
+pydantic==2.13.4
+tenacity==9.0.0
+structlog==24.4.0
+rapidfuzz==3.14.5
+pytest==9.0.3
+
+# Market data (prices, positioning)
+yfinance==1.4.1
+
+# Dashboard (scripts/terminal.py)
+streamlit==1.40.0
+plotly==5.24.1
+
+# --- Optional / future (not imported by the active pipeline) ---
+# pdfplumber==11.4.0  # press-release PDF extraction (planned)
+# lxml==6.1.1         # optional faster BeautifulSoup parser backend
+# pytest-mock==3.15.1 # declared historically; tests use built-in monkeypatch
