@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # project root (layers.*)
@@ -28,6 +28,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 import config
+from layers.marketdata.yf_client import fetch_history
 from action_sheet import TIMING, compute_book
 from layers.portfolio import tracker as pf
 
@@ -211,7 +212,13 @@ def latest_prices() -> dict[str, float]:
         FROM price_history WHERE close IS NOT NULL
         ORDER BY ticker, date DESC
     """)
-    return {r.ticker: float(r.close) for r in df.itertuples()} if not df.empty else {}
+    out = {r.ticker: float(r.close) for r in df.itertuples()} if not df.empty else {}
+    tk = config.BENCHMARK_TICKER
+    if tk not in out:
+        spot = _xbi_spot_price()
+        if spot is not None:
+            out[tk] = spot
+    return out
 
 
 def ensure_account() -> None:
@@ -493,6 +500,19 @@ def load_benchmark_closes(ticker: str | None = None) -> pd.DataFrame:
         (tk,),
     )
     if df.empty:
+        hist = fetch_history(tk, lookback_days=config.PRICE_LOOKBACK_DAYS)
+        if hist.empty:
+            return pd.DataFrame()
+        col = "Close" if "Close" in hist.columns else "close"
+        rows = []
+        for idx, r in hist.iterrows():
+            try:
+                d = idx.date()
+            except AttributeError:
+                d = pd.to_datetime(idx).date()
+            rows.append({"date": d, "close": float(r[col])})
+        df = pd.DataFrame(rows)
+    if df.empty:
         return df
     df["date"] = pd.to_datetime(df["date"])
     df["close"] = pd.to_numeric(df["close"], errors="coerce")
@@ -555,6 +575,60 @@ def _benchmark_return_since_start(
     if base_px is None or base_px <= 0:
         return None
     return (latest_px / base_px) - 1.0
+
+
+@st.cache_data(ttl=120)
+def _xbi_spot_price() -> float | None:
+    """Live XBI close via yfinance when DB is empty or stale."""
+    df = fetch_history(config.BENCHMARK_TICKER, lookback_days=14)
+    if df.empty:
+        return None
+    col = "Close" if "Close" in df.columns else "close"
+    try:
+        return float(df[col].iloc[-1])
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def resolve_benchmark_price(prices: dict[str, float], bench_df: pd.DataFrame) -> float | None:
+    """Best available XBI mark: DB latest -> history tail -> yfinance."""
+    tk = config.BENCHMARK_TICKER
+    px = prices.get(tk)
+    if px is not None:
+        return float(px)
+    if not bench_df.empty:
+        return float(bench_df.iloc[-1]["close"])
+    return _xbi_spot_price()
+
+
+def enrich_plot_benchmark(
+    plot_df: pd.DataFrame,
+    bench_df: pd.DataFrame,
+    start_cap: float,
+    track_start: date | None,
+    bench_px: float | None,
+) -> pd.DataFrame:
+    """Ensure plot_df has benchmark_equity for the XBI overlay line."""
+    out = plot_df.copy()
+    if track_start is None or start_cap <= 0:
+        return out
+    base = _benchmark_base_close(bench_df, track_start) if not bench_df.empty else None
+    if base is None and bench_px and bench_df.empty:
+        base = bench_px
+    if base is None or base <= 0:
+        return out
+    if not bench_df.empty:
+        bench = bench_df.copy()
+        bench["benchmark_equity"] = start_cap * (bench["close"] / base)
+        by_date = bench.set_index("date")["benchmark_equity"]
+        mapped = out["date"].map(by_date)
+        out["benchmark_equity"] = mapped.ffill()
+    else:
+        out["benchmark_equity"] = pd.NA
+    if bench_px is not None and len(out):
+        live_eq = start_cap * (bench_px / base)
+        out.loc[out.index[-1], "benchmark_equity"] = live_eq
+    return out
 
 
 @st.cache_data(ttl=10)
@@ -777,10 +851,37 @@ def page_home() -> None:
     track_start = tracking_start_date()
     bench_tk = config.BENCHMARK_TICKER
     bench_df = load_benchmark_closes(bench_tk)
-    bench_px = prices.get(bench_tk)
+    bench_px = resolve_benchmark_price(prices, bench_df)
     bench_ret = (_benchmark_return_since_start(bench_df, track_start, bench_px)
-                 if track_start else None)
+                 if track_start and bench_px is not None else None)
     alpha = (tot_ret_pct - bench_ret) if tot_ret_pct is not None and bench_ret is not None else None
+    bench_eq_today = (start_cap * (1 + bench_ret)) if bench_ret is not None and start_cap else None
+
+    # ---- XBI benchmark strip (always visible) ----
+    st.subheader(f"Benchmark · {bench_tk} (SPDR S&P Biotech ETF)")
+    if track_start is None:
+        st.warning("Log your first trade to start the XBI comparison window.")
+    elif bench_px is None:
+        st.warning(f"No {bench_tk} price available — check network or run `python scripts/ingest_prices.py --ticker XBI`.")
+    else:
+        xbi_cols = st.columns(5)
+        xbi_cols[0].metric(f"{bench_tk} price", f"${bench_px:.2f}",
+                           help="Latest end-of-day close (DB or yfinance).")
+        xbi_cols[1].metric(f"{bench_tk} return since {track_start}",
+                           f"{bench_ret:+.1%}" if bench_ret is not None else "—",
+                           help=f"Total return of {bench_tk} since your first trade.")
+        xbi_cols[2].metric("Portfolio return",
+                           f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—",
+                           delta=fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None,
+                           help=f"Vs starting capital {fmt_usd(start_cap)}.")
+        xbi_cols[3].metric("Alpha vs XBI",
+                           f"{alpha:+.1%}" if alpha is not None else "—",
+                           help="Portfolio return minus XBI over the same window.")
+        xbi_cols[4].metric(f"{bench_tk} @ start $",
+                           fmt_usd(bench_eq_today) if bench_eq_today else "—",
+                           help=f"What ${start_cap:,.0f} in {bench_tk} would be worth today.")
+
+    st.divider()
 
     r1 = st.columns(5)
     r1[0].metric("Account value", fmt_usd(summ["equity"]),
@@ -789,26 +890,23 @@ def page_home() -> None:
                  f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—",
                  delta=fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None,
                  help=f"Vs starting capital {fmt_usd(start_cap)}.")
-    r1[2].metric(f"{bench_tk} (benchmark)",
-                 f"{bench_ret:+.1%}" if bench_ret is not None else "—",
-                 delta=f"${bench_px:.2f}" if bench_px else None,
-                 help=f"SPDR S&P Biotech ETF since first trade ({track_start}).")
-    r1[3].metric("Alpha vs XBI",
-                 f"{alpha:+.1%}" if alpha is not None else "—",
-                 help="Portfolio total return minus XBI over the same window.")
-    r1[4].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]),
+    r1[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]),
                  help="Open positions only — not locked in until you exit.")
+    r1[3].metric("Realized P&L", fmt_usd(realized),
+                 help=f"Closed trades only ({closed_n} closed).")
+    r1[4].metric("Net exposure", f"{summ['net_pct']:+.0%}",
+                 help=f"Long minus short = {fmt_usd(summ['net_usd'])} directional.")
 
     r2 = st.columns(4)
-    r2[0].metric("Realized P&L", fmt_usd(realized),
-                 help=f"Closed trades only ({closed_n} closed).")
-    r2[1].metric("Cash", fmt_usd(summ["cash"]),
+    r2[0].metric("Cash", fmt_usd(summ["cash"]),
                  help="Unallocated buying power.")
-    r2[2].metric("Deployed", f"{deployed_pct:.0%}",
+    r2[1].metric("Deployed", f"{deployed_pct:.0%}",
                  help=f"{fmt_usd(summ['invested_usd'])} cost basis in open positions.")
-    r2[3].metric("Gross long / short",
+    r2[2].metric("Gross long / short",
                  f"{summ['gross_long_pct']:.0%} / {summ['gross_short_pct']:.0%}",
                  help=f"Long {fmt_usd(summ['gross_long_usd'])} · Short {fmt_usd(summ['gross_short_usd'])}")
+    r2[3].metric("Open positions", str(summ["positions"]),
+                 help=f"{summ['priced']}/{summ['positions']} priced at last close.")
 
     freshness_caption()
 
@@ -840,6 +938,8 @@ def page_home() -> None:
                     "unrealized_pnl": summ["unrealized_pnl_usd"],
                     "realized_to_date": realized,
                 }])], ignore_index=True)
+
+        plot_df = enrich_plot_benchmark(plot_df, bench_df, start_cap, track_start, bench_px)
 
         fig = go.Figure()
         bench_line = None
