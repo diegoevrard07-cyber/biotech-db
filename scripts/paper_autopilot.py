@@ -254,7 +254,8 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
 
             holds = _load_open_paper(cur)
             target_tickers = [r["ticker"] for r in book_rows]
-            want = sorted({h["ticker"] for h in holds} | set(target_tickers))
+            want = sorted({h["ticker"] for h in holds} | set(target_tickers)
+                          | {config.BENCHMARK_TICKER})
             n_px = 0 if dry_run else _refresh_prices(cur, want)
             closes = _latest_closes(cur, want or ["XBI"])
 

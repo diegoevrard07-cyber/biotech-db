@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Install cron jobs for unattended paper trading on Linux/macOS.
+# Install schedulers for unattended paper trading.
 #
 #   ./scripts/setup_scheduler.sh              # install with defaults
 #   ./scripts/setup_scheduler.sh --dry-run    # show what would be installed
-#   ./scripts/setup_scheduler.sh --remove     # remove biotech-db cron entries
+#   ./scripts/setup_scheduler.sh --remove     # remove biotech-db jobs
+#
+# macOS: uses launchd (missed jobs run when Mac wakes).
+# Linux: uses cron.
 #
 # Defaults (override via env):
 #   SCHED_TZ=America/New_York   local timezone for cron times
@@ -13,6 +16,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  exec "$SCRIPT_DIR/setup_launchd_macos.sh" "$@"
+fi
 
 SCHED_TZ="${SCHED_TZ:-America/New_York}"
 REFRESH_TIME="${REFRESH_TIME:-18:00}"

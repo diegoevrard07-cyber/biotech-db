@@ -27,6 +27,7 @@ import psycopg2
 import streamlit as st
 from dotenv import load_dotenv
 
+import config
 from action_sheet import TIMING, compute_book
 from layers.portfolio import tracker as pf
 
@@ -455,6 +456,80 @@ def load_performance_history() -> pd.DataFrame:
     return df.sort_values("date").groupby("date", as_index=False).last()
 
 
+@st.cache_data(ttl=300)
+def load_benchmark_closes(ticker: str | None = None) -> pd.DataFrame:
+    """Daily closes for the biotech benchmark ETF (default XBI)."""
+    tk = ticker or config.BENCHMARK_TICKER
+    df = q(
+        "SELECT date::date AS date, close FROM price_history "
+        "WHERE ticker = %s AND close IS NOT NULL ORDER BY date",
+        (tk,),
+    )
+    if df.empty:
+        return df
+    df["date"] = pd.to_datetime(df["date"])
+    df["close"] = pd.to_numeric(df["close"], errors="coerce")
+    return df.dropna(subset=["close"])
+
+
+@st.cache_data(ttl=60)
+def tracking_start_date() -> date | None:
+    """When the track record begins: first trade or first performance snapshot."""
+    df = q("SELECT MIN(entry_date) AS d FROM portfolio_holdings")
+    hold_start = df.iloc[0]["d"] if not df.empty and pd.notna(df.iloc[0]["d"]) else None
+    perf = load_performance_history()
+    perf_start = perf["date"].min().date() if not perf.empty else None
+    if hold_start and perf_start:
+        return min(hold_start, perf_start)
+    return hold_start or perf_start
+
+
+def _benchmark_base_close(benchmark_df: pd.DataFrame, start_date: date) -> float | None:
+    """First close on/after start_date, else last close on/before (handles stale EOD data)."""
+    if benchmark_df.empty:
+        return None
+    on_or_after = benchmark_df[benchmark_df["date"] >= pd.Timestamp(start_date)]
+    if not on_or_after.empty:
+        return float(on_or_after.iloc[0]["close"])
+    on_or_before = benchmark_df[benchmark_df["date"] <= pd.Timestamp(start_date)]
+    if on_or_before.empty:
+        return None
+    return float(on_or_before.iloc[-1]["close"])
+
+
+def _benchmark_equity_series(
+    plot_df: pd.DataFrame,
+    benchmark_df: pd.DataFrame,
+    start_cap: float,
+    start_date: date,
+) -> pd.Series | None:
+    """Normalize benchmark to starting capital from tracking_start_date."""
+    if benchmark_df.empty or start_cap <= 0 or plot_df.empty:
+        return None
+    base_px = _benchmark_base_close(benchmark_df, start_date)
+    if base_px is None or base_px <= 0:
+        return None
+    bench = benchmark_df[benchmark_df["date"] >= pd.Timestamp(start_date)]
+    if bench.empty:
+        bench = benchmark_df.copy()
+    bench = bench.set_index("date")
+    bench["benchmark_equity"] = start_cap * (bench["close"] / base_px)
+    return bench["benchmark_equity"].reindex(plot_df["date"], method="ffill")
+
+
+def _benchmark_return_since_start(
+    benchmark_df: pd.DataFrame,
+    start_date: date,
+    latest_px: float | None,
+) -> float | None:
+    if benchmark_df.empty or latest_px is None:
+        return None
+    base_px = _benchmark_base_close(benchmark_df, start_date)
+    if base_px is None or base_px <= 0:
+        return None
+    return (latest_px / base_px) - 1.0
+
+
 @st.cache_data(ttl=10)
 def realized_pnl_total() -> float:
     df = q("SELECT COALESCE(SUM(realized_pnl_usd), 0) AS v FROM portfolio_holdings "
@@ -672,28 +747,41 @@ def page_home() -> None:
     deployed_pct = (summ["invested_usd"] / summ["equity"]) if summ["equity"] else 0.0
     closed_n = int(q("SELECT COUNT(*) n FROM portfolio_holdings WHERE status='closed'").iloc[0, 0])
 
-    r1 = st.columns(4)
+    track_start = tracking_start_date()
+    bench_tk = config.BENCHMARK_TICKER
+    bench_df = load_benchmark_closes(bench_tk)
+    bench_px = prices.get(bench_tk)
+    bench_ret = (_benchmark_return_since_start(bench_df, track_start, bench_px)
+                 if track_start else None)
+    alpha = (tot_ret_pct - bench_ret) if tot_ret_pct is not None and bench_ret is not None else None
+
+    r1 = st.columns(5)
     r1[0].metric("Account value", fmt_usd(summ["equity"]),
                  help="Cash + signed market value of all open positions.")
     r1[1].metric("Total return",
                  f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—",
                  delta=fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None,
                  help=f"Vs starting capital {fmt_usd(start_cap)}.")
-    r1[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]),
+    r1[2].metric(f"{bench_tk} (benchmark)",
+                 f"{bench_ret:+.1%}" if bench_ret is not None else "—",
+                 delta=f"${bench_px:.2f}" if bench_px else None,
+                 help=f"SPDR S&P Biotech ETF since first trade ({track_start}).")
+    r1[3].metric("Alpha vs XBI",
+                 f"{alpha:+.1%}" if alpha is not None else "—",
+                 help="Portfolio total return minus XBI over the same window.")
+    r1[4].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]),
                  help="Open positions only — not locked in until you exit.")
-    r1[3].metric("Realized P&L", fmt_usd(realized),
-                 help=f"Closed trades only ({closed_n} closed).")
 
     r2 = st.columns(4)
-    r2[0].metric("Cash", fmt_usd(summ["cash"]),
+    r2[0].metric("Realized P&L", fmt_usd(realized),
+                 help=f"Closed trades only ({closed_n} closed).")
+    r2[1].metric("Cash", fmt_usd(summ["cash"]),
                  help="Unallocated buying power.")
-    r2[1].metric("Deployed", f"{deployed_pct:.0%}",
+    r2[2].metric("Deployed", f"{deployed_pct:.0%}",
                  help=f"{fmt_usd(summ['invested_usd'])} cost basis in open positions.")
-    r2[2].metric("Gross long / short",
+    r2[3].metric("Gross long / short",
                  f"{summ['gross_long_pct']:.0%} / {summ['gross_short_pct']:.0%}",
                  help=f"Long {fmt_usd(summ['gross_long_usd'])} · Short {fmt_usd(summ['gross_short_usd'])}")
-    r2[3].metric("Net exposure", f"{summ['net_pct']:+.0%}",
-                 help=f"Long minus short = {fmt_usd(summ['net_usd'])} directional.")
 
     freshness_caption()
 
@@ -727,14 +815,23 @@ def page_home() -> None:
                 }])], ignore_index=True)
 
         fig = go.Figure()
+        bench_line = None
+        if track_start and start_cap:
+            bench_line = _benchmark_equity_series(plot_df, bench_df, start_cap, track_start)
         fig.add_trace(go.Scatter(
             x=plot_df["date"], y=plot_df["equity"],
-            mode="lines+markers", name="Equity",
+            mode="lines+markers", name="Portfolio",
             line=dict(color=THEME["green"], width=2.5),
             fill="tozeroy", fillcolor="rgba(52,199,89,0.07)",
         ))
+        if bench_line is not None and bench_line.notna().any():
+            fig.add_trace(go.Scatter(
+                x=plot_df["date"], y=bench_line,
+                mode="lines", name=f"{bench_tk} (same start $)",
+                line=dict(color=THEME["amber"], width=2, dash="dash"),
+            ))
         if start_cap:
-            fig.add_hline(y=start_cap, line_dash="dash", line_color=THEME["muted"],
+            fig.add_hline(y=start_cap, line_dash="dot", line_color=THEME["muted"],
                           annotation_text=f"Start {fmt_usd(start_cap)}",
                           annotation_position="bottom right")
         if "unrealized_pnl" in plot_df.columns and plot_df["unrealized_pnl"].notna().any():
@@ -748,8 +845,24 @@ def page_home() -> None:
             title="Unrealized $", overlaying="y", side="right",
             gridcolor="#1f2937", tickformat="$,.0f",
         ))
-        _plotly_theme(fig, height=360, title="Equity curve (end-of-day marks)")
+        _plotly_theme(fig, height=360,
+                      title=f"Portfolio vs {bench_tk} (end-of-day marks)")
         st.plotly_chart(fig, use_container_width=True)
+
+        if bench_line is not None and bench_line.notna().any() and len(plot_df) >= 1:
+            port_ret = tot_ret_pct
+            xbi_last = float(bench_line.dropna().iloc[-1])
+            xbi_norm_ret = (xbi_last / start_cap - 1) if start_cap else None
+            if port_ret is not None and xbi_norm_ret is not None:
+                st.caption(
+                    f"Since **{track_start}**: portfolio **{port_ret:+.1%}** · "
+                    f"{bench_tk} **{xbi_norm_ret:+.1%}** · "
+                    f"alpha **{port_ret - xbi_norm_ret:+.1%}**"
+                )
+        elif not bench_df.empty and bench_px is None:
+            st.caption(f"{bench_tk} history exists but no latest price — run price ingest.")
+        elif bench_df.empty:
+            st.caption(f"No {bench_tk} prices yet — run `python scripts/ingest_prices.py --ticker XBI`.")
 
         if len(plot_df) >= 2:
             peak = plot_df["equity"].cummax()
@@ -782,8 +895,9 @@ def page_home() -> None:
             st.markdown(f"- **Next exit:** {nx['ticker']} in **{int(nx['days_to_exit'])}d** ({nx['exit_by']})")
         st.markdown(
             "**How to read this**\n"
-            "- Green line = total account value each day autopilot runs.\n"
-            "- Dashed grey = your starting capital.\n"
+            "- Green = your portfolio equity each day autopilot runs.\n"
+            f"- Amber dashed = {bench_tk} normalized to the same starting capital.\n"
+            "- Dotted grey = your starting capital.\n"
             "- Blue dotted = unrealized P&L (right axis).\n"
             "- All prices are **prior close**, not live."
         )
