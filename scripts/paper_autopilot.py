@@ -31,6 +31,7 @@ import config
 from db import get_connection
 from layers.marketdata.yf_client import fetch_history_batch
 from layers.portfolio import paper_sync as ps
+from layers.portfolio import performance_store as perf_store
 from layers.portfolio import tracker as pf
 from ingest_prices import _rows_from_history
 from action_sheet import compute_book
@@ -386,6 +387,33 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                                 round(realized_total, 2), round(ret_pct, 4),
                                 closed, opened, resized, book["positions"]])
                 print(f"  Snapshot appended -> {PERF_CSV}")
+
+                xbi_px = closes.get(config.BENCHMARK_TICKER)
+                track_start = perf_store.tracking_start_date(cur)
+                xbi_ret, bench_eq = perf_store.benchmark_fields(
+                    cur,
+                    xbi_close=xbi_px,
+                    starting_capital=sleeve if sleeve > 0 else None,
+                    track_start=track_start,
+                )
+                perf_store.upsert_snapshot(cur, {
+                    "snapshot_date": today,
+                    "equity": round(summary["equity"], 2),
+                    "cash": round(cash, 2),
+                    "open_positions": summary["positions"],
+                    "unrealized_pnl": summary["unrealized_pnl_usd"],
+                    "realized_to_date": round(realized_total, 2),
+                    "total_return_pct": round(ret_pct, 4),
+                    "exits_today": closed,
+                    "opens_today": opened,
+                    "resized_today": resized,
+                    "desk_positions": book["positions"],
+                    "xbi_close": xbi_px,
+                    "xbi_return_pct": xbi_ret,
+                    "benchmark_equity": bench_eq,
+                })
+                raw.commit()
+                print("  Snapshot upserted -> portfolio_performance (Supabase)")
             else:
                 print("  (dry run — nothing written)")
         finally:

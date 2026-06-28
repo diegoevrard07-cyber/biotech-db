@@ -35,6 +35,7 @@ EXPECTED_TABLES = [
     "calibration_runs",
     "portfolio_account",
     "portfolio_holdings",
+    "portfolio_performance",
     "event_returns",
 ]
 

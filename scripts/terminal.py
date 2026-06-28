@@ -434,7 +434,34 @@ def _alloc_pie_chart(hv: pd.DataFrame) -> go.Figure:
 
 @st.cache_data(ttl=60)
 def load_performance_history() -> pd.DataFrame:
-    """Daily equity snapshots from paper autopilot (data/raw/paper_performance.csv)."""
+    """Daily equity snapshots — Supabase portfolio_performance (falls back to local CSV)."""
+    try:
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT snapshot_date AS date, equity, cash, open_positions, unrealized_pnl,
+                           realized_to_date, total_return_pct, exits_today, opens_today,
+                           resized_today, desk_positions, xbi_close, xbi_return_pct,
+                           benchmark_equity
+                    FROM portfolio_performance
+                    ORDER BY snapshot_date
+                """)
+                cols = [d[0] for d in cur.description]
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+        if rows:
+            df = pd.DataFrame(rows, columns=cols)
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+            for c in ("equity", "cash", "unrealized_pnl", "realized_to_date", "total_return_pct",
+                      "xbi_close", "xbi_return_pct", "benchmark_equity"):
+                if c in df.columns:
+                    df[c] = pd.to_numeric(df[c], errors="coerce")
+            return df
+    except Exception:
+        pass
+
     if not PERF_CSV.exists():
         return pd.DataFrame()
     try:
@@ -799,7 +826,7 @@ def page_home() -> None:
                 "realized_to_date": realized,
             }])
             st.caption("No history file yet — showing today's snapshot only. "
-                      "Run paper autopilot to build `data/raw/paper_performance.csv`.")
+                      "Run paper autopilot to build history in Supabase (`portfolio_performance`).")
             plot_df = snap
         else:
             plot_df = perf.copy()
@@ -816,7 +843,9 @@ def page_home() -> None:
 
         fig = go.Figure()
         bench_line = None
-        if track_start and start_cap:
+        if "benchmark_equity" in plot_df.columns and plot_df["benchmark_equity"].notna().any():
+            bench_line = plot_df.set_index("date")["benchmark_equity"]
+        elif track_start and start_cap:
             bench_line = _benchmark_equity_series(plot_df, bench_df, start_cap, track_start)
         fig.add_trace(go.Scatter(
             x=plot_df["date"], y=plot_df["equity"],

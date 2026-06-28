@@ -27,6 +27,7 @@ AUTO_M="${AUTOPILOT_TIME##*:}"
 
 LABEL_REFRESH="com.biotech-db.daily-refresh"
 LABEL_AUTOPILOT="com.biotech-db.paper-autopilot"
+LABEL_STREAMLIT="com.biotech-db.streamlit"
 AGENTS_DIR="$HOME/Library/LaunchAgents"
 
 DRY_RUN=0
@@ -38,7 +39,8 @@ for arg in "$@"; do
   esac
 done
 
-chmod +x "$PROJ/scripts/run_daily_refresh.sh" "$PROJ/scripts/run_paper_autopilot.sh"
+chmod +x "$PROJ/scripts/run_daily_refresh.sh" "$PROJ/scripts/run_paper_autopilot.sh" \
+         "$PROJ/scripts/run_streamlit.sh"
 
 if [[ ! -f "$PROJ/.env" ]]; then
   echo "ERROR: $PROJ/.env not found. Copy .env.example and set DATABASE_URL first." >&2
@@ -52,11 +54,11 @@ _unload() {
 }
 
 if [[ "$REMOVE" -eq 1 ]]; then
-  for label in "$LABEL_REFRESH" "$LABEL_AUTOPILOT"; do
+  for label in "$LABEL_REFRESH" "$LABEL_AUTOPILOT" "$LABEL_STREAMLIT"; do
     _unload "$label"
     rm -f "$AGENTS_DIR/${label}.plist"
   done
-  echo "Removed launchd agents: $LABEL_REFRESH, $LABEL_AUTOPILOT"
+  echo "Removed launchd agents: $LABEL_REFRESH, $LABEL_AUTOPILOT, $LABEL_STREAMLIT"
   exit 0
 fi
 
@@ -133,25 +135,63 @@ _write_autopilot_plist() {
 EOF
 }
 
+_write_streamlit_plist() {
+  cat >"$AGENTS_DIR/${LABEL_STREAMLIT}.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${LABEL_STREAMLIT}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${PROJ}/scripts/run_streamlit.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>${PROJ}</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${PROJ}/data/logs/launchd_streamlit.out</string>
+  <key>StandardErrorPath</key>
+  <string>${PROJ}/data/logs/launchd_streamlit.err</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    <key>STREAMLIT_PORT</key>
+    <string>8520</string>
+  </dict>
+</dict>
+</plist>
+EOF
+}
+
 echo "Project:  $PROJ"
 echo "Platform: macOS launchd (missed jobs run on wake)"
 echo "Timezone: $SCHED_TZ (launchd uses Mac system clock — set System Settings to Brussels)"
 echo "Refresh:  daily at $REFRESH_TIME $SCHED_TZ"
 echo "Autopilot: weekdays at $AUTOPILOT_TIME $SCHED_TZ"
+echo "Streamlit: always on at login (port 8520, KeepAlive)"
 echo ""
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "Would install:"
   echo "  $AGENTS_DIR/${LABEL_REFRESH}.plist"
   echo "  $AGENTS_DIR/${LABEL_AUTOPILOT}.plist"
+  echo "  $AGENTS_DIR/${LABEL_STREAMLIT}.plist"
   exit 0
 fi
 
 mkdir -p "$AGENTS_DIR" "$PROJ/data/logs"
 _write_refresh_plist
 _write_autopilot_plist
+_write_streamlit_plist
 
-for label in "$LABEL_REFRESH" "$LABEL_AUTOPILOT"; do
+for label in "$LABEL_REFRESH" "$LABEL_AUTOPILOT" "$LABEL_STREAMLIT"; do
   _unload "$label"
   launchctl bootstrap "gui/$(id -u)" "$AGENTS_DIR/${label}.plist"
 done
@@ -165,3 +205,5 @@ echo ""
 echo "Manual test:"
 echo "  $PROJ/scripts/run_daily_refresh.sh"
 echo "  $PROJ/scripts/run_paper_autopilot.sh"
+echo "  $PROJ/scripts/run_streamlit.sh"
+echo "  open http://localhost:8520"

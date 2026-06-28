@@ -18,7 +18,8 @@ fi
 chmod +x "$PROJ/scripts/setup_scheduler.sh" \
          "$PROJ/scripts/setup_launchd_macos.sh" \
          "$PROJ/scripts/run_daily_refresh.sh" \
-         "$PROJ/scripts/run_paper_autopilot.sh"
+         "$PROJ/scripts/run_paper_autopilot.sh" \
+         "$PROJ/scripts/run_streamlit.sh"
 
 "$PROJ/scripts/setup_scheduler.sh" --remove 2>/dev/null || true
 "$PROJ/scripts/setup_scheduler.sh"
@@ -28,5 +29,6 @@ echo "=== Done ==="
 launchctl list | grep biotech-db || true
 echo ""
 echo "Schedule (Europe/Brussels): refresh 23:00, autopilot 23:30 weekdays"
+echo "Streamlit: http://localhost:8520 (auto-starts on login)"
 echo "Logs: $PROJ/data/logs/"
 read -r -p "Press Enter to close..."

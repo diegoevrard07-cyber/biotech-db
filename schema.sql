@@ -390,6 +390,27 @@ CREATE INDEX IF NOT EXISTS idx_holdings_status ON portfolio_holdings(status);
 CREATE INDEX IF NOT EXISTS idx_holdings_ticker ON portfolio_holdings(ticker);
 CREATE INDEX IF NOT EXISTS idx_holdings_catalyst ON portfolio_holdings(catalyst_id);
 
+-- Daily portfolio snapshots (Supabase — syncs across machines for analysis).
+-- Autopilot upserts one row per day; includes XBI benchmark for cross-device charts.
+CREATE TABLE IF NOT EXISTS portfolio_performance (
+    snapshot_date DATE PRIMARY KEY,
+    equity NUMERIC NOT NULL,
+    cash NUMERIC,
+    open_positions INTEGER,
+    unrealized_pnl NUMERIC,
+    realized_to_date NUMERIC,
+    total_return_pct NUMERIC,
+    exits_today INTEGER DEFAULT 0,
+    opens_today INTEGER DEFAULT 0,
+    resized_today INTEGER DEFAULT 0,
+    desk_positions INTEGER,
+    xbi_close NUMERIC,
+    xbi_return_pct NUMERIC,
+    benchmark_equity NUMERIC,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- =====================================================================
 -- Event-return study (the REAL returns validation set).
 -- One row per (8-K filing, hold-window). Each 8-K is a market-moving

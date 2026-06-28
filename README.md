@@ -127,6 +127,16 @@ Schema defined in `schema.sql`. Applied idempotently via `apply_schema.py` using
 
 Connection via `DATABASE_URL` in `.env` (Supabase Postgres pooler).
 
+Portfolio data (syncs across machines):
+
+| Table | Purpose |
+|-------|---------|
+| `portfolio_account` | Cash + starting capital (singleton) |
+| `portfolio_holdings` | Every open/closed trade (PAPER + manual) |
+| `portfolio_performance` | Daily equity snapshots + XBI benchmark |
+
+Run `python apply_schema.py` after pulling to create new tables. Import local CSV history once with `python scripts/sync_performance_to_db.py`.
+
 ## SEC User-Agent (required before Layer 4)
 
 SEC EDGAR requires a descriptive `User-Agent` header with your real contact info. Set in `.env`:
