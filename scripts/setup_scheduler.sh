@@ -9,9 +9,9 @@
 # Linux: uses cron.
 #
 # Defaults (override via env):
-#   SCHED_TZ=America/New_York   local timezone for cron times
-#   REFRESH_TIME=18:00          daily data refresh (refresh_all.py)
-#   AUTOPILOT_TIME=23:00        weekday paper sync (paper_autopilot.py)
+#   SCHED_TZ=Europe/Brussels    local timezone for cron times
+#   REFRESH_TIME=23:00           daily data refresh (after US market close)
+#   AUTOPILOT_TIME=23:30         weekday paper sync (after refresh)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,9 +21,9 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   exec "$SCRIPT_DIR/setup_launchd_macos.sh" "$@"
 fi
 
-SCHED_TZ="${SCHED_TZ:-America/New_York}"
-REFRESH_TIME="${REFRESH_TIME:-18:00}"
-AUTOPILOT_TIME="${AUTOPILOT_TIME:-23:00}"
+SCHED_TZ="${SCHED_TZ:-Europe/Brussels}"
+REFRESH_TIME="${REFRESH_TIME:-23:00}"
+AUTOPILOT_TIME="${AUTOPILOT_TIME:-23:30}"
 
 REFRESH_H="${REFRESH_TIME%%:*}"
 REFRESH_M="${REFRESH_TIME##*:}"

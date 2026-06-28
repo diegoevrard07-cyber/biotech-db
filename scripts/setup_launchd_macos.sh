@@ -8,17 +8,17 @@
 #   ./scripts/setup_launchd_macos.sh --remove     # unload + delete
 #
 # Defaults (override via env):
-#   SCHED_TZ=America/New_York   (informational; uses system local time)
-#   REFRESH_TIME=18:00          daily data refresh
-#   AUTOPILOT_TIME=23:00        weekday paper sync
+#   SCHED_TZ=Europe/Brussels    (Mac should use this timezone in System Settings)
+#   REFRESH_TIME=23:00          daily data refresh (after US market close)
+#   AUTOPILOT_TIME=23:30        weekday paper sync (after refresh)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-SCHED_TZ="${SCHED_TZ:-America/New_York}"
-REFRESH_TIME="${REFRESH_TIME:-18:00}"
-AUTOPILOT_TIME="${AUTOPILOT_TIME:-23:00}"
+SCHED_TZ="${SCHED_TZ:-Europe/Brussels}"
+REFRESH_TIME="${REFRESH_TIME:-23:00}"
+AUTOPILOT_TIME="${AUTOPILOT_TIME:-23:30}"
 
 REFRESH_H="${REFRESH_TIME%%:*}"
 REFRESH_M="${REFRESH_TIME##*:}"
@@ -135,9 +135,9 @@ EOF
 
 echo "Project:  $PROJ"
 echo "Platform: macOS launchd (missed jobs run on wake)"
-echo "Timezone: system local (set Mac to $SCHED_TZ for ET scheduling)"
-echo "Refresh:  daily at $REFRESH_TIME"
-echo "Autopilot: weekdays at $AUTOPILOT_TIME"
+echo "Timezone: $SCHED_TZ (launchd uses Mac system clock — set System Settings to Brussels)"
+echo "Refresh:  daily at $REFRESH_TIME $SCHED_TZ"
+echo "Autopilot: weekdays at $AUTOPILOT_TIME $SCHED_TZ"
 echo ""
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
