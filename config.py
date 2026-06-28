@@ -107,6 +107,10 @@ MAX_GBM_WEIGHT = float(os.getenv("MAX_GBM_WEIGHT", "0.25"))    # GBM names are c
 MAX_SECTOR_WEIGHT = float(os.getenv("MAX_SECTOR_WEIGHT", "0.40"))  # per indication_category
 URGENT_DAYS = int(os.getenv("URGENT_DAYS", "7"))
 
+# Paper autopilot: sync portfolio to the capped action desk daily.
+AUTOPILOT_HORIZON_DAYS = int(os.getenv("AUTOPILOT_HORIZON_DAYS", "365"))
+AUTOPILOT_REBALANCE_PCT = float(os.getenv("AUTOPILOT_REBALANCE_PCT", "0.10"))  # resize if |delta| > 10%
+
 # Risk haircut (size DOWN violent names). Grounded in the event-return regression
 # (returns_regression.py): direction is unpredictable, but MAGNITUDE is — and the
 # strongest driver is small market cap (smaller => bigger blowups). So we shrink

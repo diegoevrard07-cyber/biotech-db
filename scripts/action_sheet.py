@@ -88,9 +88,9 @@ def _scale_side(rows: list[dict], positive: bool, cap: float) -> None:
 
 
 _SIGNAL_SQL = """
-    SELECT co.ticker, co.name, co.is_gbm_focused, co.market_cap_usd,
+    SELECT co.ticker, co.id AS company_id, co.name, co.is_gbm_focused, co.market_cap_usd,
            COALESCE(co.indication_category, 'other') AS sector,
-           c.catalyst_type, c.expected_date,
+           c.id AS catalyst_id, c.catalyst_type, c.expected_date,
            es.trade_type, es.suggested_weight, es.composite_score,
            es.base_rate_score, es.edge_gap, es.confidence
     FROM edge_scores es
@@ -113,6 +113,7 @@ def _best_per_ticker(raw) -> list[dict]:
         w = float(r["suggested_weight"])
         rec = {
             "ticker": r["ticker"], "name": r["name"],
+            "company_id": r["company_id"], "catalyst_id": r["catalyst_id"],
             "is_gbm": bool(r["is_gbm_focused"]), "sector": r["sector"],
             "market_cap_usd": float(r["market_cap_usd"]) if r["market_cap_usd"] is not None else None,
             "trade_type": r["trade_type"], "catalyst_type": r["catalyst_type"],

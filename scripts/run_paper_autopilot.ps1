@@ -1,5 +1,5 @@
 # Wrapper for the paper-trading autopilot, called by Windows Task Scheduler.
-# Runs one daily cycle (refresh prices -> execute due exits -> open new -> snapshot)
+# Syncs PAPER portfolio to the capped Action Desk (action_sheet.py), then snapshots.
 # and appends all output to a dated log so you can see exactly what happened.
 $ErrorActionPreference = "Continue"
 $proj   = "C:\Users\Diegos PC\Documents\biotech-db"
