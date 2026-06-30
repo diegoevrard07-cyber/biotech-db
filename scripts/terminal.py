@@ -204,7 +204,7 @@ def exec_write(sql: str, params: tuple | None = None) -> None:
         conn.close()
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=30)
 def latest_prices() -> dict[str, float]:
     """ticker -> latest available daily close (end-of-day, not live)."""
     df = q("""
@@ -226,7 +226,7 @@ def ensure_account() -> None:
                "ON CONFLICT (id) DO NOTHING")
 
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=30)
 def get_account() -> dict:
     df = q("SELECT cash_usd, starting_capital_usd FROM portfolio_account WHERE id=1")
     if df.empty:
@@ -243,7 +243,7 @@ def set_account(cash: float, starting_capital: float | None) -> None:
         (cash, starting_capital))
 
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=30)
 def load_holdings(status: str | None = "open") -> pd.DataFrame:
     sql = """
         SELECT h.id, h.ticker, h.company_id, h.catalyst_id, h.side, h.trade_type,
@@ -439,7 +439,7 @@ def _alloc_pie_chart(hv: pd.DataFrame) -> go.Figure:
     return fig
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def load_performance_history() -> pd.DataFrame:
     """Daily equity snapshots — Supabase portfolio_performance (falls back to local CSV)."""
     try:
@@ -1732,13 +1732,37 @@ def _render_sidebar_nav() -> callable:
     return NAV_SECTIONS[section][page]
 
 
+def latest_snapshot_label() -> str:
+    """Human-readable label for the newest portfolio_performance row."""
+    try:
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT snapshot_date, equity FROM portfolio_performance "
+                    "ORDER BY snapshot_date DESC LIMIT 1"
+                )
+                row = cur.fetchone()
+        finally:
+            conn.close()
+        if row:
+            return f"Portfolio snapshot: **{row[0]}** · equity **${float(row[1]):,.0f}**"
+    except Exception:
+        pass
+    return "Portfolio snapshot: none yet (run paper autopilot)"
+
+
 def main() -> None:
     st.sidebar.title("EDGE TERMINAL")
     st.sidebar.caption("Decision support · read-only")
+    if st.sidebar.button("Refresh data", use_container_width=True, type="primary"):
+        st.cache_data.clear()
+        st.rerun()
+    st.sidebar.caption(latest_snapshot_label())
     page_fn = _render_sidebar_nav()
     st.sidebar.markdown("---")
     page_fn()
-    st.sidebar.caption("Data cached 5 min")
+    st.sidebar.caption("Cache 30s · click Refresh after autopilot runs")
 
 
 if __name__ == "__main__":
