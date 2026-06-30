@@ -4,17 +4,21 @@ GBM/Onc-CNS Edge Engine - Bloomberg-style terminal.
 Run with:
     streamlit run scripts/terminal.py
 
-Dark, dense, multi-panel cockpit for the Rung 2 decision-support engine. Read-only,
-cached (5 min), no hardcoded credentials (DATABASE_URL from .env).
+Dark, dense, multi-panel cockpit for the Rung 2 decision-support engine. Portfolio
+data is cached briefly (30s); reference/research queries cache for 5 min. No
+hardcoded credentials (DATABASE_URL from .env).
 
-Panels: Trade Blotter | Security | Catalyst Calendar | Validation | Data Health.
+Nav:
+    Trade Desk : Cockpit · Portfolio · Action Desk
+    Research   : Strategy · Market & Models (dossier, calendar, validation,
+                 data health, glossary)
 """
 
 from __future__ import annotations
 
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # project root (layers.*)
@@ -30,6 +34,7 @@ from dotenv import load_dotenv
 import config
 from layers.marketdata.yf_client import fetch_history
 from action_sheet import TIMING, compute_book
+from layers.composite import scorer
 from layers.portfolio import tracker as pf
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -990,7 +995,6 @@ def page_home() -> None:
             peak = plot_df["equity"].cummax()
             dd = (plot_df["equity"] - peak) / peak
             max_dd = float(dd.min())
-            best_day = plot_df.loc[plot_df["equity"].diff().idxmax()] if len(plot_df) > 1 else None
             st.caption(f"Max drawdown from peak: **{max_dd:.1%}** · "
                        f"Snapshots: **{len(plot_df)}** day(s)")
 
@@ -1137,7 +1141,7 @@ def render_ticker_dossier(ticker: str, *, blotter: pd.DataFrame | None = None) -
     if pack is None:
         st.warning(f"No company record for {ticker}.")
         return
-    crow, cid = pack["crow"], pack["cid"]
+    crow = pack["crow"]
     fin, pos, prices, cats, insiders = pack["fin"], pack["pos"], pack["prices"], pack["cats"], pack["insiders"]
     if blotter is None:
         blotter = load_blotter()
@@ -1327,7 +1331,6 @@ def page_action_desk() -> None:
     summ = pf.account_summary(_holding_dicts(load_holdings("open")), get_account()["cash"], prices)
     equity = summ["equity"] or 0.0
 
-    caps = {"gross_long": 1.0, "gross_short": 0.30, "net": 0.60, "gbm": 0.25}
     m = st.columns(6)
     m[0].metric("Capped positions", book["positions"])
     m[1].metric("Gross L/S", f"{book['gross_long']:.0%} / {book['gross_short']:.0%}")
@@ -1413,11 +1416,6 @@ def page_action_desk() -> None:
 
 
 # ===========================================================================
-def page_security() -> None:
-    """Legacy alias — dossier picker."""
-    _intel_dossier_tab()
-
-
 def _intel_dossier_tab() -> None:
     companies = q(
         "SELECT ticker FROM companies WHERE ticker IS NOT NULL ORDER BY ticker"
@@ -1461,16 +1459,6 @@ def _render_catalyst_calendar() -> None:
     st.caption("Dot size ∝ |weight| · dashed line = today")
 
 
-def page_intel() -> None:
-    st.title("Market intel")
-    st.caption("Company dossiers and the catalyst calendar.")
-    tab_d, tab_c = st.tabs(["Company dossier", "Catalyst calendar"])
-    with tab_d:
-        _intel_dossier_tab()
-    with tab_c:
-        _render_catalyst_calendar()
-
-
 def _render_data_health() -> None:
     tables = ["companies", "trials", "catalysts", "edge_scores", "price_history",
               "positioning", "insider_transactions", "catalyst_outcomes", "financials"]
@@ -1504,21 +1492,25 @@ def _render_data_health() -> None:
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
-def page_system() -> None:
-    st.title("Models & data")
-    tab_v, tab_d = st.tabs(["Validation", "Data health"])
-    with tab_v:
+def page_research() -> None:
+    """Single research surface: dossiers, calendar, validation, data health, glossary.
+
+    Merges the former 'Market Intel' and 'Models & Data' pages into one tabbed view.
+    """
+    st.title("Market & models")
+    tab_dossier, tab_cal, tab_val, tab_health, tab_gloss = st.tabs(
+        ["Company dossier", "Catalyst calendar", "Validation", "Data health", "Glossary"]
+    )
+    with tab_dossier:
+        _intel_dossier_tab()
+    with tab_cal:
+        _render_catalyst_calendar()
+    with tab_val:
         page_validation(embedded=True)
-    with tab_d:
+    with tab_health:
         _render_data_health()
-    with st.expander("Glossary"):
+    with tab_gloss:
         page_glossary(embedded=True)
-
-
-# ===========================================================================
-def page_calendar() -> None:
-    st.title("Catalyst calendar")
-    _render_catalyst_calendar()
 
 
 # ===========================================================================
@@ -1635,38 +1627,202 @@ def page_validation(*, embedded: bool = False) -> None:
 
 
 # ===========================================================================
-def page_health() -> None:
-    st.title("🩺 DATA HEALTH")
-    tables = ["companies", "trials", "catalysts", "edge_scores", "price_history",
-              "positioning", "insider_transactions", "catalyst_outcomes", "financials"]
-    counts = {t: int(q(f"SELECT COUNT(*) n FROM {t}").iloc[0, 0]) for t in tables}
-    cols = st.columns(len(counts))
-    for col, (name, n) in zip(cols, counts.items()):
-        col.metric(name, f"{n:,}")
+def page_strategy() -> None:
+    """Quant-grade specification of the engine: how a signal becomes a sized position.
 
-    st.subheader("Signal coverage (in-universe companies with tickers)")
-    cov = q(
-        """
-        SELECT
-          (SELECT COUNT(*) FROM companies WHERE ticker IS NOT NULL AND COALESCE(in_universe,TRUE)) AS universe,
-          (SELECT COUNT(DISTINCT company_id) FROM price_history WHERE company_id IS NOT NULL) AS with_prices,
-          (SELECT COUNT(DISTINCT company_id) FROM positioning) AS with_positioning,
-          (SELECT COUNT(DISTINCT company_id) FROM insider_transactions) AS with_insider,
-          (SELECT COUNT(*) FROM companies WHERE is_gbm_focused) AS gbm_focused
-        """
+    Reads live values from `config` and `layers.composite.scorer` so the page can
+    never drift from the running parameters.
+    """
+    w = scorer.DEFAULT_WEIGHTS
+    tiers = config.RISK_HAIRCUT_TIERS
+
+    st.title("Strategy specification")
+    st.caption(
+        "Decision-support engine for catalyst-driven small-cap onc/CNS biotech "
+        "(GBM flagship subset). End-of-day data; one rebalance per day. "
+        "Parameters below are read live from config — they reflect what is actually running."
     )
-    if not cov.empty:
-        st.dataframe(cov, use_container_width=True, hide_index=True)
 
-    st.subheader("Freshness")
-    specs = [("price_history", "fetched_at"), ("positioning", "computed_at"),
-             ("insider_transactions", "created_at"), ("edge_scores", "computed_at"),
-             ("catalyst_outcomes", "created_at")]
-    rows = []
-    for tbl, col in specs:
-        ts = q(f"SELECT MAX({col}) ts FROM {tbl}").iloc[0, 0]
-        rows.append({"table": tbl, "last_updated": ts})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    # ---- 1. Thesis ----
+    st.subheader("1 · Thesis")
+    st.markdown(
+        "The edge is the **gap between an intrinsic, sentiment-free grade of a binary "
+        "catalyst and the move the options market has priced for it.** Direction of a "
+        "biotech catalyst is close to unforecastable; the *magnitude* and the *crowd's "
+        "mispricing of that magnitude* are not. Two orthogonal quantities drive every "
+        "decision:\n\n"
+        "- **Grade** — intrinsic quality of the setup (proximity, trial base rate, "
+        "balance-sheet survivability). No price or sentiment in it.\n"
+        "- **Edge gap** — model-expected move minus market-implied move. The money signal."
+    )
+
+    # ---- 2. Universe & inputs ----
+    st.subheader("2 · Universe & data inputs")
+    st.markdown(
+        f"- **Universe:** US-listed oncology/CNS small caps; market cap ≤ "
+        f"`${config.SMALL_CAP_CEILING_USD:,.0f}` kept in-universe (larger names tagged "
+        f"out-of-universe, not traded). GBM-focused names flagged as the flagship subset.\n"
+        f"- **Catalysts:** {', '.join(sorted(config.ALLOWED_CATALYST_TYPES))} from "
+        f"ClinicalTrials.gov + SEC filings; only dated, future catalysts enter the book.\n"
+        "- **Prices / positioning:** yfinance OHLCV (EOD), short % float, options-implied "
+        "move, ATM IV, 30-day run-up.\n"
+        "- **Fundamentals:** SEC XBRL — cash, quarterly burn, runway, shares outstanding.\n"
+        "- **Insider flow:** SEC Form 4 net open-market buys.\n"
+        f"- **Benchmark:** `{config.BENCHMARK_TICKER}` (abnormal return = name minus benchmark)."
+    )
+
+    # ---- 3. Composite grade ----
+    st.subheader("3 · Composite grade")
+    st.markdown(
+        "Deliberately few factors at near-equal weights (anti-*Noise*; no kitchen-sink "
+        "regression). Each sub-score is mapped to [0, 1]:"
+    )
+    st.latex(
+        rf"\text{{composite}} = {w['proximity']}\cdot P_{{\text{{prox}}}} "
+        rf"+ {w['base_rate']}\cdot P_{{\text{{base}}}} "
+        rf"+ {w['financial']}\cdot P_{{\text{{fin}}}}"
+    )
+    st.markdown(
+        "- **Proximity** `P_prox` — step function on days-to-catalyst: ≤30d→1.0, ≤90d→0.85, "
+        "≤180d→0.65, ≤365d→0.45, beyond→0.25, past→0.1.\n"
+        "- **Base rate** `P_base` — historical success probability for the trial phase / "
+        "indication / sponsor class, clamped to [0, 1] (0.5 if unknown).\n"
+        "- **Financial** `P_fin` — runway buckets: self-funding→1.0, ≥24mo→1.0, ≥12mo→0.75, "
+        "≥6mo→0.5, ≥3mo→0.3, else 0.1.\n"
+        "- SEC-confirmed dates get a +0.03 composite bump. **Confidence** is tracked "
+        "separately (data completeness + date reliability) and is *not* folded into the grade."
+    )
+
+    # ---- 4. Edge gap ----
+    st.subheader("4 · Edge gap (mispricing)")
+    st.latex(r"\text{edge\_gap} = \text{expected\_move} - \text{implied\_move}")
+    st.markdown(
+        "- **expected_move** is a heuristic of absolute catalyst magnitude, maximal at "
+        "maximum uncertainty: `0.20 + 0.40·(1 − 2·|base − 0.5|)` — i.e. coin-flip events "
+        "carry the largest expected move (~0.40), lopsided ones the smallest (~0.20).\n"
+        "- **implied_move** is the options-market expected move around the event.\n"
+        "- `edge_gap < 0` → market pays for a **bigger** move than justified → overpriced "
+        "(fade candidate). `edge_gap > 0` → market **underprices** the move → own the binary."
+    )
+
+    # ---- 5. Trade-type decision ----
+    st.subheader("5 · Trade-type decision rules")
+    st.markdown(
+        "Evaluated in order; first match wins. `run_up` = 30-day pre-event return, "
+        "`fin_tilt` ≤ 0 = dilution pressure.\n\n"
+        "1. `fin_tilt ≤ −0.15` **and** `run_up > 0.50` → **fade** (financing-stressed hype).\n"
+        "2. `base < 0.25` **and** (`run_up > 0.75` **or** edge_gap < −0.05) → **fade**.\n"
+        "3. `edge_gap < −0.10` **and** `base < 0.5` → **fade** (paying up for a coin-flip).\n"
+        "4. `edge_gap > 0.10` **and** `base ≥ 0.45` **and** `fin_tilt > −0.10` → "
+        "**hold_through** (cheap optionality).\n"
+        "5. `proximity ≥ 0.85` **and** `base ≥ 0.35` **and** `fin_tilt > −0.10` **and** "
+        "reliable date → **buy_the_rumor**.\n"
+        "6. `base ≥ 0.55` **and** `fin_tilt > −0.10` **and** not overpriced → **hold_through**.\n"
+        "7. otherwise → **avoid** (excluded from the book).\n\n"
+        "`buy_the_rumor` requires a reliable (SEC-confirmed or medium/high-confidence) date "
+        "because it lives or dies on timing."
+    )
+
+    # ---- 6. Sizing ----
+    st.subheader("6 · Position sizing")
+    st.latex(r"f^\star = \frac{p\,(b+1) - 1}{b}, \qquad b = 1 \;\text{(symmetric payoff)}")
+    st.markdown(
+        f"Raw signed weight by trade type, then scaled by fractional Kelly "
+        f"`λ = {config.KELLY_FRACTION}` and clamped to ±`{config.MAX_SINGLE_NAME_WEIGHT:.0%}` "
+        f"per name:\n\n"
+        "- **hold_through:** `λ · kelly(base)` (long).\n"
+        "- **buy_the_rumor:** `λ · 0.5 · proximity` (long, base-agnostic, event-driven).\n"
+        "- **fade:** `−λ · kelly(1 − base)` (short).\n"
+        "- Net insider buying nudges long conviction up (still capped).\n\n"
+        "**Risk haircut (magnitude control).** Before portfolio caps, each weight is "
+        "multiplied by a market-cap tier multiplier — smaller caps blow up harder, so they "
+        "are sized down. This can only *reduce* exposure:"
+    )
+    haircut = pd.DataFrame(
+        [{"market cap <": ("∞" if c == float("inf") else f"${c:,.0f}"), "size ×": m}
+         for c, m in tiers]
+        + [{"market cap <": "unknown", "size ×": config.RISK_HAIRCUT_UNKNOWN}]
+    )
+    st.dataframe(haircut, use_container_width=True, hide_index=True)
+
+    # ---- 7. Portfolio caps ----
+    st.subheader("7 · Portfolio construction caps")
+    st.markdown(
+        "Applied in order to the best signal per ticker (highest |weight|, then nearest "
+        "date), scaling signed weights within each constraint:\n\n"
+        f"1. **Sector** (per indication category): gross ≤ `{config.MAX_SECTOR_WEIGHT:.0%}`.\n"
+        f"2. **GBM cluster** (correlated): gross ≤ `{config.MAX_GBM_WEIGHT:.0%}`.\n"
+        f"3. **Gross long** ≤ `{config.MAX_GROSS_LONG:.0%}`, **gross short** ≤ "
+        f"`{config.MAX_GROSS_SHORT:.0%}`.\n"
+        f"4. **Net exposure** clamped to ±`{config.MAX_NET:.0%}` (dominant side scaled down).\n\n"
+        f"Names below 0.1% weight are dropped. Catalysts within `{config.URGENT_DAYS}` days "
+        "are flagged urgent."
+    )
+
+    # ---- 8. Exit timing ----
+    st.subheader("8 · Exit timing")
+    st.markdown(
+        "Exit date is derived from the linked catalyst:\n\n"
+        "- **buy_the_rumor** → exit ~1 trading day **before** the catalyst.\n"
+        "- **hold_through** → exit shortly **after** the readout.\n"
+        "- **fade** → cover **after** the print.\n\n"
+        "No linked catalyst ⇒ manual exit. The action center surfaces exits that are "
+        "overdue or due within 7 days."
+    )
+
+    # ---- 9. Risk overlays ----
+    st.subheader("9 · Risk overlays (paper autopilot)")
+    st.markdown(
+        f"- **Drawdown circuit breaker:** if equity falls more than "
+        f"`{config.DRAWDOWN_CIRCUIT_PCT:.0%}` below its prior peak, all target weights are "
+        f"scaled by `{config.DRAWDOWN_DERISK_FACTOR}` and new opens are paused until recovery. "
+        f"Catches correlated sector selloffs that per-name caps miss. "
+        f"{'**ON**' if config.DRAWDOWN_CIRCUIT_ENABLED else '**OFF**'}.\n"
+        f"- **Mean-reversion profit-lock (longs only):** when an open long is up "
+        f"≥ `{config.PROFIT_LOCK_GAIN_PCT:.0%}` **and** stretched ≥ "
+        f"`{config.PROFIT_LOCK_ZSCORE}`σ above its `{config.PROFIT_LOCK_LOOKBACK_DAYS}`-day mean, "
+        f"trim `{config.PROFIT_LOCK_TRIM_FRACTION:.0%}` of the position. Skipped within "
+        f"`{config.PROFIT_LOCK_MIN_DAYS_TO_CATALYST}` days of a catalyst so events can play out. "
+        f"Self-limiting (stops once the name reverts). "
+        f"{'**ON**' if config.PROFIT_LOCK_ENABLED else '**OFF**'}."
+    )
+
+    # ---- 10. Validation ----
+    st.subheader("10 · Validation & calibration")
+    st.markdown(
+        f"- **Ground truth:** abnormal returns (name − {config.BENCHMARK_TICKER}) around 8-K "
+        f"announcements over 1/3/5-day holds.\n"
+        f"- **Outcome labels:** a catalyst is hit/miss when |abnormal return| over a "
+        f"±`{config.EVENT_WINDOW_DAYS}`-day window exceeds `{config.OUTCOME_MOVE_THRESHOLD:.0%}`, "
+        "else ambiguous.\n"
+        "- **Calibration:** Brier score + reliability curve of model probability vs realized "
+        "hit rate; base-rate model held out temporally.\n"
+        "- **Backtest:** walk-forward of the trade rules. See the **Validation** tab for the "
+        "live numbers."
+    )
+
+    # ---- 11. Cadence ----
+    st.subheader("11 · Operating cadence")
+    st.markdown(
+        f"- One end-of-day cycle: full data refresh, then paper autopilot rebalances toward "
+        f"the capped book over a `{config.AUTOPILOT_HORIZON_DAYS}`-day horizon.\n"
+        f"- **Rebalance band:** a position is resized only when the target deviates by more "
+        f"than `{config.AUTOPILOT_REBALANCE_PCT:.0%}` (suppresses churn).\n"
+        "- Equity, cash, and benchmark marks are snapshotted daily to `portfolio_performance`.\n"
+        "- All marks are prior-close; nothing here is intraday or live."
+    )
+
+    # ---- 12. Limitations ----
+    st.subheader("12 · Known limitations")
+    st.markdown(
+        "- `expected_move` and `base_rate` are heuristics; calibration refines them but they "
+        "are not market-derived.\n"
+        "- Fade/short signals are the weakest leg — the run-up→reversal relationship is a weak "
+        "barbell, not a clean fade. Shorts and fades are experimental until they earn a track "
+        "record.\n"
+        "- Options-implied move and short-interest data are sparse for the smallest names.\n"
+        "- No transaction-cost, borrow-cost, or slippage model; paper fills at prior close."
+    )
 
 
 NAV_SECTIONS = {
@@ -1676,8 +1832,8 @@ NAV_SECTIONS = {
         "Action Desk": page_action_desk,
     },
     "Research": {
-        "Market Intel": page_intel,
-        "Models & Data": page_system,
+        "Strategy": page_strategy,
+        "Market & Models": page_research,
     },
 }
 
