@@ -17,6 +17,36 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-06-30 — Strip explanatory fluff from the terminal (keep operational text)
+
+**Branch/PR:** `cursor/remove-cockpit-honesty-banner-7e76` (#4)
+
+Removed hand-holding captions, tips, and pure-prose metric tooltips while keeping
+operational text (run commands, empty-state facts, data-bearing tooltips, legends,
+freshness, drawdown, computed stats):
+
+- **Cockpit/Portfolio:** dropped "Log a trade below / check the Action Sheet" and
+  "Nothing pressing" → terse empty states; removed the "Set your starting cash…"
+  setup caption; removed prose `help=` tooltips that carried no data (Account value,
+  Unrealized P&L, Cash, XBI price, XBI return, Alpha). Kept tooltips that show dollar
+  amounts/counts/caps.
+- **Trade book / Action Desk:** removed "Capped action-desk names… Select a row…",
+  "Select a row to open the full company dossier", and "Act now · capped book · all
+  signals. Click a row…" tips. Trimmed the capped-book legend to "✓ = in the
+  risk-capped book." Sizing note made declarative.
+- **Validation:** removed the "Takeaway…", "Finding: weak barbell…", and
+  "Offerings/license deals skew negative…" commentary essays; kept the computed
+  `corr(...)` stat, metrics, and the build command. Trimmed chart/section titles.
+- **Sidebar footer:** "Cache 30s · click Refresh after autopilot runs" → "Cache 30s".
+
+**Why:** owner designed the system and does not need explanations; maximize operational
+signal, drop fluff.
+
+**Verify:** `python -m pytest` → 182 passed; `pyflakes scripts/terminal.py` → clean;
+headless `AppTest` render of all five pages against the live DB → no exceptions.
+
+---
+
 ## 2026-06-30 — Terminal restructure: Strategy tab, merged Research, dead-code cleanup
 
 **Branch/PR:** `cursor/remove-cockpit-honesty-banner-7e76` (#4)
