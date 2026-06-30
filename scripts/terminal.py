@@ -1737,7 +1737,6 @@ def latest_snapshot_label() -> str:
 
 def main() -> None:
     st.sidebar.title("EDGE TERMINAL")
-    st.sidebar.caption("Decision support · read-only")
     if st.sidebar.button("Refresh data", use_container_width=True, type="primary"):
         st.cache_data.clear()
         st.rerun()
