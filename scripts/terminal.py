@@ -1021,14 +1021,6 @@ def page_home() -> None:
         if not nxt.empty:
             nx = nxt.iloc[0]
             st.markdown(f"- **Next exit:** {nx['ticker']} in **{int(nx['days_to_exit'])}d** ({nx['exit_by']})")
-        st.markdown(
-            "**How to read this**\n"
-            "- Green = your portfolio equity each day autopilot runs.\n"
-            f"- Amber dashed = {bench_tk} normalized to the same starting capital.\n"
-            "- Dotted grey = your starting capital.\n"
-            "- Blue dotted = unrealized P&L (right axis).\n"
-            "- All prices are **prior close**, not live."
-        )
 
     # ---- trade book (action desk names to trade) ----
     book = load_action_book(90)
