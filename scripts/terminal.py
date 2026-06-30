@@ -748,7 +748,7 @@ def page_portfolio() -> None:
                 "now": cur, "mkt_value": abs(mv) if mv is not None else None,
                 "% book": (abs(mv) / summ["equity"] if mv is not None and summ["equity"] else None),
                 "P&L $": pnl, "P&L %": pnl_pct,
-                "exit_by": r.planned_exit_date, "rule": r.planned_exit_rule,
+                "exit_by": r.planned_exit_date, "rule": pf.format_exit_rule(r.planned_exit_rule),
             })
         hv = pd.DataFrame(rows)
         sty = hv.style.format({
@@ -791,7 +791,7 @@ def page_portfolio() -> None:
         catalyst_id, cat_date = cat_map[cat_label]
         exit_date, exit_rule = pf.planned_exit(ttype, cat_date)
         if exit_date:
-            st.caption(f"Planned exit: **{exit_date}** — {exit_rule}")
+            st.caption(f"Planned exit: **{exit_date}** — {pf.format_exit_rule(exit_rule)}")
         if st.button("Add trade", type="primary"):
             if amount <= 0 or price <= 0:
                 st.error("Enter a positive size and entry price.")

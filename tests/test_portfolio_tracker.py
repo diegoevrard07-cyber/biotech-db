@@ -71,12 +71,18 @@ def test_planned_exit_rules():
     cat = date(2026, 8, 30)
     d, rule = t.planned_exit("buy_the_rumor", cat)
     assert d == date(2026, 8, 29) and "SELL" in rule
-    d, _ = t.planned_exit("hold_through", cat)
-    assert d == date(2026, 8, 31)
+    assert "(" not in rule
+    d, rule = t.planned_exit("hold_through", cat)
+    assert d == date(2026, 8, 31) and "on purpose" not in rule
     d, _ = t.planned_exit("fade", cat)
     assert d == date(2026, 8, 31)
     d, rule = t.planned_exit("buy_the_rumor", None)
     assert d is None and "manually" in rule.lower()
+
+
+def test_format_exit_rule_strips_trailing_hint():
+    raw = "EXIT shortly AFTER the readout (you held through it on purpose)"
+    assert t.format_exit_rule(raw) == "EXIT shortly AFTER the readout"
 
 
 def test_exit_alerts_levels():

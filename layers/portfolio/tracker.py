@@ -8,6 +8,7 @@ account equity a single clean sum: equity = cash + sum(signed market values).
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 from typing import Any
 
@@ -16,10 +17,19 @@ SHORT = "short"
 
 # Plain-language exit instruction per trade type.
 EXIT_RULES = {
-    "buy_the_rumor": "SELL ~1 trading day BEFORE the catalyst (sell the rumor, never hold the print)",
-    "hold_through": "EXIT shortly AFTER the readout (you held through it on purpose)",
+    "buy_the_rumor": "SELL ~1 trading day BEFORE the catalyst",
+    "hold_through": "EXIT shortly AFTER the readout",
     "fade": "COVER the short AFTER the print",
 }
+
+_TRAILING_HINT = re.compile(r"\s*\([^)]+\)\s*$")
+
+
+def format_exit_rule(rule: str | None) -> str | None:
+    """Drop trailing parenthetical hints from stored exit rules."""
+    if not rule:
+        return rule
+    return _TRAILING_HINT.sub("", rule).strip()
 
 
 def planned_exit(trade_type: str | None, catalyst_date: date | None,
@@ -179,8 +189,8 @@ def exit_alerts(open_holdings: list[dict], today: date,
             "level": level,
             "days": days,
             "exit_date": ped,
-            "reason": h.get("planned_exit_rule") or EXIT_RULES.get(
-                (h.get("trade_type") or "").lower(), "Review around the catalyst date."),
+            "reason": format_exit_rule(h.get("planned_exit_rule") or EXIT_RULES.get(
+                (h.get("trade_type") or "").lower(), "Review around the catalyst date.")),
         })
     out.sort(key=lambda a: a["days"])
     return out

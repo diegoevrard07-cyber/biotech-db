@@ -34,7 +34,7 @@ from logger import setup_logger
 log = setup_logger("action_sheet")
 
 TIMING = {
-    "buy_the_rumor": "ENTER now; EXIT ~1 trading day BEFORE the print (sell the news)",
+    "buy_the_rumor": "ENTER now; EXIT ~1 trading day BEFORE the print",
     "hold_through": "ENTER; HOLD through the readout; exit after",
     "fade": "SHORT now; COVER after the print",
 }
