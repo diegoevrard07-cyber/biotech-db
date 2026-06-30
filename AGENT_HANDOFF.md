@@ -4,6 +4,10 @@
 > state, and known traps*. The `.cursorrules` file holds hard coding standards; this
 > file holds the *why* and the *where we are*. Keep both in sync. Update the
 > "Current State" and "Roadmap" sections whenever you finish meaningful work.
+>
+> **Operations log:** record every operational change (trading/risk rules, scheduling,
+> pipeline, schema, notable UI) in `OPERATIONS_LOG.md`, newest first, so changes can be
+> reviewed and evaluated later. Add an entry as part of the same change.
 
 ---
 
