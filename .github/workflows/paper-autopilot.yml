@@ -1,18 +1,21 @@
 name: Paper Autopilot
 
-# Runs the paper-trading autopilot in the cloud so it no longer depends on a
-# laptop being on. Writes to Supabase (DATABASE_URL). Weekdays after US close.
+# Runs the paper-trading autopilot in the cloud (writes to Supabase) so it no
+# longer depends on a laptop being on.
 #
-# Times are UTC. 22:30 UTC is safely after the US market close year-round
-# (~00:30 Brussels CEST / 23:30 CET). Trades the same US trading day.
+# Chained to the data refresh: this fires only AFTER "Daily Data Refresh"
+# finishes, so trades always use fresh signals regardless of how long the
+# refresh took. Trades only execute on weekdays (UTC); the refresh itself runs
+# every day to keep research data current.
 #
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
 #   DATABASE_URL, POE_API_KEY, SEC_USER_AGENT
 
 on:
-  schedule:
-    - cron: "30 22 * * 1-5"   # weekdays 22:30 UTC
-  workflow_dispatch:           # allow manual "Run workflow" from the Actions tab
+  workflow_run:
+    workflows: ["Daily Data Refresh"]
+    types: [completed]
+  workflow_dispatch:   # manual "Run workflow" button
 
 concurrency:
   group: paper-autopilot
@@ -28,23 +31,38 @@ jobs:
       POE_API_KEY: ${{ secrets.POE_API_KEY }}
       SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
     steps:
+      - name: Gate to weekdays (UTC)
+        id: gate
+        run: |
+          dow=$(date -u +%u)   # 1=Mon .. 7=Sun
+          if [ "$dow" -ge 6 ]; then
+            echo "Weekend (dow=$dow) — no paper trade today."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
 
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run paper autopilot
+        if: steps.gate.outputs.run == 'true'
         run: python scripts/paper_autopilot.py
 
       - name: Upload run log
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: autopilot-log-${{ github.run_id }}

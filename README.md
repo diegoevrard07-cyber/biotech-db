@@ -152,10 +152,14 @@ Disable either with `DRAWDOWN_CIRCUIT_ENABLED=0` / `PROFIT_LOCK_ENABLED=0`. Note
 
 Because all state lives in Supabase, the autopilot can run on GitHub Actions instead of a local scheduler — see `.github/workflows/`:
 
-| Workflow | Schedule (UTC) | Runs |
-|----------|----------------|------|
-| `daily-refresh.yml` | 22:00 daily | `refresh_all.py` (keeps signals fresh) |
-| `paper-autopilot.yml` | 22:30 weekdays | `paper_autopilot.py` (syncs the PAPER book) |
+| Workflow | Trigger | Runs |
+|----------|---------|------|
+| `daily-refresh.yml` | cron daily 22:00 UTC (after US close) | `refresh_all.py` (keeps signals fresh) |
+| `paper-autopilot.yml` | **after** the refresh completes, weekdays only | `paper_autopilot.py` (syncs the PAPER book) |
+
+The autopilot is **chained** to the refresh (`workflow_run`), so trades always run on fresh data no matter how long the refresh takes — no fixed-gap race. The refresh runs every day (research data stays current); the autopilot gates itself to weekdays.
+
+**Why once a day, not every few minutes:** every signal here is end-of-day granularity (prices use daily closes; SEC/CT.gov change slowly). Polling more often adds no signal, risks rate-limit bans from yfinance/SEC, and burns Actions minutes. Once daily after the close is optimal.
 
 **Setup (one time):** add three repo secrets under *Settings → Secrets and variables → Actions* — `DATABASE_URL`, `POE_API_KEY`, `SEC_USER_AGENT`. Both workflows also have a manual *Run workflow* button (`workflow_dispatch`).
 
