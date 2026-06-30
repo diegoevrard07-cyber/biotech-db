@@ -215,6 +215,98 @@ def _resize_position(cur, h: dict, tgt: dict, today: date, *,
     return cash_delta, rp
 
 
+def _trailing_closes(cur, ticker: str, days: int) -> list[float]:
+    """Most-recent `days` daily closes for a ticker (newest first)."""
+    cur.execute(
+        """
+        SELECT close FROM price_history
+        WHERE ticker = %s AND close IS NOT NULL
+        ORDER BY date DESC LIMIT %s
+        """,
+        (ticker, days),
+    )
+    return [float(r[0]) for r in cur.fetchall()]
+
+
+def _peak_equity(cur, current_equity: float) -> float:
+    """Highest recorded equity (Supabase history), never below today's value."""
+    cur.execute("SELECT MAX(equity) FROM portfolio_performance")
+    row = cur.fetchone()
+    peak = float(row[0]) if row and row[0] is not None else 0.0
+    return max(peak, float(current_equity))
+
+
+def _profit_lock_trim(cur, h: dict, px: float, today: date, fraction: float,
+                      *, dry_run: bool) -> tuple[float, float, float]:
+    """Scale OUT `fraction` of a winning long. Returns (cash_delta, realized, new_shares)."""
+    cur_sh = float(h["shares"])
+    trim = round(cur_sh * fraction, 2)
+    remaining = round(cur_sh - trim, 2)
+    if trim <= 0 or remaining <= 0:
+        return 0.0, 0.0, cur_sh
+    ep = float(h["entry_price"])
+    rp = pf.realized_pnl(h["side"], trim, ep, px)
+    cash_delta = pf.cash_delta_on_close(h["side"], trim, px)
+    gain_pct = (px / ep - 1) if ep else 0.0
+    print(f"  LOCK {h['ticker']:<6} -{trim:.2f} -> {remaining:.2f} @ {px:.2f}  "
+          f"realized {rp:+,.0f}  (+{gain_pct:.0%}, mean-revert trim)")
+    if not dry_run:
+        cur.execute("""
+            INSERT INTO portfolio_holdings
+                (ticker, company_id, catalyst_id, side, trade_type, entry_date,
+                 shares, entry_price, cost_basis_usd, exit_date, exit_price,
+                 realized_pnl_usd, status, notes)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'closed','PAPER_LOCK')
+        """, (h["ticker"], h.get("company_id"), h.get("catalyst_id"), h["side"],
+              h.get("trade_type"), h.get("entry_date") or today, trim, ep,
+              round(trim * ep, 2), today, px, round(rp, 2)))
+        cur.execute("""
+            UPDATE portfolio_holdings SET shares=%s, cost_basis_usd=%s, updated_at=NOW()
+            WHERE id=%s
+        """, (remaining, round(remaining * ep, 2), h["id"]))
+    return cash_delta, rp, remaining
+
+
+def _profit_lock_pass(cur, holds: list[dict], closes: dict, targets: dict,
+                      today: date, *, dry_run: bool) -> tuple[float, float, int]:
+    """Partial mean-reversion profit-take on extended long winners.
+
+    Returns (cash_delta_total, realized_total, count). Adjusts `targets` so the
+    normal sync does not immediately re-add a name we just locked.
+    """
+    if not config.PROFIT_LOCK_ENABLED:
+        return 0.0, 0.0, 0
+    cash_delta_total = 0.0
+    realized_total = 0.0
+    locked = 0
+    for h in holds:
+        if h["side"] != pf.LONG:
+            continue
+        px = closes.get(h["ticker"])
+        ep = float(h["entry_price"])
+        if px is None or ep <= 0:
+            continue
+        if (px / ep - 1) < config.PROFIT_LOCK_GAIN_PCT:
+            continue
+        ped = h.get("planned_exit_date")
+        if ped is not None and (ped - today).days <= config.PROFIT_LOCK_MIN_DAYS_TO_CATALYST:
+            continue  # let imminent catalysts play out
+        hist = _trailing_closes(cur, h["ticker"], config.PROFIT_LOCK_LOOKBACK_DAYS)
+        z = pf.zscore(px, hist)
+        if z is None or z < config.PROFIT_LOCK_ZSCORE:
+            continue  # not stretched above its mean -> nothing to revert
+        cd, rp, new_sh = _profit_lock_trim(
+            cur, h, px, today, config.PROFIT_LOCK_TRIM_FRACTION, dry_run=dry_run)
+        if new_sh < float(h["shares"]):
+            cash_delta_total += cd
+            realized_total += rp
+            locked += 1
+            h["shares"] = new_sh
+            if h["ticker"] in targets:
+                targets[h["ticker"]]["target_shares"] = new_sh  # block re-add this run
+    return cash_delta_total, realized_total, locked
+
+
 def _update_metadata(cur, h: dict, tgt: dict, *, dry_run: bool) -> None:
     """Refresh exit dates / catalyst when size is already on target."""
     if (h.get("planned_exit_date") == tgt["planned_exit_date"]
@@ -235,7 +327,8 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
     today = date.today()
     horizon = horizon_days or config.AUTOPILOT_HORIZON_DAYS
     tol = config.AUTOPILOT_REBALANCE_PCT
-    closed = opened = resized = 0
+    closed = opened = resized = locked = 0
+    derisk = False
     realized_today = 0.0
     summary: dict = {"equity": 0.0, "positions": 0, "unrealized_pnl_usd": 0.0}
 
@@ -263,6 +356,16 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
             equity = pf.account_summary(_holding_dicts(holds), cash, closes)["equity"]
             if sleeve <= 0 and equity > 0:
                 sleeve = equity
+
+            # Drawdown circuit breaker: de-risk if equity has fallen below peak.
+            derisk = False
+            if config.DRAWDOWN_CIRCUIT_ENABLED:
+                peak = _peak_equity(cur, equity)
+                if peak > 0 and equity <= peak * (1 - config.DRAWDOWN_CIRCUIT_PCT):
+                    derisk = True
+                    dd = (equity / peak - 1) if peak else 0.0
+                    print(f"  [CIRCUIT BREAKER] equity ${equity:,.0f} is {dd:+.1%} vs peak "
+                          f"${peak:,.0f} -> de-risk x{config.DRAWDOWN_DERISK_FACTOR}, opens paused")
 
             print(f"\n=== PAPER AUTOPILOT  {today} ===")
             print(f"Action desk: {book['positions']} targets  "
@@ -299,6 +402,21 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
             if sync_book and targets:
                 equity = pf.account_summary(_holding_dicts(holds), cash, closes)["equity"]
                 targets = ps.build_targets(book_rows, equity, closes)
+
+                # Circuit breaker: shrink all targets and pause new opens.
+                if derisk:
+                    for t in targets:
+                        targets[t]["target_shares"] = round(
+                            targets[t]["target_shares"] * config.DRAWDOWN_DERISK_FACTOR, 2)
+                        targets[t]["target_dollars"] = round(
+                            targets[t]["target_dollars"] * config.DRAWDOWN_DERISK_FACTOR, 2)
+
+                # --- 1b) PARTIAL PROFIT-LOCK (mean reversion, longs only) ---
+                cd, rp, locked = _profit_lock_pass(
+                    cur, holds, closes, targets, today, dry_run=dry_run)
+                cash += cd
+                realized_today += rp
+
                 held = {h["ticker"]: h for h in holds}
 
                 # --- 2) TRIMS (free cash before adds) ---
@@ -327,6 +445,8 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                     if px is None:
                         continue
                     if h is None:
+                        if derisk:
+                            continue  # circuit breaker: no new opens while de-risked
                         cd = pf.cash_delta_on_open(tgt["side"], tgt["target_shares"], px)
                         if tgt["side"] == pf.LONG and -cd > cash + 1e-6:
                             print(f"  [skip open] {t}: need ${-cd:,.0f}, cash ${cash:,.0f}")
@@ -368,7 +488,8 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                 realized_total = float(cur.fetchone()[0] or 0.0)
 
             ret_pct = (summary["equity"] - sleeve) / sleeve if sleeve else 0.0
-            print(f"\n  Closed: {closed}  Opened: {opened}  Resized: {resized}")
+            print(f"\n  Closed: {closed}  Opened: {opened}  Resized: {resized}  "
+                  f"Profit-locked: {locked}{'  [DE-RISKED]' if derisk else ''}")
             print(f"  Cash ${cash:,.0f} | Equity ${summary['equity']:,.0f} | "
                   f"Unrealized {summary['unrealized_pnl_usd']:+,.0f} | "
                   f"Realized-to-date {realized_total:+,.0f} | "
@@ -420,6 +541,7 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
             cur.close()
 
     log.info("autopilot_done", closed=closed, opened=opened, resized=resized,
+             profit_locked=locked, derisked=derisk,
              desk_positions=book["positions"], equity=round(summary["equity"], 2),
              realized_total=round(realized_total, 2))
 

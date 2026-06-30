@@ -111,6 +111,25 @@ URGENT_DAYS = int(os.getenv("URGENT_DAYS", "7"))
 AUTOPILOT_HORIZON_DAYS = int(os.getenv("AUTOPILOT_HORIZON_DAYS", "365"))
 AUTOPILOT_REBALANCE_PCT = float(os.getenv("AUTOPILOT_REBALANCE_PCT", "0.10"))  # resize if |delta| > 10%
 
+# --- Risk mitigation overlays (paper autopilot) ---
+# Drawdown circuit breaker: if equity falls more than PCT below its prior peak,
+# de-risk the whole book (scale targets by FACTOR, pause new opens) until it
+# recovers. Catches correlated sector selloffs that per-name caps miss.
+DRAWDOWN_CIRCUIT_ENABLED = os.getenv("DRAWDOWN_CIRCUIT_ENABLED", "1") not in ("0", "false", "False")
+DRAWDOWN_CIRCUIT_PCT = float(os.getenv("DRAWDOWN_CIRCUIT_PCT", "0.10"))     # -10% from peak
+DRAWDOWN_DERISK_FACTOR = float(os.getenv("DRAWDOWN_DERISK_FACTOR", "0.5"))  # shrink targets to 50%
+
+# Partial profit-lock (LONGS only): scale OUT a fraction of a winner when it is
+# both in profit AND stretched above its short-term mean (mean reversion). Keeps
+# a core position into the catalyst. Self-limiting: stops once the name reverts.
+# Skips names with a catalyst within MIN_DAYS_TO_CATALYST so events can play out.
+PROFIT_LOCK_ENABLED = os.getenv("PROFIT_LOCK_ENABLED", "1") not in ("0", "false", "False")
+PROFIT_LOCK_GAIN_PCT = float(os.getenv("PROFIT_LOCK_GAIN_PCT", "0.20"))        # min +20% unrealized
+PROFIT_LOCK_TRIM_FRACTION = float(os.getenv("PROFIT_LOCK_TRIM_FRACTION", "0.25"))  # sell 25% of position
+PROFIT_LOCK_ZSCORE = float(os.getenv("PROFIT_LOCK_ZSCORE", "1.5"))            # extended >=1.5 std above mean
+PROFIT_LOCK_LOOKBACK_DAYS = int(os.getenv("PROFIT_LOCK_LOOKBACK_DAYS", "20"))  # mean/std window
+PROFIT_LOCK_MIN_DAYS_TO_CATALYST = int(os.getenv("PROFIT_LOCK_MIN_DAYS_TO_CATALYST", "3"))
+
 # Risk haircut (size DOWN violent names). Grounded in the event-return regression
 # (returns_regression.py): direction is unpredictable, but MAGNITUDE is — and the
 # strongest driver is small market cap (smaller => bigger blowups). So we shrink

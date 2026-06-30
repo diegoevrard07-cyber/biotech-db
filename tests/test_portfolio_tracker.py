@@ -20,6 +20,21 @@ def test_short_pnl_and_value():
     assert t.realized_pnl("short", 100, 10.0, 12.0) == -200.0
 
 
+def test_zscore_basic():
+    # Flat history -> undefined.
+    assert t.zscore(10.0, [10.0, 10.0, 10.0, 10.0, 10.0]) is None
+    # Too few points -> None.
+    assert t.zscore(10.0, [10.0, 11.0]) is None
+    # Current sits at the mean -> 0.
+    assert t.zscore(3.0, [1.0, 2.0, 3.0, 4.0, 5.0]) == 0.0
+    # Stretched above the mean -> positive.
+    z = t.zscore(20.0, [10.0, 11.0, 9.0, 10.5, 9.5])
+    assert z is not None and z > 1.5
+    # Below the mean -> negative.
+    z2 = t.zscore(5.0, [10.0, 11.0, 9.0, 10.5, 9.5])
+    assert z2 is not None and z2 < 0
+
+
 def test_cash_flows():
     # Buying a long spends cash; selling returns it.
     assert t.cash_delta_on_open("long", 100, 10.0) == -1000.0

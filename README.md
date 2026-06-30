@@ -137,6 +137,17 @@ Portfolio data (syncs across machines):
 
 Run `python apply_schema.py` after pulling to create new tables. Import local CSV history once with `python scripts/sync_performance_to_db.py`.
 
+## Risk mitigation overlays (paper autopilot)
+
+Two dynamic, end-of-day risk controls run inside `paper_autopilot.py` (all configurable in `.env`, all reduce risk only):
+
+| Overlay | What it does | Key knobs (defaults) |
+|---------|--------------|----------------------|
+| **Drawdown circuit breaker** | If equity falls > X% below its peak, shrink all targets and pause new opens until it recovers (catches correlated sector selloffs). | `DRAWDOWN_CIRCUIT_PCT=0.10`, `DRAWDOWN_DERISK_FACTOR=0.5` |
+| **Partial profit-lock (mean reversion)** | Scale OUT a fraction of a LONG winner when it is both in profit AND stretched above its short-term mean (z-score). Keeps a core into the catalyst; skips names with a catalyst within N days. | `PROFIT_LOCK_GAIN_PCT=0.20`, `PROFIT_LOCK_TRIM_FRACTION=0.25`, `PROFIT_LOCK_ZSCORE=1.5`, `PROFIT_LOCK_MIN_DAYS_TO_CATALYST=3` |
+
+Disable either with `DRAWDOWN_CIRCUIT_ENABLED=0` / `PROFIT_LOCK_ENABLED=0`. Note: EOD-based — they mitigate multi-day slides and over-extension, not single-name overnight gaps (the 5% per-name cap covers that).
+
 ## SEC User-Agent (required before Layer 4)
 
 SEC EDGAR requires a descriptive `User-Agent` header with your real contact info. Set in `.env`:

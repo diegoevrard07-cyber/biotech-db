@@ -83,6 +83,23 @@ def shares_from_dollars(dollars: float, price: float | None) -> float | None:
     return float(dollars) / float(price)
 
 
+def zscore(current: float, history: list[float]) -> float | None:
+    """Standard score of `current` vs a price history window (population stdev).
+
+    Returns None when the window is too short or flat. Positive => stretched
+    ABOVE the recent mean (overbought / mean-reversion candidate).
+    """
+    vals = [float(x) for x in history if x is not None]
+    if len(vals) < 5:
+        return None
+    mean = sum(vals) / len(vals)
+    var = sum((v - mean) ** 2 for v in vals) / len(vals)
+    sd = var ** 0.5
+    if sd <= 0:
+        return None
+    return (float(current) - mean) / sd
+
+
 def size_from_weight(weight: float, equity: float,
                      price: float | None) -> dict[str, Any]:
     """Translate a target portfolio weight (signed fraction) into $ and shares."""
