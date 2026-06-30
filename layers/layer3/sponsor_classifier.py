@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
-from pathlib import Path
 
 import config
 from layers.layer1.seed_loader import load_company_seeds

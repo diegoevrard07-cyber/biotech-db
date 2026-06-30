@@ -64,8 +64,6 @@ def _ret(a, b):
 
 
 def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | None = None) -> dict:
-    from datetime import date as _date
-
     trade_returns: list[float] = []
     weighted_returns: list[float] = []
     by_type: dict[str, int] = {}

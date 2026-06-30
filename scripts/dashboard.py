@@ -11,7 +11,7 @@ All DB queries are cached for 5 minutes (@st.cache_data(ttl=300)).
 from __future__ import annotations
 
 import os
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 import pandas as pd

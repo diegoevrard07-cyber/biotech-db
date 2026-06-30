@@ -210,7 +210,7 @@ def fetch_negative(limit_per_query: int = 1) -> list[dict]:
             filename, filed = resolved
             try:
                 html = download_primary_html(cik, adsh, filename)
-            except Exception as exc:
+            except Exception:
                 continue
             display = (hit.get("display_names") or [""])[0]
             ticker = _parse_ticker(display) or "UNK"

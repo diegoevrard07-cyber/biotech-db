@@ -96,7 +96,7 @@ def verify_layer4() -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    args = parser.parse_args()
+    parser.parse_args()
     ok = verify_layer4()
     sys.exit(0 if ok else 1)
 

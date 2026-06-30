@@ -211,7 +211,7 @@ def verify_layer3() -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    args = parser.parse_args()
+    parser.parse_args()
     ok = verify_layer3()
     sys.exit(0 if ok else 1)
 

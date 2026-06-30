@@ -20,7 +20,6 @@ from tqdm import tqdm
 import config
 from db import get_connection
 from layers.layer3.indication_taxonomy import categorize_indication
-from layers.layer3.sponsor_classifier import classify_sponsor
 from logger import setup_logger
 
 log = setup_logger("ingest_fda_approvals")
