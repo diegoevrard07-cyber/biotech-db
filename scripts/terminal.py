@@ -831,7 +831,6 @@ def page_portfolio() -> None:
 # ===========================================================================
 def page_home() -> None:
     st.title("Cockpit")
-    honesty_banner()
     ensure_account()
     acct = get_account()
     prices = latest_prices()
