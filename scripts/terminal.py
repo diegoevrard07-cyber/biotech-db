@@ -1308,8 +1308,6 @@ def render_trade_book_panel(book: dict, equity: float, prices: dict[str, float],
         ticker = summary.iloc[sel_rows[0]]["ticker"]
         with st.expander(f"{ticker} — company dossier", expanded=True):
             render_ticker_dossier(ticker)
-    else:
-        st.caption("Tip: click a row in the table above to load company details.")
 
 
 # ===========================================================================
