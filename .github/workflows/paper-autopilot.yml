@@ -1,0 +1,53 @@
+name: Paper Autopilot
+
+# Runs the paper-trading autopilot in the cloud so it no longer depends on a
+# laptop being on. Writes to Supabase (DATABASE_URL). Weekdays after US close.
+#
+# Times are UTC. 22:30 UTC is safely after the US market close year-round
+# (~00:30 Brussels CEST / 23:30 CET). Trades the same US trading day.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   DATABASE_URL, POE_API_KEY, SEC_USER_AGENT
+
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"   # weekdays 22:30 UTC
+  workflow_dispatch:           # allow manual "Run workflow" from the Actions tab
+
+concurrency:
+  group: paper-autopilot
+  cancel-in-progress: false
+
+jobs:
+  autopilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: UTC
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      POE_API_KEY: ${{ secrets.POE_API_KEY }}
+      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run paper autopilot
+        run: python scripts/paper_autopilot.py
+
+      - name: Upload run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autopilot-log-${{ github.run_id }}
+          path: data/logs/
+          if-no-files-found: ignore
+          retention-days: 14

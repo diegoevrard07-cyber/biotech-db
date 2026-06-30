@@ -148,6 +148,21 @@ Two dynamic, end-of-day risk controls run inside `paper_autopilot.py` (all confi
 
 Disable either with `DRAWDOWN_CIRCUIT_ENABLED=0` / `PROFIT_LOCK_ENABLED=0`. Note: EOD-based — they mitigate multi-day slides and over-extension, not single-name overnight gaps (the 5% per-name cap covers that).
 
+## Cloud automation (no laptop required)
+
+Because all state lives in Supabase, the autopilot can run on GitHub Actions instead of a local scheduler — see `.github/workflows/`:
+
+| Workflow | Schedule (UTC) | Runs |
+|----------|----------------|------|
+| `daily-refresh.yml` | 22:00 daily | `refresh_all.py` (keeps signals fresh) |
+| `paper-autopilot.yml` | 22:30 weekdays | `paper_autopilot.py` (syncs the PAPER book) |
+
+**Setup (one time):** add three repo secrets under *Settings → Secrets and variables → Actions* — `DATABASE_URL`, `POE_API_KEY`, `SEC_USER_AGENT`. Both workflows also have a manual *Run workflow* button (`workflow_dispatch`).
+
+Caveats: GitHub Actions cron is best-effort (can be delayed minutes) and scheduled workflows auto-disable after ~60 days of repo inactivity (re-enable in the Actions tab). For a once-daily paper job this is fine. The local launchd/cron setup still works if you prefer running on your Mac — use one or the other to avoid double-trading.
+
+To host the dashboard 24/7, deploy `scripts/terminal.py` to **Streamlit Community Cloud** (free) and add the same secrets there.
+
 ## SEC User-Agent (required before Layer 4)
 
 SEC EDGAR requires a descriptive `User-Agent` header with your real contact info. Set in `.env`:
