@@ -5,7 +5,10 @@ name: Daily Data Refresh
 # before the autopilot job. Writes to Supabase.
 #
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
-#   DATABASE_URL, POE_API_KEY, SEC_USER_AGENT
+#   DATABASE_URL    (Supabase Postgres)
+#   SEC_USER_AGENT  (SEC EDGAR requires a descriptive UA for Layer 4 filings)
+# POE_API_KEY is NOT required: the Layer-2 council is scaffolded but not wired
+# into the active pipeline. Omit it.
 
 on:
   schedule:
@@ -23,7 +26,6 @@ jobs:
     env:
       TZ: UTC
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      POE_API_KEY: ${{ secrets.POE_API_KEY }}
       SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
     steps:
       - uses: actions/checkout@v4

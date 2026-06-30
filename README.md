@@ -161,7 +161,7 @@ The autopilot is **chained** to the refresh (`workflow_run`), so trades always r
 
 **Why once a day, not every few minutes:** every signal here is end-of-day granularity (prices use daily closes; SEC/CT.gov change slowly). Polling more often adds no signal, risks rate-limit bans from yfinance/SEC, and burns Actions minutes. Once daily after the close is optimal.
 
-**Setup (one time):** add three repo secrets under *Settings → Secrets and variables → Actions* — `DATABASE_URL`, `POE_API_KEY`, `SEC_USER_AGENT`. Both workflows also have a manual *Run workflow* button (`workflow_dispatch`).
+**Setup (one time):** add repo secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL` (both jobs) and `SEC_USER_AGENT` (refresh only, for SEC EDGAR). `POE_API_KEY` is **not** needed — the Layer-2 council is scaffolded but not wired into the active pipeline. Both workflows also have a manual *Run workflow* button (`workflow_dispatch`).
 
 Caveats: GitHub Actions cron is best-effort (can be delayed minutes) and scheduled workflows auto-disable after ~60 days of repo inactivity (re-enable in the Actions tab). For a once-daily paper job this is fine. The local launchd/cron setup still works if you prefer running on your Mac — use one or the other to avoid double-trading.
 

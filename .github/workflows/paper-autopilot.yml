@@ -8,8 +8,8 @@ name: Paper Autopilot
 # refresh took. Trades only execute on weekdays (UTC); the refresh itself runs
 # every day to keep research data current.
 #
-# Required repo secrets (Settings -> Secrets and variables -> Actions):
-#   DATABASE_URL, POE_API_KEY, SEC_USER_AGENT
+# Required repo secret (Settings -> Secrets and variables -> Actions):
+#   DATABASE_URL   (the autopilot only reads/writes the portfolio in Supabase)
 
 on:
   workflow_run:
@@ -28,8 +28,6 @@ jobs:
     env:
       TZ: UTC
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      POE_API_KEY: ${{ secrets.POE_API_KEY }}
-      SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
     steps:
       - name: Gate to weekdays (UTC)
         id: gate
