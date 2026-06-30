@@ -17,6 +17,38 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-06-30 — Terminal restructure: Strategy tab, merged Research, dead-code cleanup
+
+**Branch/PR:** `cursor/remove-cockpit-honesty-banner-7e76` (#4)
+
+- **Merged Research surface.** Collapsed the two Research nav pages ("Market Intel" and
+  "Models & Data") into a single `page_research` ("Market & Models") with tabs: Company
+  dossier, Catalyst calendar, Validation, Data health, Glossary. Nav is now
+  `Trade Desk: Cockpit · Portfolio · Action Desk` and `Research: Strategy · Market & Models`.
+- **New Strategy tab** (`page_strategy`): a quant-grade spec of the engine — thesis,
+  universe/inputs, composite grade formula, edge-gap definition, trade-type decision
+  rules, sizing (fractional Kelly + market-cap risk-haircut tiers), portfolio caps, exit
+  timing, risk overlays, validation/calibration, cadence, and known limitations. Reads
+  parameters live from `config` + `layers.composite.scorer` so it cannot drift from the
+  running system. No advisory/hint copy.
+- **Dead code removed** from `scripts/terminal.py`: unused pages `page_security`,
+  `page_calendar`, `page_health` (the last duplicated `_render_data_health`); unused
+  `timedelta` import; unused locals `best_day`, `cid`, `caps`. Fixed the stale module
+  docstring.
+- **Repo-wide lint cleanup:** removed unused imports / dead locals flagged by pyflakes
+  across `scripts/` and `layers/` (verify_layer3/4, fetch_eight_k_fixtures,
+  seed_paper_trades, ingest_fda_approvals, dashboard, backtest, ingest_financials,
+  catalyst_extractor, dedupe, indication_taxonomy, ctgov_historical, sponsor_classifier).
+
+**Why:** declutter navigation, give a single authoritative strategy reference, and bring
+the codebase to a clean health baseline.
+
+**Verify:** `python -m pytest` → 182 passed; `python -m pyflakes scripts/ layers/` →
+clean; headless `AppTest` render of Cockpit/Portfolio/Action Desk/Market & Models/Strategy
+against the live DB → no exceptions.
+
+---
+
 ## 2026-06-30 — UI cleanup: remove advisory copy from Edge Terminal
 
 **Branch/PR:** `cursor/remove-cockpit-honesty-banner-7e76` (#4)
