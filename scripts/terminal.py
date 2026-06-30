@@ -310,11 +310,6 @@ def data_freshness() -> dict:
     return out
 
 
-def honesty_banner() -> None:
-    st.info("Longs use the validated base-rate edge. Shorts and fades are experimental — "
-            "paper-trade until they earn a track record. Prices are end-of-day.")
-
-
 def freshness_caption() -> None:
     fr = data_freshness()
     today = pd.Timestamp(date.today(), tz="UTC")
@@ -692,7 +687,6 @@ def render_action_center(open_df: pd.DataFrame) -> None:
 
 def page_portfolio() -> None:
     st.title("Portfolio")
-    honesty_banner()
     ensure_account()
     acct = get_account()
     prices = latest_prices()
