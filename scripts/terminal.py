@@ -678,11 +678,11 @@ def _holding_dicts(df: pd.DataFrame) -> list[dict]:
 def render_action_center(open_df: pd.DataFrame) -> None:
     st.subheader("Action center")
     if open_df.empty:
-        st.caption("No open positions. Log a trade below or check the Action Sheet for ideas.")
+        st.caption("No open positions.")
         return
     alerts = pf.exit_alerts(_holding_dicts(open_df), date.today(), soon_days=7)
     if not alerts:
-        st.success("Nothing pressing. No exits due in the next 7 days.")
+        st.caption("No exits due within 7 days.")
         return
     for a in alerts:
         when = "TODAY / overdue" if a["days"] <= 0 else f"in {a['days']} day(s) ({a['exit_date']})"
@@ -700,8 +700,6 @@ def page_portfolio() -> None:
     # ---- account setup ----
     needs_setup = (acct["starting_capital"] is None and acct["cash"] == 0 and open_df.empty)
     with st.expander("⚙️ Account / cash", expanded=needs_setup):
-        if needs_setup:
-            st.caption("Set your starting cash to begin. Cash auto-adjusts as you log trades.")
         cash = st.number_input("Cash balance ($)", value=float(acct["cash"]), step=100.0, format="%.2f")
         start_cap = st.number_input("Starting capital ($) — for total-return tracking",
                                     value=float(acct["starting_capital"] or 0.0), step=100.0, format="%.2f")
@@ -713,8 +711,7 @@ def page_portfolio() -> None:
     # ---- account summary ----
     summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
     m = st.columns(6)
-    m[0].metric("Account value", fmt_usd(summ["equity"]),
-                help="Cash + market value of open positions (long +, short −).")
+    m[0].metric("Account value", fmt_usd(summ["equity"]))
     m[1].metric("Cash", fmt_usd(summ["cash"]))
     m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
     m[3].metric("Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"]))
@@ -858,23 +855,20 @@ def page_home() -> None:
     # ---- XBI benchmark strip (always visible) ----
     st.subheader(f"Benchmark · {bench_tk} (SPDR S&P Biotech ETF)")
     if track_start is None:
-        st.warning("Log your first trade to start the XBI comparison window.")
+        st.caption("No trades yet — XBI window starts at first trade.")
     elif bench_px is None:
         st.warning(f"No {bench_tk} price available — check network or run `python scripts/ingest_prices.py --ticker XBI`.")
     else:
         xbi_cols = st.columns(5)
-        xbi_cols[0].metric(f"{bench_tk} price", f"${bench_px:.2f}",
-                           help="Latest end-of-day close (DB or yfinance).")
+        xbi_cols[0].metric(f"{bench_tk} price", f"${bench_px:.2f}")
         xbi_cols[1].metric(f"{bench_tk} return since {track_start}",
-                           f"{bench_ret:+.1%}" if bench_ret is not None else "—",
-                           help=f"Total return of {bench_tk} since your first trade.")
+                           f"{bench_ret:+.1%}" if bench_ret is not None else "—")
         xbi_cols[2].metric("Portfolio return",
                            f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—",
                            delta=fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None,
                            help=f"Vs starting capital {fmt_usd(start_cap)}.")
         xbi_cols[3].metric("Alpha vs XBI",
-                           f"{alpha:+.1%}" if alpha is not None else "—",
-                           help="Portfolio return minus XBI over the same window.")
+                           f"{alpha:+.1%}" if alpha is not None else "—")
         xbi_cols[4].metric(f"{bench_tk} @ start $",
                            fmt_usd(bench_eq_today) if bench_eq_today else "—",
                            help=f"What ${start_cap:,.0f} in {bench_tk} would be worth today.")
@@ -882,22 +876,19 @@ def page_home() -> None:
     st.divider()
 
     r1 = st.columns(5)
-    r1[0].metric("Account value", fmt_usd(summ["equity"]),
-                 help="Cash + signed market value of all open positions.")
+    r1[0].metric("Account value", fmt_usd(summ["equity"]))
     r1[1].metric("Total return",
                  f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—",
                  delta=fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None,
                  help=f"Vs starting capital {fmt_usd(start_cap)}.")
-    r1[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]),
-                 help="Open positions only — not locked in until you exit.")
+    r1[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
     r1[3].metric("Realized P&L", fmt_usd(realized),
                  help=f"Closed trades only ({closed_n} closed).")
     r1[4].metric("Net exposure", f"{summ['net_pct']:+.0%}",
                  help=f"Long minus short = {fmt_usd(summ['net_usd'])} directional.")
 
     r2 = st.columns(4)
-    r2[0].metric("Cash", fmt_usd(summ["cash"]),
-                 help="Unallocated buying power.")
+    r2[0].metric("Cash", fmt_usd(summ["cash"]))
     r2[1].metric("Deployed", f"{deployed_pct:.0%}",
                  help=f"{fmt_usd(summ['invested_usd'])} cost basis in open positions.")
     r2[2].metric("Gross long / short",
@@ -1023,7 +1014,6 @@ def page_home() -> None:
     # ---- trade book (action desk names to trade) ----
     book = load_action_book(90)
     st.subheader("Trade book")
-    st.caption("Capped action-desk names in the near-term window. Select a row for the full dossier.")
     render_trade_book_panel(book, summ["equity"] or 0.0, prices, act_days=60, key_prefix="cockpit")
 
     # ---- position visuals (stacked full-width — no overlap) ----
@@ -1294,7 +1284,6 @@ def render_trade_book_panel(book: dict, equity: float, prices: dict[str, float],
         "base": "{:.2f}", "gap": "{:+.2f}", "d->": "{:.0f}",
     }, na_rep="")
 
-    st.caption("Select a row to open the full company dossier below.")
     pick = st.dataframe(
         styled, use_container_width=True, hide_index=True,
         height=min(420, 44 + 32 * len(summary)),
@@ -1317,7 +1306,6 @@ def load_action_book(horizon_days: int) -> dict:
 def page_action_desk() -> None:
     """Merged Action Sheet + Trade Blotter: act-now trades with full metrics."""
     st.title("Action Desk")
-    st.caption("Act now · capped book · all signals. Click a row in Act now for the company dossier.")
 
     flt = _action_desk_filters(sidebar=False)
     blotter = load_blotter()
@@ -1369,7 +1357,7 @@ def page_action_desk() -> None:
             }, na_rep="—")
             st.dataframe(styled, use_container_width=True, hide_index=True, height=520)
             if not equity:
-                st.caption("Set starting capital on Portfolio to see $ / share sizing.")
+                st.caption("No starting capital set — $/share sizing hidden.")
             csv = view.to_csv(index=False).encode("utf-8")
             st.download_button("⬇ Download capped book (CSV)", csv,
                                file_name=f"action_sheet_{book['today']}.csv", mime="text/csv")
@@ -1412,7 +1400,7 @@ def page_action_desk() -> None:
             "runway": "{:.0f}", "conf": "{:.2f}", "d->": "{:.0f}",
         }, na_rep="—")
         st.dataframe(styled, use_container_width=True, hide_index=True, height=560)
-        st.caption("✓ = name is in the risk-capped book. Use for research; trade from **Act now** / **Capped book**.")
+        st.caption("✓ = in the risk-capped book.")
 
 
 # ===========================================================================
@@ -1519,10 +1507,9 @@ def page_validation(*, embedded: bool = False) -> None:
         st.title("Validation")
 
     # --- Event-study evidence: the REAL returns dataset (8-K reactions) ---
-    st.subheader("Event-study evidence — realized returns around 8-K announcements")
-    st.caption("Each 8-K is a market-moving filing. We measure the abnormal return "
-               "(stock move minus XBI) over a short hold. This is our ground truth for "
-               "whether signals predict profit. Build/refresh: python scripts/build_event_returns.py")
+    st.subheader("Event-study evidence — abnormal returns around 8-K announcements")
+    st.caption("Abnormal return = name − XBI over the hold. "
+               "Build/refresh: `python scripts/build_event_returns.py`")
     hold = st.radio("Hold window (trading days)", [1, 3, 5], index=1, horizontal=True,
                     key="evt_hold")
     er = q("SELECT abnormal_return, run_up_30d, event_type FROM event_returns "
@@ -1538,9 +1525,6 @@ def page_validation(*, embedded: bool = False) -> None:
         m2.metric("Median abnormal", f"{ar.median():+.1%}")
         m3.metric("Std (dispersion)", f"{ar.std():.1%}")
         m4.metric("|move| ≥ 25%", f"{(ar.abs() >= 0.25).mean():.0%}")
-        st.caption("Takeaway: biotech 8-K reactions are extremely high-variance — that "
-                   "dispersion is the opportunity AND the risk. Median near zero means "
-                   "most filings are noise; the edge is in selecting which.")
 
         paired = er.dropna(subset=["run_up_30d"]).copy()
         if len(paired) >= 25:
@@ -1552,18 +1536,14 @@ def page_validation(*, embedded: bool = False) -> None:
             fig = px.bar(grp, x="q", y="abnormal_return",
                          color="abnormal_return",
                          color_continuous_scale=["#ff5c5c", "#6b7280", "#29d391"],
-                         title="Forward abnormal return by PRE-event run-up (the sentiment-gap test)")
+                         title="Forward abnormal return by pre-event run-up quintile")
             fig.update_layout(height=320, showlegend=False, coloraxis_showscale=False,
                               paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
                               font_color="#cfd3dc", yaxis_tickformat=".1%",
                               xaxis_title="", yaxis_title="avg forward abnormal")
             st.plotly_chart(fig, use_container_width=True)
             corr = paired["run_up_30d"].corr(paired["abnormal_return"])
-            st.caption(f"Finding: the relationship is a weak **barbell**, not a clean fade "
-                       f"(corr={corr:+.3f}). Names that already crashed (Q1) or already "
-                       f"mooned (Q5) underperform; the middle drifts up. Pure 'fade the "
-                       f"run-up' is weak — only the most extreme run-ups give back, and only "
-                       f"slightly. Treat current fade signals with caution.")
+            st.caption(f"corr(run-up, forward abnormal) = {corr:+.3f}")
 
         bytype = er.dropna(subset=["event_type"])
         if not bytype.empty:
@@ -1572,11 +1552,8 @@ def page_validation(*, embedded: bool = False) -> None:
                   .sort_values("mean"))
             tt["mean"] = (tt["mean"] * 100).round(2).astype(str) + "%"
             tt["median"] = (tt["median"] * 100).round(2).astype(str) + "%"
-            st.markdown("**Sanity check — abnormal return by labeled event type:**")
+            st.markdown("**Abnormal return by event type**")
             st.dataframe(tt, use_container_width=True, hide_index=True)
-            st.caption("Offerings/license deals skew negative, approvals positive — the "
-                       "signs match reality, which validates the abnormal-return math. "
-                       "(Labeled subset is small; signs > magnitudes here.)")
 
     st.divider()
     runs = q("SELECT * FROM calibration_runs ORDER BY run_at DESC LIMIT 1")
@@ -1900,7 +1877,7 @@ def main() -> None:
     page_fn = _render_sidebar_nav()
     st.sidebar.markdown("---")
     page_fn()
-    st.sidebar.caption("Cache 30s · click Refresh after autopilot runs")
+    st.sidebar.caption("Cache 30s")
 
 
 if __name__ == "__main__":
