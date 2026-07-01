@@ -8,11 +8,14 @@ Designed for Windows Task Scheduler (weekday evenings). Each run:
   4. Opens new names and rebalances existing ones toward target weights.
   5. Appends a daily performance snapshot to data/raw/paper_performance.csv.
 
-Only touches notes='PAPER' holdings. Longs AND shorts (fades) follow the action desk.
+Only touches notes='PAPER' holdings. When config.LONG_ONLY is set (default), the
+capped book contains no shorts, so no fades are opened and any open shorts fall out
+of the book and are covered on the next sync.
 
   python scripts/paper_autopilot.py                 # sync to action desk + snapshot
   python scripts/paper_autopilot.py --dry-run       # show planned trades
   python scripts/paper_autopilot.py --exits-only    # close due exits only, no sync
+  python scripts/paper_autopilot.py --cover-shorts  # cover all open PAPER shorts now
   python scripts/paper_autopilot.py --horizon-days 90
 """
 
@@ -131,7 +134,7 @@ def _close_position(cur, h: dict, px: float, today: date, reason: str,
     rp = pf.realized_pnl(h["side"], sh, ep, px)
     cash_delta = pf.cash_delta_on_close(h["side"], sh, px)
     tag = {"exit_due": "EXIT", "not_in_book": "DROP", "side_flip": "FLIP",
-           "trade_change": "RETYPE"}.get(reason, "CLOSE")
+           "trade_change": "RETYPE", "long_only_cover": "COVER"}.get(reason, "CLOSE")
     print(f"  {tag} {h['ticker']:<6} {h['side']:<5} {h['trade_type']:<13} "
           f"{sh:.2f} @ {px:.2f}  realized {rp:+,.0f}  ({reason})")
     if not dry_run:
@@ -546,6 +549,59 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
              realized_total=round(realized_total, 2))
 
 
+def cover_shorts(*, dry_run: bool = False) -> None:
+    """Close every open PAPER short at last close and free the cash. One-shot.
+
+    Use to flatten shorts immediately (e.g. when switching to long-only) rather than
+    waiting for the daily sync to drop them as not_in_book.
+    """
+    today = date.today()
+    with get_connection() as conn:
+        raw = conn.connection
+        cur = raw.cursor()
+        try:
+            cur.execute("INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
+                        "ON CONFLICT (id) DO NOTHING")
+            cur.execute("SELECT cash_usd FROM portfolio_account WHERE id=1")
+            cash = float((cur.fetchone() or (0.0,))[0] or 0.0)
+
+            shorts = [h for h in _load_open_paper(cur) if h["side"] == pf.SHORT]
+            print(f"\n=== COVER SHORTS  {today} ===")
+            if not shorts:
+                print("  No open PAPER shorts.")
+                return
+            tickers = [h["ticker"] for h in shorts]
+            n_px = 0 if dry_run else _refresh_prices(cur, tickers)
+            closes = _latest_closes(cur, tickers)
+            print(f"  Open shorts: {len(shorts)}   price rows refreshed: {n_px}")
+
+            covered = 0
+            realized_today = 0.0
+            for h in shorts:
+                px = closes.get(h["ticker"])
+                if px is None:
+                    print(f"  [skip] {h['ticker']}: no price")
+                    continue
+                cd, rp = _close_position(cur, h, px, today, "long_only_cover", dry_run=dry_run)
+                cash += cd
+                realized_today += rp
+                covered += 1
+
+            print(f"\n  Covered: {covered}/{len(shorts)}   realized {realized_today:+,.0f}   "
+                  f"cash -> ${cash:,.0f}")
+            if not dry_run:
+                cur.execute("UPDATE portfolio_account SET cash_usd=%s, updated_at=NOW() WHERE id=1",
+                            (round(cash, 2),))
+                raw.commit()
+                print("  Committed.")
+            else:
+                print("  (dry run — nothing written)")
+        finally:
+            cur.close()
+    log.info("cover_shorts_done", covered=covered if shorts else 0,
+             realized=round(realized_today, 2) if shorts else 0.0)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Paper autopilot — sync to capped action desk")
     ap.add_argument("--dry-run", action="store_true")
@@ -553,12 +609,17 @@ def main() -> None:
                     help="close due exits only; do not sync to action desk")
     ap.add_argument("--no-open", action="store_true",
                     help="alias for --exits-only (legacy)")
+    ap.add_argument("--cover-shorts", action="store_true",
+                    help="cover all open PAPER shorts now, then exit")
     ap.add_argument("--horizon-days", type=int, default=None,
                     help=f"action desk horizon (default {config.AUTOPILOT_HORIZON_DAYS})")
     args = ap.parse_args()
     exits_only = args.exits_only or args.no_open
     try:
         config.preflight()
+        if args.cover_shorts:
+            cover_shorts(dry_run=args.dry_run)
+            return
         run(dry_run=args.dry_run, sync_book=not exits_only,
             horizon_days=args.horizon_days)
     except Exception as exc:  # noqa: BLE001
