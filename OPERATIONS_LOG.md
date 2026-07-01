@@ -17,6 +17,40 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-07-01 — Long-only mode (drop shorts/fades)
+
+**Branch/PR:** `cursor/long-only-mode-7e76`
+
+Shorts/fades were never actually disabled — earlier discussion left `AUTOPILOT_LONG_ONLY`
+unimplemented, so the autopilot kept opening `fade` shorts (8 open, the main P&L drag).
+This makes long-only real:
+
+- **`config.LONG_ONLY`** (env `LONG_ONLY`, default **ON**). Set `LONG_ONLY=0` to re-enable
+  shorts.
+- **`action_sheet.compute_book`**: when long-only, negative-weight (short/fade) signals are
+  dropped before sizing — the capped book, Action Desk trade book, and paper autopilot all
+  become long-only. Existing open shorts fall out of the book and get covered on the next
+  sync (`not_in_book`).
+- **`action_sheet.size_book`**: in long-only the net-exposure throttle is skipped (net =
+  gross long), so deployment is governed by the gross-long cap (`MAX_GROSS_LONG`, 100%)
+  instead of the `MAX_NET` 60% cap — freed short capital is redeployed into longs rather
+  than sitting idle.
+- **`paper_autopilot.py --cover-shorts`**: one-shot command that covers all open PAPER
+  shorts at last close and frees the cash (used to flatten immediately rather than waiting
+  for the daily sync).
+- **Strategy page** reflects the live mode (LONG-ONLY / LONG-SHORT) and the cap change.
+
+**One-time action:** ran `--cover-shorts` on the live DB to flatten the 8 open shorts
+(net realized ≈ −$130, locking in drag that was already unrealized).
+
+**Note (risk posture):** long-only now allows up to 100% long deployment (was ~90% net with
+shorts). Lower `MAX_GROSS_LONG` to hold a larger cash buffer if desired.
+
+**Verify:** `python -m pytest` → 184 passed (2 new long-only tests); `--cover-shorts --dry-run`
+previewed all 8 covers before writing.
+
+---
+
 ## 2026-06-30 — Strip explanatory fluff from the terminal (keep operational text)
 
 **Branch/PR:** `cursor/remove-cockpit-honesty-banner-7e76` (#4)
