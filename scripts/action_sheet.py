@@ -144,10 +144,15 @@ def size_book(rows: list[dict]) -> tuple[list[dict], dict]:
     _scale_side(rows, positive=False, cap=config.MAX_GROSS_SHORT)
 
     # Enforce net exposure: scale the dominant side down to meet the net cap.
+    # In long-only mode there are no shorts, so net == gross long and the
+    # gross-long cap already governs deployment; skip the net throttle so freed
+    # short capital can be redeployed into longs instead of sitting idle.
     gl = sum(r["weight"] for r in rows if r["weight"] > 0)
     gs = -sum(r["weight"] for r in rows if r["weight"] < 0)
     net0 = gl - gs
-    if net0 > config.MAX_NET and gl > 0:
+    if config.LONG_ONLY:
+        pass
+    elif net0 > config.MAX_NET and gl > 0:
         target_long = config.MAX_NET + gs
         f = max(0.0, target_long / gl)
         for r in rows:
@@ -182,6 +187,8 @@ def compute_book(*, horizon_days: int = 365) -> dict:
     with get_connection() as conn:
         raw = conn.execute(text(_SIGNAL_SQL), {"h": horizon_days}).mappings().all()
     picks = _best_per_ticker(raw)
+    if config.LONG_ONLY:
+        picks = [p for p in picks if p["weight"] > 0]  # drop shorts/fades entirely
     apply_risk_haircut(picks)   # de-risk tiny-caps BEFORE applying portfolio caps
     rows, summary = size_book(picks)
     return {"rows": rows, "today": today, "horizon_days": horizon_days, **summary}

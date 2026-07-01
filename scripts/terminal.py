@@ -1613,10 +1613,12 @@ def page_strategy() -> None:
     w = scorer.DEFAULT_WEIGHTS
     tiers = config.RISK_HAIRCUT_TIERS
 
+    mode = "LONG-ONLY" if config.LONG_ONLY else "LONG/SHORT"
     st.title("Strategy specification")
     st.caption(
         "Decision-support engine for catalyst-driven small-cap onc/CNS biotech "
         "(GBM flagship subset). End-of-day data; one rebalance per day. "
+        f"Mode: **{mode}**. "
         "Parameters below are read live from config — they reflect what is actually running."
     )
 
@@ -1699,6 +1701,12 @@ def page_strategy() -> None:
         "`buy_the_rumor` requires a reliable (SEC-confirmed or medium/high-confidence) date "
         "because it lives or dies on timing."
     )
+    if config.LONG_ONLY:
+        st.markdown(
+            "**Long-only mode is ON:** `fade` (short) signals are still computed and shown "
+            "as research, but they are dropped from the capped book — none are traded, and "
+            "open shorts are covered on the next sync. Set `LONG_ONLY=0` to re-enable shorts."
+        )
 
     # ---- 6. Sizing ----
     st.subheader("6 · Position sizing")
@@ -1734,6 +1742,10 @@ def page_strategy() -> None:
         f"4. **Net exposure** clamped to ±`{config.MAX_NET:.0%}` (dominant side scaled down).\n\n"
         f"Names below 0.1% weight are dropped. Catalysts within `{config.URGENT_DAYS}` days "
         "are flagged urgent."
+        + (f"\n\n**Long-only:** the net throttle is skipped (net = gross long), so deployment "
+           f"is governed by the gross-long cap `{config.MAX_GROSS_LONG:.0%}`, not the "
+           f"`{config.MAX_NET:.0%}` net cap — freed short capital is redeployed into longs."
+           if config.LONG_ONLY else "")
     )
 
     # ---- 8. Exit timing ----

@@ -99,6 +99,12 @@ OUTCOME_MOVE_THRESHOLD = float(os.getenv("OUTCOME_MOVE_THRESHOLD", "0.10"))
 KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.25"))  # fractional Kelly
 MAX_SINGLE_NAME_WEIGHT = float(os.getenv("MAX_SINGLE_NAME_WEIGHT", "0.05"))  # 5% cap
 
+# Long-only mode: drop every short/fade (negative-weight) signal from the capped
+# book. When ON, the action desk and paper autopilot only ever hold longs, and any
+# existing open shorts fall out of the book and get covered on the next sync.
+# Owner preference: shorts/fades are experimental and were the main drag, so default ON.
+LONG_ONLY = os.getenv("LONG_ONLY", "1") not in ("0", "false", "False")
+
 # Portfolio construction caps (action sheet)
 MAX_GROSS_LONG = float(os.getenv("MAX_GROSS_LONG", "1.0"))    # 100% long
 MAX_GROSS_SHORT = float(os.getenv("MAX_GROSS_SHORT", "0.30"))  # 30% short
