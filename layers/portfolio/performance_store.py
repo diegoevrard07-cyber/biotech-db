@@ -37,11 +37,16 @@ _UPSERT_SQL = """
 
 
 def _xbi_base_close(cur, track_start: date) -> float | None:
+    """Benchmark base = first close ON/AFTER the tracking start (the first day you
+    could actually have deployed into XBI), falling back to the last close before it
+    only if none exists after. Must match terminal._benchmark_base_close so the stored
+    metric and the dashboard chart agree — otherwise a weekend/holiday start date makes
+    them pick different bases (e.g. 6/18 vs 6/22) and report different XBI returns."""
     cur.execute(
         """
         SELECT close FROM price_history
-        WHERE ticker = %s AND close IS NOT NULL AND date <= %s
-        ORDER BY date DESC LIMIT 1
+        WHERE ticker = %s AND close IS NOT NULL AND date >= %s
+        ORDER BY date ASC LIMIT 1
         """,
         (config.BENCHMARK_TICKER, track_start),
     )
@@ -51,8 +56,8 @@ def _xbi_base_close(cur, track_start: date) -> float | None:
     cur.execute(
         """
         SELECT close FROM price_history
-        WHERE ticker = %s AND close IS NOT NULL AND date >= %s
-        ORDER BY date ASC LIMIT 1
+        WHERE ticker = %s AND close IS NOT NULL AND date <= %s
+        ORDER BY date DESC LIMIT 1
         """,
         (config.BENCHMARK_TICKER, track_start),
     )
