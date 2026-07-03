@@ -17,6 +17,26 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-07-03 — Fix XBI benchmark base (was overstating XBI by ~4pp)
+
+**Branch/PR:** `cursor/fix-xbi-benchmark-base-7e76`
+
+- **Bug:** the tracking start is the first `entry_date` (2026-06-21), a **weekend/holiday**
+  with no XBI close. `performance_store._xbi_base_close` picked the last close ON/BEFORE
+  (6/18 = $140.72) while the dashboard's `terminal._benchmark_base_close` picked the first
+  close ON/AFTER (6/22 = $145.86). Same window, two different bases → the stored metric
+  showed **XBI +14.0%** while the chart showed **+10.0%**. The 6/18 base anchors XBI three
+  trading days before any position existed and flatters the benchmark.
+- **Fix:** `_xbi_base_close` now prefers the first close ON/AFTER the start (matches the
+  dashboard), falling back to before only if none exists. Restated the stored snapshots.
+- **Corrected numbers:** XBI **+10.0%** (base $145.86). Portfolio +6.9% (post short-strip)
+  → **alpha ≈ −3.1%**, not −7.2%. Still lagging, but roughly half the gap the bug implied.
+
+**Verify:** `performance_store._xbi_base_close` returns $145.86 for track_start 2026-06-21;
+latest snapshot `xbi_return_pct = 0.1001`.
+
+---
+
 ## 2026-07-03 — Strip all historical shorts + performance analysis tools
 
 **Branch/PR:** `cursor/strip-shorts-perf-analysis-7e76`
