@@ -43,19 +43,24 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 st.set_page_config(page_title="Edge Terminal", layout="wide", page_icon="◆")
 
-# ---- Design tokens ----
+# ---- Design tokens (Projection-Finance-style dark UI) ----
 THEME = {
-    "bg": "#0c0f14",
-    "panel": "#141922",
-    "border": "#252d3a",
-    "text": "#e8eaed",
-    "muted": "#8b95a5",
-    "accent": "#5b8def",
-    "green": "#34c759",
-    "red": "#ff5a5f",
-    "amber": "#f0b429",
+    "bg": "#0a0d13",
+    "bg2": "#0e121a",
+    "card": "#12161f",
+    "card2": "#161b26",
+    "border": "#222a38",
+    "border_soft": "#1a212e",
+    "text": "#e8ebf2",
+    "muted": "#8b95a7",
+    "faint": "#596474",
+    "accent": "#6c8cff",
+    "green": "#2fd39a",
+    "red": "#f76a83",
+    "amber": "#f4b740",
+    "purple": "#8b7bff",
     "font": "'Inter', 'Segoe UI', system-ui, sans-serif",
-    "mono": "'JetBrains Mono', 'Consolas', monospace",
+    "mono": "'JetBrains Mono', 'SF Mono', 'Consolas', monospace",
 }
 
 TRADE_COLORS = {
@@ -65,42 +70,200 @@ TRADE_COLORS = {
     "avoid": THEME["muted"],
 }
 
-st.markdown(
-    f"""
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-      html, body, [class*="css"] {{ font-family: {THEME['font']}; color: {THEME['text']}; }}
-      .stApp {{ background: {THEME['bg']}; }}
-      .block-container {{ padding-top: 1rem; padding-bottom: 1rem; max-width: 100%; }}
-      h1 {{ font-size: 1.35rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.15rem; }}
-      h2, h3 {{ font-size: 0.95rem; font-weight: 600; color: {THEME['text']}; margin: 0.75rem 0 0.35rem; }}
-      hr {{ margin: 0.75rem 0; border-color: {THEME['border']}; opacity: 0.5; }}
-      [data-testid="stMetric"] {{
-        background: {THEME['panel']}; border: 1px solid {THEME['border']};
-        border-radius: 8px; padding: 0.55rem 0.75rem;
-      }}
-      [data-testid="stMetricValue"] {{
-        font-family: {THEME['mono']}; font-size: 1rem; color: {THEME['text']};
-      }}
-      [data-testid="stMetricLabel"] {{
-        color: {THEME['muted']}; text-transform: uppercase; font-size: 0.62rem;
-        letter-spacing: 0.06em; font-weight: 500;
-      }}
-      [data-testid="stSidebar"] {{ background: {THEME['panel']}; border-right: 1px solid {THEME['border']}; }}
-      [data-testid="stSidebar"] h1 {{ font-size: 1rem; font-weight: 700; letter-spacing: 0.04em; }}
-      div[data-testid="stDataFrame"] {{ font-size: 0.78rem; }}
-      [data-testid="stExpander"] {{
-        background: {THEME['panel']}; border: 1px solid {THEME['border']}; border-radius: 8px;
-      }}
-      .stAlert {{ border-radius: 8px; }}
-      .panel-caption {{ color: {THEME['muted']}; font-size: 0.82rem; line-height: 1.45; }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Ordered palette for allocation donuts / categorical charts.
+ALLOC_PALETTE = ["#2fd39a", "#6c8cff", "#f76a83", "#f4b740", "#8b7bff",
+                 "#39c0d3", "#e77ac6", "#9aa7bd", "#5b8def", "#57d9a3"]
+
+
+def _inject_css() -> None:
+    t = THEME
+    st.markdown(
+        f"""
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+          html, body, [class*="css"] {{ font-family: {t['font']}; color: {t['text']}; }}
+          .stApp {{
+            background:
+              radial-gradient(1200px 600px at 15% -10%, #141b2b 0%, rgba(20,27,43,0) 55%),
+              radial-gradient(1000px 500px at 100% 0%, #17131f 0%, rgba(23,19,31,0) 50%),
+              {t['bg']};
+          }}
+          header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
+          [data-testid="stToolbar"] {{ right: 1rem; }}
+          .block-container {{ padding: 1.1rem 1.6rem 2rem; max-width: 1500px; }}
+          #MainMenu, footer {{ visibility: hidden; }}
+
+          h1 {{ font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 .1rem; }}
+          h2, h3 {{ font-size: .95rem; font-weight: 600; color: {t['text']}; margin: .3rem 0 .4rem; }}
+          hr {{ margin: .8rem 0; border-color: {t['border_soft']}; opacity: .6; }}
+          a {{ color: {t['accent']}; }}
+
+          /* ---- cards (bordered containers) ---- */
+          [data-testid="stVerticalBlockBorderWrapper"] {{
+            background: linear-gradient(180deg, {t['card2']} 0%, {t['card']} 100%);
+            border: 1px solid {t['border']}; border-radius: 16px;
+            padding: 2px 4px; box-shadow: 0 1px 0 rgba(255,255,255,.02) inset, 0 8px 24px rgba(0,0,0,.28);
+          }}
+
+          /* ---- KPI stat grid (custom HTML) ---- */
+          .pf-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                      gap: 14px; margin: .2rem 0 .3rem; }}
+          .pf-card {{ background: linear-gradient(180deg, {t['card2']} 0%, {t['card']} 100%);
+                      border: 1px solid {t['border']}; border-radius: 16px; padding: 16px 18px;
+                      box-shadow: 0 8px 24px rgba(0,0,0,.28); }}
+          .pf-stat-label {{ color: {t['muted']}; font-size: .66rem; text-transform: uppercase;
+                            letter-spacing: .09em; font-weight: 600; margin-bottom: 10px; }}
+          .pf-stat-row {{ display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }}
+          .pf-stat-val {{ font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em;
+                          font-family: {t['mono']}; }}
+          .pf-stat-sub {{ color: {t['muted']}; font-size: .72rem; margin-top: 7px; }}
+          .pf-arrow {{ color: {t['muted']}; font-weight: 600; }}
+          .pf-delta {{ font-size: .74rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }}
+          .pf-delta.up {{ color: {t['green']}; background: rgba(47,211,154,.12); }}
+          .pf-delta.down {{ color: {t['red']}; background: rgba(247,106,131,.12); }}
+          .pf-delta.flat {{ color: {t['muted']}; background: rgba(139,148,167,.12); }}
+
+          /* ---- badges / chips ---- */
+          .pf-badge {{ display: inline-flex; align-items: center; gap: 6px; font-size: .7rem;
+                       font-weight: 600; padding: 3px 10px; border-radius: 20px;
+                       background: rgba(108,140,255,.14); color: {t['accent']};
+                       border: 1px solid rgba(108,140,255,.25); }}
+          .pf-badge.green {{ background: rgba(47,211,154,.12); color: {t['green']};
+                             border-color: rgba(47,211,154,.25); }}
+          .pf-badge.amber {{ background: rgba(244,183,64,.12); color: {t['amber']};
+                             border-color: rgba(244,183,64,.25); }}
+          .pf-chip {{ display: inline-flex; align-items: center; gap: 7px; font-size: .76rem;
+                      color: {t['text']}; padding: 6px 12px; border-radius: 10px;
+                      background: {t['card']}; border: 1px solid {t['border']}; }}
+          .pf-chip .k {{ color: {t['muted']}; }}
+          .pf-header {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }}
+          .pf-header .spacer {{ flex: 1; }}
+          .pf-big {{ font-size: 2.1rem; font-weight: 800; letter-spacing: -.03em; font-family: {t['mono']}; }}
+
+          /* ---- native metrics fallback ---- */
+          [data-testid="stMetric"] {{ background: {t['card']}; border: 1px solid {t['border']};
+                                      border-radius: 14px; padding: .6rem .9rem; }}
+          [data-testid="stMetricValue"] {{ font-family: {t['mono']}; font-size: 1.15rem; color: {t['text']}; }}
+          [data-testid="stMetricLabel"] {{ color: {t['muted']}; text-transform: uppercase;
+                                           font-size: .62rem; letter-spacing: .07em; font-weight: 600; }}
+
+          /* ---- sidebar ---- */
+          [data-testid="stSidebar"] {{ background: {t['bg2']}; border-right: 1px solid {t['border_soft']}; }}
+          [data-testid="stSidebar"] .block-container {{ padding-top: 1.2rem; }}
+          [data-testid="stSidebar"] h1 {{ font-size: .95rem; font-weight: 800; letter-spacing: .12em; }}
+
+          /* ---- buttons ---- */
+          .stButton > button {{ border-radius: 10px; border: 1px solid {t['border']};
+                                background: {t['card2']}; color: {t['text']}; font-weight: 600; }}
+          .stButton > button:hover {{ border-color: {t['accent']}; color: #fff; }}
+          .stButton > button[kind="primary"] {{ background: {t['accent']}; border-color: {t['accent']};
+                                                 color: #0a0d13; }}
+          .stButton > button[kind="primary"]:hover {{ background: #85a0ff; color: #0a0d13; }}
+          .stDownloadButton > button {{ border-radius: 10px; background: {t['card2']};
+                                        border: 1px solid {t['border']}; color: {t['text']}; }}
+
+          /* ---- inputs ---- */
+          [data-baseweb="select"] > div, .stTextInput input, .stNumberInput input,
+          .stDateInput input {{ background: {t['card']} !important; border-color: {t['border']} !important;
+                                border-radius: 10px !important; color: {t['text']} !important; }}
+          .stTextInput input::placeholder {{ color: {t['faint']}; }}
+
+          /* ---- segmented control (timeframe pills) ---- */
+          [data-testid="stSegmentedControl"] button {{ background: transparent; border: none;
+                                                        color: {t['muted']}; border-radius: 8px; }}
+          [data-testid="stSegmentedControl"] button[aria-checked="true"],
+          [data-testid="stSegmentedControl"] button[aria-selected="true"] {{
+             background: {t['card2']}; color: {t['text']}; }}
+          [data-testid="stSegmentedControl"] > div {{ background: {t['card']};
+             border: 1px solid {t['border']}; border-radius: 10px; padding: 3px; }}
+
+          /* ---- tabs ---- */
+          .stTabs [data-baseweb="tab-list"] {{ gap: 4px; border-bottom: 1px solid {t['border_soft']}; }}
+          .stTabs [data-baseweb="tab"] {{ background: transparent; color: {t['muted']};
+             border-radius: 8px 8px 0 0; padding: 8px 14px; font-weight: 600; font-size: .82rem; }}
+          .stTabs [aria-selected="true"] {{ background: {t['card']}; color: {t['text']}; }}
+
+          /* ---- dataframe ---- */
+          div[data-testid="stDataFrame"] {{ font-size: .8rem; border-radius: 12px; }}
+          [data-testid="stExpander"] {{ background: {t['card']}; border: 1px solid {t['border']};
+                                        border-radius: 12px; }}
+          .stAlert {{ border-radius: 12px; }}
+          .panel-caption {{ color: {t['muted']}; font-size: .82rem; line-height: 1.45; }}
+
+          ::-webkit-scrollbar {{ width: 9px; height: 9px; }}
+          ::-webkit-scrollbar-thumb {{ background: {t['border']}; border-radius: 8px; }}
+          ::-webkit-scrollbar-track {{ background: transparent; }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # Sidebar navigation: two areas, each with sub-pages (populated after page defs).
 NAV_SECTIONS: dict[str, dict[str, callable]] = {}
+
+
+# ===========================================================================
+# Presentation helpers (Projection-Finance-style building blocks)
+# ===========================================================================
+def _stat_card(label: str, value: str, *, delta: str | None = None,
+               delta_dir: str = "flat", sub: str | None = None) -> str:
+    """Return one KPI card as HTML. delta_dir in {up, down, flat}."""
+    delta_html = f'<span class="pf-delta {delta_dir}">{delta}</span>' if delta else ""
+    sub_html = f'<div class="pf-stat-sub">{sub}</div>' if sub else ""
+    return (
+        '<div class="pf-card">'
+        f'<div class="pf-stat-label">{label}</div>'
+        f'<div class="pf-stat-row"><span class="pf-stat-val">{value}</span>{delta_html}</div>'
+        f'{sub_html}</div>'
+    )
+
+
+def render_kpi_row(cards: list[str]) -> None:
+    st.markdown(f'<div class="pf-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
+
+
+def render_page_header(title: str, *, badges: list[str] | None = None,
+                       chips: list[tuple[str, str]] | None = None) -> None:
+    """Top header strip: title + status badges + info chips."""
+    bits = [f'<span style="font-size:1.4rem;font-weight:700;letter-spacing:-.02em;">{title}</span>']
+    for b in badges or []:
+        bits.append(b)
+    bits.append('<span class="spacer"></span>')
+    for k, v in chips or []:
+        bits.append(f'<span class="pf-chip"><span class="k">{k}</span> {v}</span>')
+    st.markdown(f'<div class="pf-header">{"".join(bits)}</div>', unsafe_allow_html=True)
+
+
+def _bucket_donut(buckets: dict[str, float], *, center_top: str, center_bot: str,
+                  title: str) -> go.Figure:
+    """Allocation donut for a small set of named buckets (Cash / trade types)."""
+    items = [(k, v) for k, v in buckets.items() if v and v > 0]
+    if not items:
+        items = [("Cash", 1.0)]
+    labels = [k for k, _ in items]
+    vals = [v for _, v in items]
+    fig = go.Figure(go.Pie(
+        labels=labels, values=vals, hole=0.7,
+        marker=dict(colors=ALLOC_PALETTE[: len(labels)],
+                    line=dict(color=THEME["card"], width=2)),
+        textinfo="none", sort=False, direction="clockwise",
+        hovertemplate="%{label}<br>$%{value:,.0f} · %{percent}<extra></extra>",
+    ))
+    fig.update_layout(
+        height=230, showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=8, r=8, t=34, b=8),
+        title=dict(text=title, font=dict(size=12, color=THEME["muted"]), x=0.5, xanchor="center"),
+        annotations=[dict(
+            text=f'<span style="color:{THEME["muted"]};font-size:11px">{center_top}</span>'
+                 f'<br><b style="font-size:17px">{center_bot}</b>',
+            showarrow=False, font=dict(color=THEME["text"]),
+        )],
+    )
+    return fig
+
+
+def _timeframe_cutoff(label: str) -> int | None:
+    return {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365, "ALL": None}.get(label)
 
 
 def _style_trade_col(df: pd.DataFrame, col: str = "trade") -> pd.io.formats.style.Styler:
@@ -375,20 +538,24 @@ PERF_COLUMNS = [
 def _plotly_theme(fig: go.Figure, *, height: int = 340, title: str | None = None) -> go.Figure:
     fig.update_layout(
         height=height,
-        title=dict(text=title, font=dict(size=13, color=THEME["text"])) if title else None,
-        paper_bgcolor=THEME["bg"],
-        plot_bgcolor=THEME["panel"],
+        title=dict(text=title, font=dict(size=12.5, color=THEME["muted"])) if title else None,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family=THEME["font"], color=THEME["text"], size=11),
-        margin=dict(l=56, r=32, t=52 if title else 28, b=48),
+        margin=dict(l=52, r=28, t=48 if title else 20, b=40),
         legend=dict(
             orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02,
             bgcolor="rgba(0,0,0,0)", font=dict(size=10),
         ),
         uniformtext_minsize=9,
         uniformtext_mode="hide",
+        hoverlabel=dict(bgcolor=THEME["card2"], bordercolor=THEME["border"],
+                        font=dict(color=THEME["text"], size=11)),
     )
-    fig.update_xaxes(gridcolor=THEME["border"], zerolinecolor=THEME["border"], showgrid=True)
-    fig.update_yaxes(gridcolor=THEME["border"], zerolinecolor=THEME["border"], showgrid=True)
+    fig.update_xaxes(gridcolor=THEME["border_soft"], zerolinecolor=THEME["border_soft"],
+                     showgrid=True, linecolor=THEME["border_soft"])
+    fig.update_yaxes(gridcolor=THEME["border_soft"], zerolinecolor=THEME["border_soft"],
+                     showgrid=True, linecolor=THEME["border_soft"])
     return fig
 
 
@@ -422,10 +589,10 @@ def _alloc_pie_chart(hv: pd.DataFrame) -> go.Figure:
         }])], ignore_index=True)
     else:
         pie_df = alloc
-    palette = px.colors.qualitative.Dark24
+    palette = (ALLOC_PALETTE + px.colors.qualitative.Set3)[: len(pie_df)]
     fig = go.Figure(go.Pie(
         labels=pie_df["ticker"], values=pie_df["mkt_abs"],
-        hole=0.52, marker=dict(colors=palette[: len(pie_df)]),
+        hole=0.6, marker=dict(colors=palette, line=dict(color=THEME["card"], width=2)),
         textinfo="percent", textposition="inside",
         insidetextorientation="horizontal",
         hovertemplate="%{label}<br>$%{value:,.0f}<br>%{percent}<extra></extra>",
@@ -825,23 +992,96 @@ def page_portfolio() -> None:
 
 
 # ===========================================================================
+def _timeframe_control(key: str) -> str:
+    opts = ["1W", "1M", "3M", "6M", "1Y", "ALL"]
+    if hasattr(st, "segmented_control"):
+        v = st.segmented_control("Range", opts, default="ALL", key=key,
+                                 label_visibility="collapsed")
+        return v or "ALL"
+    return st.radio("Range", opts, index=5, horizontal=True, key=key,
+                    label_visibility="collapsed")
+
+
+def _dir(x: float | None) -> str:
+    if x is None or x == 0:
+        return "flat"
+    return "up" if x > 0 else "down"
+
+
+def _alloc_legend_html(buckets: dict[str, float], total: float) -> str:
+    items = [(k, v) for k, v in buckets.items() if v and v > 0]
+    rows = []
+    for i, (k, v) in enumerate(items):
+        c = ALLOC_PALETTE[i % len(ALLOC_PALETTE)]
+        pct = (v / total) if total else 0
+        rows.append(
+            '<div style="display:flex;align-items:center;gap:8px;font-size:.76rem;margin:5px 0;">'
+            f'<span style="width:9px;height:9px;border-radius:3px;background:{c};"></span>'
+            f'<span style="flex:1;color:{THEME["muted"]}">{k}</span>'
+            f'<span style="font-family:{THEME["mono"]}">{fmt_usd(v)}</span>'
+            f'<span style="color:{THEME["faint"]};min-width:44px;text-align:right;">{pct:.0%}</span>'
+            '</div>'
+        )
+    return "".join(rows)
+
+
+def _cockpit_balance_chart(plot_df: pd.DataFrame, metric: str, start_cap: float,
+                           bench_line: pd.Series | None, bench_tk: str) -> go.Figure:
+    """Area chart styled like the reference: soft-filled primary series + XBI overlay."""
+    series_map = {
+        "Portfolio value": ("equity", "$,.0f", THEME["accent"]),
+        "Total return %": ("_ret", ".1%", THEME["green"]),
+        "Cash": ("cash", "$,.0f", THEME["purple"]),
+        "Unrealized P&L": ("unrealized_pnl", "$,.0f", THEME["amber"]),
+    }
+    col, tickfmt, color = series_map.get(metric, series_map["Portfolio value"])
+    df = plot_df.copy()
+    if col == "_ret":
+        df["_ret"] = (df["equity"] / start_cap - 1) if start_cap else 0.0
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df["date"], y=df[col], mode="lines", name=metric,
+        line=dict(color=color, width=2.6, shape="spline", smoothing=0.6),
+        fill="tozeroy", fillcolor=color.replace(")", ",0.10)").replace("#", "rgba(") if False else None,
+        hovertemplate="%{x|%b %d}<br>%{y:" + tickfmt + "}<extra></extra>",
+    ))
+    # soft gradient-ish fill via a translucent hex
+    fig.data[0].fillcolor = _rgba(color, 0.12)
+    if col == "equity" and bench_line is not None and bench_line.notna().any():
+        fig.add_trace(go.Scatter(
+            x=df["date"], y=bench_line.reindex(df["date"]).values,
+            mode="lines", name=f"{bench_tk}",
+            line=dict(color=THEME["muted"], width=1.8, dash="dash"),
+            hovertemplate="%{x|%b %d}<br>" + bench_tk + " %{y:$,.0f}<extra></extra>",
+        ))
+    if col == "equity" and start_cap:
+        fig.add_hline(y=start_cap, line_dash="dot", line_color=THEME["faint"], line_width=1)
+    _plotly_theme(fig, height=320)
+    fig.update_yaxes(tickformat=tickfmt)
+    fig.update_layout(showlegend=False, margin=dict(l=52, r=20, t=12, b=36))
+    return fig
+
+
+def _rgba(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 def page_home() -> None:
-    st.title("Cockpit")
     ensure_account()
     acct = get_account()
     prices = latest_prices()
     open_df = load_holdings("open")
+    closed_df = load_holdings("closed")
     summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
     start_cap = float(acct["starting_capital"] or summ["equity"] or 0.0)
-    realized = realized_pnl_total()
     perf = load_performance_history()
     hv = enrich_holdings(open_df, summ, prices)
 
-    # ---- headline metrics (two rows) ----
-    tot_ret_usd = summ["equity"] - start_cap if start_cap else None
+    equity = summ["equity"]
+    tot_ret_usd = equity - start_cap if start_cap else None
     tot_ret_pct = (tot_ret_usd / start_cap) if start_cap and tot_ret_usd is not None else None
-    deployed_pct = (summ["invested_usd"] / summ["equity"]) if summ["equity"] else 0.0
-    closed_n = int(q("SELECT COUNT(*) n FROM portfolio_holdings WHERE status='closed'").iloc[0, 0])
 
     track_start = tracking_start_date()
     bench_tk = config.BENCHMARK_TICKER
@@ -850,206 +1090,203 @@ def page_home() -> None:
     bench_ret = (_benchmark_return_since_start(bench_df, track_start, bench_px)
                  if track_start and bench_px is not None else None)
     alpha = (tot_ret_pct - bench_ret) if tot_ret_pct is not None and bench_ret is not None else None
-    bench_eq_today = (start_cap * (1 + bench_ret)) if bench_ret is not None and start_cap else None
 
-    # ---- XBI benchmark strip (always visible) ----
-    st.subheader(f"Benchmark · {bench_tk} (SPDR S&P Biotech ETF)")
-    if track_start is None:
-        st.caption("No trades yet — XBI window starts at first trade.")
-    elif bench_px is None:
-        st.warning(f"No {bench_tk} price available — check network or run `python scripts/ingest_prices.py --ticker XBI`.")
-    else:
-        xbi_cols = st.columns(5)
-        xbi_cols[0].metric(f"{bench_tk} price", f"${bench_px:.2f}")
-        xbi_cols[1].metric(f"{bench_tk} return since {track_start}",
-                           f"{bench_ret:+.1%}" if bench_ret is not None else "—")
-        xbi_cols[2].metric("Portfolio return",
-                           f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—",
-                           delta=fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None,
-                           help=f"Vs starting capital {fmt_usd(start_cap)}.")
-        xbi_cols[3].metric("Alpha vs XBI",
-                           f"{alpha:+.1%}" if alpha is not None else "—")
-        xbi_cols[4].metric(f"{bench_tk} @ start $",
-                           fmt_usd(bench_eq_today) if bench_eq_today else "—",
-                           help=f"What ${start_cap:,.0f} in {bench_tk} would be worth today.")
+    # drawdown / risk posture from the equity history
+    max_dd = 0.0
+    cur_dd = 0.0
+    if not perf.empty and perf["equity"].notna().any():
+        eq_series = pd.concat([perf["equity"].dropna(), pd.Series([equity])], ignore_index=True)
+        peak = eq_series.cummax()
+        dd = (eq_series - peak) / peak
+        max_dd = float(dd.min())
+        cur_dd = float(dd.iloc[-1])
+    risk_elevated = cur_dd <= -config.DRAWDOWN_CIRCUIT_PCT
+    last_eod = perf["date"].max().date() if not perf.empty else None
 
-    st.divider()
+    # ---------- header ----------
+    mode = "Long-only" if config.LONG_ONLY else "Long / short"
+    badges = [f'<span class="pf-badge green">● PAPER · {mode}</span>']
+    chips = []
+    if track_start:
+        chips.append(("Since", str(track_start)))
+    chips.append(("Positions", str(summ["positions"])))
+    if last_eod:
+        chips.append(("Last EOD", str(last_eod)))
+    render_page_header("Cockpit", badges=badges, chips=chips)
 
-    r1 = st.columns(5)
-    r1[0].metric("Account value", fmt_usd(summ["equity"]))
-    r1[1].metric("Total return",
-                 f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—",
-                 delta=fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None,
-                 help=f"Vs starting capital {fmt_usd(start_cap)}.")
-    r1[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
-    r1[3].metric("Realized P&L", fmt_usd(realized),
-                 help=f"Closed trades only ({closed_n} closed).")
-    r1[4].metric("Net exposure", f"{summ['net_pct']:+.0%}",
-                 help=f"Long minus short = {fmt_usd(summ['net_usd'])} directional.")
+    # ---------- KPI cards ----------
+    render_kpi_row([
+        _stat_card("Portfolio · start", fmt_usd(start_cap)),
+        _stat_card("Portfolio · now", fmt_usd(equity),
+                   delta=(f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else None),
+                   delta_dir=_dir(tot_ret_pct)),
+        _stat_card("Total return",
+                   (f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—"),
+                   delta=(fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None),
+                   delta_dir=_dir(tot_ret_usd),
+                   sub=f"vs {fmt_usd(start_cap)} start"),
+        _stat_card("Alpha vs XBI",
+                   (f"{alpha:+.1%}" if alpha is not None else "—"),
+                   delta_dir=_dir(alpha),
+                   sub=(f"XBI {bench_ret:+.1%}" if bench_ret is not None else "no benchmark")),
+        _stat_card("Risk of drawdown", "Elevated" if risk_elevated else "Low",
+                   sub=f"max DD {max_dd:.1%} · circuit {config.DRAWDOWN_CIRCUIT_PCT:.0%}"),
+    ])
 
-    r2 = st.columns(4)
-    r2[0].metric("Cash", fmt_usd(summ["cash"]))
-    r2[1].metric("Deployed", f"{deployed_pct:.0%}",
-                 help=f"{fmt_usd(summ['invested_usd'])} cost basis in open positions.")
-    r2[2].metric("Gross long / short",
-                 f"{summ['gross_long_pct']:.0%} / {summ['gross_short_pct']:.0%}",
-                 help=f"Long {fmt_usd(summ['gross_long_usd'])} · Short {fmt_usd(summ['gross_short_usd'])}")
-    r2[3].metric("Open positions", str(summ["positions"]),
-                 help=f"{summ['priced']}/{summ['positions']} priced at last close.")
+    # ---------- balance chart + allocation ----------
+    left, right = st.columns([2, 1], gap="medium")
 
-    freshness_caption()
+    with left:
+        with st.container(border=True):
+            head = st.columns([2, 1.3, 2])
+            head[0].markdown(
+                f'<div class="pf-stat-label">Current balance</div>'
+                f'<div class="pf-big">{fmt_usd(equity)}</div>'
+                f'<span class="pf-delta {_dir(tot_ret_usd)}">'
+                f'{fmt_usd(tot_ret_usd) if tot_ret_usd is not None else "—"}</span>',
+                unsafe_allow_html=True)
+            metric = head[1].selectbox("Metric",
+                                       ["Portfolio value", "Total return %", "Cash", "Unrealized P&L"],
+                                       label_visibility="collapsed", key="bal_metric")
+            with head[2]:
+                tf = _timeframe_control("bal_tf")
 
-    # ---- equity curve + snapshot descriptors ----
-    st.subheader("Account performance")
-    chart_l, desc_r = st.columns([2, 1])
+            # build plot frame (history + live point)
+            if perf.empty:
+                plot_df = pd.DataFrame([{
+                    "date": pd.Timestamp(date.today()), "equity": equity,
+                    "cash": summ["cash"], "unrealized_pnl": summ["unrealized_pnl_usd"],
+                }])
+            else:
+                plot_df = perf.copy()
+                if plot_df["date"].max().date() < date.today():
+                    plot_df = pd.concat([plot_df, pd.DataFrame([{
+                        "date": pd.Timestamp(date.today()), "equity": equity,
+                        "cash": summ["cash"], "unrealized_pnl": summ["unrealized_pnl_usd"],
+                    }])], ignore_index=True)
+            cutoff = _timeframe_cutoff(tf)
+            if cutoff is not None:
+                floor = pd.Timestamp(date.today()) - pd.Timedelta(days=cutoff)
+                filt = plot_df[plot_df["date"] >= floor]
+                if len(filt) >= 2:
+                    plot_df = filt
+            plot_df = enrich_plot_benchmark(plot_df, bench_df, start_cap, track_start, bench_px)
+            bench_line = None
+            if "benchmark_equity" in plot_df.columns and plot_df["benchmark_equity"].notna().any():
+                bench_line = plot_df.set_index("date")["benchmark_equity"]
+            elif track_start and start_cap:
+                bench_line = _benchmark_equity_series(plot_df, bench_df, start_cap, track_start)
 
-    with chart_l:
-        if perf.empty:
-            snap = pd.DataFrame([{
-                "date": pd.Timestamp(date.today()),
-                "equity": summ["equity"],
-                "cash": summ["cash"],
-                "unrealized_pnl": summ["unrealized_pnl_usd"],
-                "realized_to_date": realized,
-            }])
-            st.caption("No history file yet — showing today's snapshot only. "
-                      "Run paper autopilot to build history in Supabase (`portfolio_performance`).")
-            plot_df = snap
-        else:
-            plot_df = perf.copy()
-            # append live point if today's close isn't logged yet
-            last_d = plot_df["date"].max().date()
-            if last_d < date.today():
-                plot_df = pd.concat([plot_df, pd.DataFrame([{
-                    "date": pd.Timestamp(date.today()),
-                    "equity": summ["equity"],
-                    "cash": summ["cash"],
-                    "unrealized_pnl": summ["unrealized_pnl_usd"],
-                    "realized_to_date": realized,
-                }])], ignore_index=True)
+            st.plotly_chart(_cockpit_balance_chart(plot_df, metric, start_cap, bench_line, bench_tk),
+                            use_container_width=True, config={"displayModeBar": False})
+            if alpha is not None:
+                st.markdown(
+                    f'<div class="panel-caption">Portfolio <b>{tot_ret_pct:+.1%}</b> · '
+                    f'{bench_tk} <b>{bench_ret:+.1%}</b> · alpha '
+                    f'<b style="color:{THEME["green"] if alpha>=0 else THEME["red"]}">{alpha:+.1%}</b> '
+                    f'· max DD <b>{max_dd:.1%}</b></div>', unsafe_allow_html=True)
 
-        plot_df = enrich_plot_benchmark(plot_df, bench_df, start_cap, track_start, bench_px)
+    with right:
+        with st.container(border=True):
+            st.markdown('<div class="pf-stat-label">Allocation · start → now</div>',
+                        unsafe_allow_html=True)
+            now_buckets = {"Cash": max(summ["cash"], 0.0)}
+            if not hv.empty:
+                label_map = {"buy_the_rumor": "Buy rumor", "hold_through": "Hold-through",
+                             "fade": "Fade", "manual": "Manual"}
+                g = hv.dropna(subset=["mkt_value"]).groupby("type")["mkt_value"].sum()
+                for t, v in g.items():
+                    now_buckets[label_map.get(t, str(t))] = float(v)
+            dcol = st.columns(2)
+            dcol[0].plotly_chart(
+                _bucket_donut({"Cash": start_cap or 1.0}, center_top="Start",
+                              center_bot=fmt_usd(start_cap), title="Start"),
+                use_container_width=True, config={"displayModeBar": False})
+            dcol[1].plotly_chart(
+                _bucket_donut(now_buckets, center_top="Now", center_bot=fmt_usd(equity),
+                              title="Now"),
+                use_container_width=True, config={"displayModeBar": False})
+            st.markdown(_alloc_legend_html(now_buckets, equity), unsafe_allow_html=True)
 
-        fig = go.Figure()
-        bench_line = None
-        if "benchmark_equity" in plot_df.columns and plot_df["benchmark_equity"].notna().any():
-            bench_line = plot_df.set_index("date")["benchmark_equity"]
-        elif track_start and start_cap:
-            bench_line = _benchmark_equity_series(plot_df, bench_df, start_cap, track_start)
-        fig.add_trace(go.Scatter(
-            x=plot_df["date"], y=plot_df["equity"],
-            mode="lines+markers", name="Portfolio",
-            line=dict(color=THEME["green"], width=2.5),
-            fill="tozeroy", fillcolor="rgba(52,199,89,0.07)",
-        ))
-        if bench_line is not None and bench_line.notna().any():
-            fig.add_trace(go.Scatter(
-                x=plot_df["date"], y=bench_line,
-                mode="lines", name=f"{bench_tk} (same start $)",
-                line=dict(color=THEME["amber"], width=2, dash="dash"),
-            ))
-        if start_cap:
-            fig.add_hline(y=start_cap, line_dash="dot", line_color=THEME["muted"],
-                          annotation_text=f"Start {fmt_usd(start_cap)}",
-                          annotation_position="bottom right")
-        if "unrealized_pnl" in plot_df.columns and plot_df["unrealized_pnl"].notna().any():
-            fig.add_trace(go.Scatter(
-                x=plot_df["date"], y=plot_df["unrealized_pnl"],
-                mode="lines", name="Unrealized P&L",
-                line=dict(color=THEME["accent"], width=1.5, dash="dot"),
-                yaxis="y2",
-            ))
-        fig.update_layout(yaxis2=dict(
-            title="Unrealized $", overlaying="y", side="right",
-            gridcolor="#1f2937", tickformat="$,.0f",
-        ))
-        _plotly_theme(fig, height=360,
-                      title=f"Portfolio vs {bench_tk} (end-of-day marks)")
-        st.plotly_chart(fig, use_container_width=True)
+    # ---------- kept charts: position breakdown + portfolio allocation ----------
+    if not hv.empty and hv["pnl_usd"].notna().any():
+        pcol = st.columns(2, gap="medium")
+        with pcol[0]:
+            with st.container(border=True):
+                st.markdown('<div class="pf-stat-label">Position breakdown</div>',
+                            unsafe_allow_html=True)
+                st.plotly_chart(_pnl_bar_chart(hv), use_container_width=True,
+                                config={"displayModeBar": False})
+        with pcol[1]:
+            with st.container(border=True):
+                st.markdown('<div class="pf-stat-label">Portfolio allocation</div>',
+                            unsafe_allow_html=True)
+                st.plotly_chart(_alloc_pie_chart(hv), use_container_width=True,
+                                config={"displayModeBar": False})
 
-        if bench_line is not None and bench_line.notna().any() and len(plot_df) >= 1:
-            port_ret = tot_ret_pct
-            xbi_last = float(bench_line.dropna().iloc[-1])
-            xbi_norm_ret = (xbi_last / start_cap - 1) if start_cap else None
-            if port_ret is not None and xbi_norm_ret is not None:
-                st.caption(
-                    f"Since **{track_start}**: portfolio **{port_ret:+.1%}** · "
-                    f"{bench_tk} **{xbi_norm_ret:+.1%}** · "
-                    f"alpha **{port_ret - xbi_norm_ret:+.1%}**"
-                )
-        elif not bench_df.empty and bench_px is None:
-            st.caption(f"{bench_tk} history exists but no latest price — run price ingest.")
-        elif bench_df.empty:
-            st.caption(f"No {bench_tk} prices yet — run `python scripts/ingest_prices.py --ticker XBI`.")
+    # ---------- actions / holdings table ----------
+    with st.container(border=True):
+        htop = st.columns([3, 2])
+        htop[0].markdown('<div class="pf-stat-label">Actions</div>', unsafe_allow_html=True)
+        search = htop[1].text_input("Search", placeholder="Filter ticker…",
+                                    label_visibility="collapsed", key="cockpit_search")
+        tab_open, tab_book, tab_closed = st.tabs(["Open positions", "Trade book", "Closed"])
 
-        if len(plot_df) >= 2:
-            peak = plot_df["equity"].cummax()
-            dd = (plot_df["equity"] - peak) / peak
-            max_dd = float(dd.min())
-            st.caption(f"Max drawdown from peak: **{max_dd:.1%}** · "
-                       f"Snapshots: **{len(plot_df)}** day(s)")
+        with tab_open:
+            if hv.empty:
+                st.caption("No open positions.")
+            else:
+                show = hv.copy()
+                if search:
+                    show = show[show["ticker"].str.contains(search.strip(), case=False, na=False)]
+                show = show[[
+                    "ticker", "type", "entry", "now", "cost_basis", "mkt_value",
+                    "pct_book", "pnl_usd", "pnl_pct", "exit_by", "days_to_exit",
+                ]].rename(columns={
+                    "type": "trade", "entry": "entry $", "now": "last $",
+                    "cost_basis": "cost $", "mkt_value": "mkt $", "pct_book": "% book",
+                    "pnl_usd": "P&L $", "pnl_pct": "P&L %", "exit_by": "exit date",
+                    "days_to_exit": "days left",
+                })
+                st.dataframe(
+                    show.style.format({
+                        "entry $": "{:.2f}", "last $": "{:.2f}", "cost $": "${:,.0f}",
+                        "mkt $": "${:,.0f}", "% book": "{:.1%}", "P&L $": "${:+,.0f}",
+                        "P&L %": "{:+.1%}", "days left": "{:.0f}",
+                    }, na_rep="—").map(
+                        lambda v: f"color:{THEME['green'] if (isinstance(v,(int,float)) and v>=0) else THEME['red']}"
+                        if isinstance(v, (int, float)) else "", subset=["P&L $", "P&L %"]),
+                    use_container_width=True, hide_index=True,
+                    height=min(420, 46 + 34 * len(show)))
 
-    with desc_r:
-        st.markdown("**Snapshot**")
-        st.markdown(
-            f"- **Open positions:** {summ['positions']} "
-            f"({summ['priced']}/{summ['positions']} priced)\n"
-            f"- **Cost basis:** {fmt_usd(summ['invested_usd'])}\n"
-            f"- **Market value (long−short):** {fmt_usd(summ['net_usd'])}\n"
-            f"- **Cash buffer:** {100 - deployed_pct:.0%} of equity\n"
-            f"- **Mode:** {'PAPER' if not open_df.empty and (open_df['notes'] == 'PAPER').any() else 'Live / mixed'}"
-        )
-        if not hv.empty and hv["pnl_usd"].notna().any():
-            best = hv.loc[hv["pnl_usd"].idxmax()]
-            worst = hv.loc[hv["pnl_usd"].idxmin()]
-            st.markdown(
-                f"- **Best open:** {best['ticker']} ({best['pnl_usd']:+,.0f})\n"
-                f"- **Worst open:** {worst['ticker']} ({worst['pnl_usd']:+,.0f})"
-            )
-        nxt = hv.dropna(subset=["days_to_exit"]).sort_values("days_to_exit") if not hv.empty else pd.DataFrame()
-        if not nxt.empty:
-            nx = nxt.iloc[0]
-            st.markdown(f"- **Next exit:** {nx['ticker']} in **{int(nx['days_to_exit'])}d** ({nx['exit_by']})")
+        with tab_book:
+            book = load_action_book(90)
+            render_trade_book_panel(book, equity or 0.0, prices, act_days=60, key_prefix="cockpit")
 
-    # ---- trade book (action desk names to trade) ----
-    book = load_action_book(90)
-    st.subheader("Trade book")
-    render_trade_book_panel(book, summ["equity"] or 0.0, prices, act_days=60, key_prefix="cockpit")
+        with tab_closed:
+            if closed_df.empty:
+                st.caption("No closed trades.")
+            else:
+                cd = closed_df.copy()
+                if search:
+                    cd = cd[cd["ticker"].str.contains(search.strip(), case=False, na=False)]
+                cd = cd[["ticker", "trade_type", "entry_date", "exit_date", "shares",
+                         "entry_price", "exit_price", "realized_pnl_usd"]].rename(columns={
+                    "trade_type": "trade", "entry_date": "entry", "exit_date": "exit",
+                    "entry_price": "entry $", "exit_price": "exit $", "realized_pnl_usd": "realized $",
+                })
+                for c in ("entry $", "exit $", "realized $", "shares"):
+                    cd[c] = pd.to_numeric(cd[c], errors="coerce")
+                st.dataframe(
+                    cd.style.format({
+                        "shares": "{:.0f}", "entry $": "{:.2f}", "exit $": "{:.2f}",
+                        "realized $": "${:+,.0f}",
+                    }, na_rep="—").map(
+                        lambda v: f"color:{THEME['green'] if (isinstance(v,(int,float)) and v>=0) else THEME['red']}"
+                        if isinstance(v, (int, float)) else "", subset=["realized $"]),
+                    use_container_width=True, hide_index=True,
+                    height=min(420, 46 + 34 * len(cd)))
 
-    # ---- position visuals (stacked full-width — no overlap) ----
-    if not hv.empty:
-        st.subheader("Position breakdown")
-        st.plotly_chart(_pnl_bar_chart(hv), use_container_width=True)
-        st.plotly_chart(_alloc_pie_chart(hv), use_container_width=True)
-
-        st.markdown("**Holdings detail**")
-        show = hv[[
-            "ticker", "side", "type", "notes", "shares", "entry", "now",
-            "cost_basis", "mkt_value", "pct_book", "pnl_usd", "pnl_pct",
-            "exit_by", "days_to_exit",
-        ]].rename(columns={
-            "type": "trade", "notes": "tag", "entry": "entry $", "now": "last $",
-            "cost_basis": "cost $", "mkt_value": "mkt $", "pct_book": "% book",
-            "pnl_usd": "P&L $", "pnl_pct": "P&L %", "exit_by": "exit date",
-            "days_to_exit": "days left",
-        })
-        st.dataframe(
-            show.style.format({
-                "shares": "{:.1f}", "entry $": "{:.2f}", "last $": "{:.2f}",
-                "cost $": "${:,.0f}", "mkt $": "${:,.0f}", "% book": "{:.1%}",
-                "P&L $": "${:+,.0f}", "P&L %": "{:+.1%}", "days left": "{:.0f}",
-            }, na_rep="—"),
-            use_container_width=True, hide_index=True, height=min(360, 44 + 36 * len(show)),
-        )
-
-    if not perf.empty:
-        with st.expander("📋 Daily performance log", expanded=False):
-            log = perf.copy()
-            log["date"] = log["date"].dt.date
-            log["total_return_pct"] = log["total_return_pct"].map(lambda x: f"{x:+.2%}" if pd.notna(x) else "—")
-            st.dataframe(log, use_container_width=True, hide_index=True)
-
-    st.divider()
     render_action_center(open_df)
 
 
@@ -1440,9 +1677,11 @@ def _render_catalyst_calendar() -> None:
                      hover_data=["company", "catalyst_type", "composite_score", "suggested_weight"])
     fig.add_vline(x=today, line_dash="dash", line_color=THEME["muted"])
     fig.update_layout(height=max(440, 18 * cal["ticker"].nunique()),
-                      paper_bgcolor=THEME["bg"], plot_bgcolor=THEME["panel"],
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       font=dict(color=THEME["text"]), margin=dict(l=48, r=24, t=40, b=48),
                       legend_title_text="", xaxis_title="", yaxis_title="")
+    fig.update_xaxes(gridcolor=THEME["border_soft"])
+    fig.update_yaxes(gridcolor=THEME["border_soft"])
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Dot size ∝ |weight| · dashed line = today")
 
@@ -1538,7 +1777,7 @@ def page_validation(*, embedded: bool = False) -> None:
                          color_continuous_scale=["#ff5c5c", "#6b7280", "#29d391"],
                          title="Forward abnormal return by pre-event run-up quintile")
             fig.update_layout(height=320, showlegend=False, coloraxis_showscale=False,
-                              paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
+                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                               font_color="#cfd3dc", yaxis_tickformat=".1%",
                               xaxis_title="", yaxis_title="avg forward abnormal")
             st.plotly_chart(fig, use_container_width=True)
@@ -1579,7 +1818,7 @@ def page_validation(*, embedded: bool = False) -> None:
                                   markers=True, range_x=[0, 1], range_y=[0, 1])
                     fig.add_shape(type="line", x0=0, y0=0, x1=1, y1=1,
                                   line=dict(dash="dash", color="#666"))
-                    fig.update_layout(height=340, paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
+                    fig.update_layout(height=340, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                                       font_color="#cfd3dc", title="Reliability (diagonal = perfect)")
                     st.plotly_chart(fig, use_container_width=True)
             except Exception:
@@ -1591,8 +1830,8 @@ def page_validation(*, embedded: bool = False) -> None:
     else:
         fig = px.bar(outcomes, x="outcome_label", y="n", color="outcome_label",
                      color_discrete_map={"hit": "#29d391", "miss": "#ff5c5c", "ambiguous": "#6b7280"})
-        fig.update_layout(height=280, showlegend=False, paper_bgcolor="#0b0e11",
-                          plot_bgcolor="#0b0e11", font_color="#cfd3dc")
+        fig.update_layout(height=280, showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
+                          plot_bgcolor="rgba(0,0,0,0)", font_color="#cfd3dc")
         st.plotly_chart(fig, use_container_width=True)
 
     bt = PROJECT_ROOT / "data" / "raw" / "backtest_trades.csv"
@@ -1881,15 +2120,23 @@ def latest_snapshot_label() -> str:
 
 
 def main() -> None:
-    st.sidebar.title("EDGE TERMINAL")
-    if st.sidebar.button("Refresh data", use_container_width=True, type="primary"):
+    _inject_css()
+    st.sidebar.markdown(
+        f'<div style="display:flex;align-items:center;gap:10px;margin:.2rem 0 1rem;">'
+        f'<span style="width:26px;height:26px;border-radius:8px;'
+        f'background:linear-gradient(135deg,{THEME["accent"]},{THEME["purple"]});'
+        f'display:inline-flex;align-items:center;justify-content:center;'
+        f'font-weight:800;color:#0a0d13;">◆</span>'
+        f'<span style="font-weight:800;letter-spacing:.12em;font-size:.95rem;">EDGE TERMINAL</span>'
+        f'</div>', unsafe_allow_html=True)
+    if st.sidebar.button("↻  Refresh data", use_container_width=True, type="primary"):
         st.cache_data.clear()
         st.rerun()
     st.sidebar.caption(latest_snapshot_label())
     page_fn = _render_sidebar_nav()
     st.sidebar.markdown("---")
     page_fn()
-    st.sidebar.caption("Cache 30s")
+    st.sidebar.caption("End-of-day marks · cache 30s")
 
 
 if __name__ == "__main__":
