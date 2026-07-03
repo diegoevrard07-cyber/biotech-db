@@ -17,6 +17,26 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-07-03 — Risk/reward report tool
+
+**Branch/PR:** `cursor/risk-report-7e76`
+
+- **`scripts/risk_report.py`**: reproducible risk/reward evaluation in three tiers —
+  (1) live paper equity curve (ann. vol, Sharpe, max DD, beta vs XBI), (2) closed-trade
+  distribution (expectancy, win rate, payoff, per-trade Sharpe, implied Kelly), (3) XBI
+  long-run reference (ann. return/vol/Sharpe/max DD). rf=0, annualized ×√252; flags small
+  samples.
+- **Snapshot of current output (all young/biased, not a verdict):**
+  - XBI reference (5y): +9.2%/yr, vol 32.2%, **Sharpe 0.27**, max DD −54.7%.
+  - Closed longs (n=39): expectancy +6.2%/trade, win 79%, payoff 1.19, per-trade
+    Sharpe 0.96 — but upward-biased (profit-lock books small wins/cuts winners; open losers
+    excluded).
+  - Live equity (n=5): meaningless magnitudes; beta vs XBI ~0.67 on 3 overlapping days.
+  - Population event dispersion (2,113 8-K events, 3d hold): mean +1.0%, sd 22% → per-bet
+    edge is tiny; portfolio edge must come from selection + diversification across events.
+
+---
+
 ## 2026-07-03 — Fix XBI benchmark base (was overstating XBI by ~4pp)
 
 **Branch/PR:** `cursor/fix-xbi-benchmark-base-7e76`
