@@ -91,11 +91,15 @@ def _inject_css() -> None:
           }}
           header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
           [data-testid="stToolbar"] {{ right: 1rem; }}
-          .block-container {{ padding: 1.1rem 1.6rem 2rem; max-width: 1500px; }}
+          [data-testid="stAppDeployButton"] {{ display: none !important; }}
+          .block-container {{ padding: 2.6rem 1.6rem 2rem; max-width: 1500px; }}
           #MainMenu, footer {{ visibility: hidden; }}
           /* single-page: no left nav bar */
           [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
           [data-testid="collapsedControl"] {{ display: none !important; }}
+          /* hide previous page's lingering (stale) content during a rerun so it
+             does not ghost over the newly loading page */
+          [data-testid="stElementContainer"][data-stale="true"] {{ display: none !important; }}
 
           /* top navigation bar */
           .pf-topbar {{ display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }}
@@ -551,7 +555,7 @@ PERF_COLUMNS = [
 def _plotly_theme(fig: go.Figure, *, height: int = 340, title: str | None = None) -> go.Figure:
     fig.update_layout(
         height=height,
-        title=dict(text=title, font=dict(size=12.5, color=THEME["muted"])) if title else None,
+        title=dict(text=title or "", font=dict(size=12.5, color=THEME["muted"])),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family=THEME["font"], color=THEME["text"], size=11),
