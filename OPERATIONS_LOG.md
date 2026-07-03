@@ -17,6 +17,24 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-07-03 — Fix redesign UI overlap (stale content, chart title, toolbar)
+
+**Branch/PR:** `cursor/dashboard-redesign-7e76` (#9)
+
+Diagnosed with a headless-Chrome (Playwright) screenshot pass against the live app:
+- **Stale-content overlap** (the "unreadable" report): on a page switch, ~37 elements
+  from the previous page lingered at 0.68 opacity while the query-heavy new page loaded,
+  ghosting old text over new. Fixed by hiding stale elements during rerun:
+  `[data-testid="stElementContainer"][data-stale="true"] {{ display:none }}`.
+- **Stray "undefined"** on the balance chart = empty Plotly `Title()` with `text=None`;
+  `_plotly_theme` now always sets `text=title or ""`.
+- **Streamlit toolbar** (Deploy/RUNNING) crowded the top-right nav → bumped block-container
+  top padding to 2.6rem and hid the Deploy button.
+
+Verified via before/after screenshots of all five pages + a mid-switch capture (no ghosting).
+
+---
+
 ## 2026-07-03 — Cockpit redesign (Projection-Finance-style UI)
 
 **Branch/PR:** `cursor/dashboard-redesign-7e76`
