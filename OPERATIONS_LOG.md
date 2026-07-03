@@ -17,6 +17,35 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-07-03 — Strip all historical shorts + performance analysis tools
+
+**Branch/PR:** `cursor/strip-shorts-perf-analysis-7e76`
+
+- **Stripped every short the paper book ever did** (`scripts/strip_shorts.py`, reversible).
+  21 short rows (13 full + 8 trim closes; net realized **−$172.56**), all already closed.
+  The script backs up rows to `data/backups/shorts_backup_<ts>.json` and a
+  `shorts_removed_backup` table, deletes the shorts, reverses their net cash impact
+  (`cash += $172.56` → $2,062.25, since a round-tripped short's net cash = its realized
+  P&L), and restates the 5 `portfolio_performance` snapshots to a long-only basis.
+  Result: realized **+$14.73 → +$187.29**, total return **+5.16% → +6.9%**, alpha vs XBI
+  **−8.9% → ~−7.2%** (improved but XBI gap not closed — the lag is the long book vs a hot
+  tape, not the shorts).
+- **`scripts/base_rate_report.py`**: edge-vs-luck report — compares each closed trade's
+  realized win/loss against the model's predicted catalyst base rate; reliability buckets
+  + Brier score. `--all` includes pre-catalyst closes; default shows only resolved
+  catalysts.
+
+**Evaluation snapshot (all tiny-sample, ~2 weeks):**
+- Realized longs: 39 closed, deployed ~$5.1k, **+$187.29 (+3.66% on cost, avg 5.8-day hold)**;
+  vs XBI **+14%** over the window — realized trading has captured far less than buy-and-hold XBI.
+- Calibration: **only 1 resolved catalyst pair** (Brier 0.41, n=1) — statistically empty.
+- Base-rate report (resolved): n=3 decided, 67% win vs 79% predicted (Brier 0.106); high
+  base-rate names won, the coin-flip lost — directionally sensible, not validated.
+
+**Reversibility:** restore from the JSON backup or `shorts_removed_backup` table.
+
+---
+
 ## 2026-07-01 — Long-only mode (drop shorts/fades)
 
 **Branch/PR:** `cursor/long-only-mode-7e76`
