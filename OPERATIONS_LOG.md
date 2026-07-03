@@ -17,6 +17,34 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-07-03 — Cockpit redesign (Projection-Finance-style UI)
+
+**Branch/PR:** `cursor/dashboard-redesign-7e76`
+
+Full visual overhaul of the Cockpit page + global theme, modeled on the reference
+screenshot. Data/logic layer untouched (same DB functions).
+
+- **New design system** (`_inject_css`): deep-navy gradient background, rounded gradient
+  cards, pill segmented-controls, restyled metrics/tabs/tables/buttons/sidebar, custom
+  scrollbars, hidden default Streamlit chrome. New palette (accent #6c8cff, green
+  #2fd39a, red #f76a83, purple #8b7bff).
+- **Rebuilt Cockpit** (`page_home`): page header with PAPER·mode badge + info chips;
+  5 KPI stat cards (start, now, total return, alpha vs XBI, drawdown risk); "Current
+  balance" card with metric selector + timeframe segmented control (1W…ALL) and a
+  soft-filled area chart + XBI overlay; twin allocation donuts (start → now) with a
+  color legend; **kept** the Position breakdown (P&L bar) and Portfolio allocation
+  (donut) charts per owner request, restyled; a tabbed Actions card (Open / Trade book /
+  Closed) with ticker search and green/red P&L.
+- Helpers added: `_stat_card`, `render_kpi_row`, `render_page_header`, `_bucket_donut`,
+  `_alloc_legend_html`, `_cockpit_balance_chart`, `_timeframe_control`, `_rgba`.
+- Restyled shared `_plotly_theme` + kept charts to transparent card backgrounds; fixed
+  stale `THEME["panel"]` / hardcoded `#0b0e11` refs in calendar/validation charts.
+
+**Verify:** 184 tests pass; headless `AppTest` render of Cockpit / Portfolio / Action
+Desk / Market & Models / Strategy against the live DB → no exceptions.
+
+---
+
 ## 2026-07-03 — Risk/reward report tool
 
 **Branch/PR:** `cursor/risk-report-7e76`
