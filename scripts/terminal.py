@@ -41,7 +41,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-st.set_page_config(page_title="Edge Terminal", layout="wide", page_icon="◆")
+st.set_page_config(page_title="Edge Terminal", layout="wide", page_icon="◆",
+                   initial_sidebar_state="collapsed")
 
 # ---- Design tokens (Projection-Finance-style dark UI) ----
 THEME = {
@@ -92,6 +93,18 @@ def _inject_css() -> None:
           [data-testid="stToolbar"] {{ right: 1rem; }}
           .block-container {{ padding: 1.1rem 1.6rem 2rem; max-width: 1500px; }}
           #MainMenu, footer {{ visibility: hidden; }}
+          /* single-page: no left nav bar */
+          [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
+          [data-testid="collapsedControl"] {{ display: none !important; }}
+
+          /* top navigation bar */
+          .pf-topbar {{ display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }}
+          .pf-logo {{ display: flex; align-items: center; gap: 10px; font-weight: 800;
+                      letter-spacing: .1em; font-size: .9rem; white-space: nowrap; }}
+          .pf-logo .mark {{ width: 26px; height: 26px; border-radius: 8px;
+                            background: linear-gradient(135deg,{t['accent']},{t['purple']});
+                            display: inline-flex; align-items: center; justify-content: center;
+                            color: #0a0d13; }}
 
           h1 {{ font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 .1rem; }}
           h2, h3 {{ font-size: .95rem; font-weight: 600; color: {t['text']}; margin: .3rem 0 .4rem; }}
@@ -1188,7 +1201,7 @@ def page_home() -> None:
 
     with right:
         with st.container(border=True):
-            st.markdown('<div class="pf-stat-label">Allocation · start → now</div>',
+            st.markdown('<div class="pf-stat-label">Allocation</div>',
                         unsafe_allow_html=True)
             now_buckets = {"Cash": max(summ["cash"], 0.0)}
             if not hv.empty:
@@ -1197,14 +1210,9 @@ def page_home() -> None:
                 g = hv.dropna(subset=["mkt_value"]).groupby("type")["mkt_value"].sum()
                 for t, v in g.items():
                     now_buckets[label_map.get(t, str(t))] = float(v)
-            dcol = st.columns(2)
-            dcol[0].plotly_chart(
-                _bucket_donut({"Cash": start_cap or 1.0}, center_top="Start",
-                              center_bot=fmt_usd(start_cap), title="Start"),
-                use_container_width=True, config={"displayModeBar": False})
-            dcol[1].plotly_chart(
-                _bucket_donut(now_buckets, center_top="Now", center_bot=fmt_usd(equity),
-                              title="Now"),
+            st.plotly_chart(
+                _bucket_donut(now_buckets, center_top="Deployed", center_bot=fmt_usd(equity),
+                              title=""),
                 use_container_width=True, config={"displayModeBar": False})
             st.markdown(_alloc_legend_html(now_buckets, equity), unsafe_allow_html=True)
 
@@ -2053,90 +2061,43 @@ def page_strategy() -> None:
     )
 
 
-NAV_SECTIONS = {
-    "Trade Desk": {
-        "Cockpit": page_home,
-        "Portfolio": page_portfolio,
-        "Action Desk": page_action_desk,
-    },
-    "Research": {
-        "Strategy": page_strategy,
-        "Market & Models": page_research,
-    },
+PAGES: dict[str, callable] = {
+    "Cockpit": page_home,
+    "Portfolio": page_portfolio,
+    "Action Desk": page_action_desk,
+    "Strategy": page_strategy,
+    "Market & Models": page_research,
 }
 
 
-def _render_sidebar_nav() -> callable:
-    """Two-level nav: pick section, then sub-page."""
-    if "nav_section" not in st.session_state:
-        st.session_state.nav_section = "Trade Desk"
-    if "nav_page" not in st.session_state:
-        st.session_state.nav_page = "Cockpit"
-
-    section = st.sidebar.radio(
-        "Area",
-        list(NAV_SECTIONS.keys()),
-        index=list(NAV_SECTIONS.keys()).index(st.session_state.nav_section),
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    if section != st.session_state.nav_section:
-        st.session_state.nav_section = section
-        st.session_state.nav_page = next(iter(NAV_SECTIONS[section].keys()))
-
-    pages = list(NAV_SECTIONS[section].keys())
-    if st.session_state.nav_page not in pages:
-        st.session_state.nav_page = pages[0]
-
-    page = st.sidebar.radio(
-        section,
-        pages,
-        index=pages.index(st.session_state.nav_page),
-        label_visibility="visible",
-    )
-    st.session_state.nav_page = page
-    st.sidebar.caption(f"{section} › **{page}**")
-    return NAV_SECTIONS[section][page]
-
-
-def latest_snapshot_label() -> str:
-    """Human-readable label for the newest portfolio_performance row."""
-    try:
-        conn = get_conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT snapshot_date, equity FROM portfolio_performance "
-                    "ORDER BY snapshot_date DESC LIMIT 1"
-                )
-                row = cur.fetchone()
-        finally:
-            conn.close()
-        if row:
-            return f"Portfolio snapshot: **{row[0]}** · equity **${float(row[1]):,.0f}**"
-    except Exception:
-        pass
-    return "Portfolio snapshot: none yet (run paper autopilot)"
+def _top_nav() -> callable:
+    """Single-page top navigation bar (replaces the sidebar)."""
+    names = list(PAGES.keys())
+    bar = st.columns([2.2, 6, 1.2], gap="small", vertical_alignment="center")
+    with bar[0]:
+        st.markdown(
+            '<div class="pf-logo"><span class="mark">◆</span>EDGE TERMINAL</div>',
+            unsafe_allow_html=True)
+    with bar[1]:
+        if hasattr(st, "segmented_control"):
+            sel = st.segmented_control("nav", names, default=names[0],
+                                       label_visibility="collapsed", key="topnav")
+        else:
+            sel = st.radio("nav", names, horizontal=True,
+                           label_visibility="collapsed", key="topnav")
+    with bar[2]:
+        if st.button("↻ Refresh", use_container_width=True, type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+    st.markdown(f'<hr style="margin:.4rem 0 1rem;border-color:{THEME["border_soft"]}">',
+                unsafe_allow_html=True)
+    return PAGES.get(sel or names[0], PAGES[names[0]])
 
 
 def main() -> None:
     _inject_css()
-    st.sidebar.markdown(
-        f'<div style="display:flex;align-items:center;gap:10px;margin:.2rem 0 1rem;">'
-        f'<span style="width:26px;height:26px;border-radius:8px;'
-        f'background:linear-gradient(135deg,{THEME["accent"]},{THEME["purple"]});'
-        f'display:inline-flex;align-items:center;justify-content:center;'
-        f'font-weight:800;color:#0a0d13;">◆</span>'
-        f'<span style="font-weight:800;letter-spacing:.12em;font-size:.95rem;">EDGE TERMINAL</span>'
-        f'</div>', unsafe_allow_html=True)
-    if st.sidebar.button("↻  Refresh data", use_container_width=True, type="primary"):
-        st.cache_data.clear()
-        st.rerun()
-    st.sidebar.caption(latest_snapshot_label())
-    page_fn = _render_sidebar_nav()
-    st.sidebar.markdown("---")
+    page_fn = _top_nav()
     page_fn()
-    st.sidebar.caption("End-of-day marks · cache 30s")
 
 
 if __name__ == "__main__":
