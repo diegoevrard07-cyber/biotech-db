@@ -9,8 +9,12 @@ Designed for Windows Task Scheduler (weekday evenings). Each run:
   5. Appends a daily performance snapshot to data/raw/paper_performance.csv.
 
 Only touches notes='PAPER' holdings. When config.LONG_ONLY is set (default), the
-capped book contains no shorts, so no fades are opened and any open shorts fall out
-of the book and are covered on the next sync.
+capped book contains no shorts, no short target is ever executed (execution-level
+guard), and any open shorts fall out of the book and are covered on the next sync.
+
+Risk overlays (see config): per-position stop-loss on longs, graded drawdown
+de-risking with open-pause, and an XBI-SMA regime filter that shrinks targets in
+a down-tape.
 
   python scripts/paper_autopilot.py                 # sync to action desk + snapshot
   python scripts/paper_autopilot.py --dry-run       # show planned trades
@@ -35,6 +39,7 @@ from db import get_connection
 from layers.marketdata.yf_client import fetch_history_batch
 from layers.portfolio import paper_sync as ps
 from layers.portfolio import performance_store as perf_store
+from layers.portfolio import risk
 from layers.portfolio import tracker as pf
 from ingest_prices import _rows_from_history
 from action_sheet import compute_book
@@ -134,7 +139,8 @@ def _close_position(cur, h: dict, px: float, today: date, reason: str,
     rp = pf.realized_pnl(h["side"], sh, ep, px)
     cash_delta = pf.cash_delta_on_close(h["side"], sh, px)
     tag = {"exit_due": "EXIT", "not_in_book": "DROP", "side_flip": "FLIP",
-           "trade_change": "RETYPE", "long_only_cover": "COVER"}.get(reason, "CLOSE")
+           "trade_change": "RETYPE", "long_only_cover": "COVER",
+           "stop_loss": "STOP"}.get(reason, "CLOSE")
     print(f"  {tag} {h['ticker']:<6} {h['side']:<5} {h['trade_type']:<13} "
           f"{sh:.2f} @ {px:.2f}  realized {rp:+,.0f}  ({reason})")
     if not dry_run:
@@ -360,15 +366,31 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
             if sleeve <= 0 and equity > 0:
                 sleeve = equity
 
-            # Drawdown circuit breaker: de-risk if equity has fallen below peak.
-            derisk = False
+            # Graded drawdown de-risk: scale targets progressively as drawdown
+            # deepens; pause new opens once the scale hits the pause threshold.
+            dd_scale = 1.0
             if config.DRAWDOWN_CIRCUIT_ENABLED:
                 peak = _peak_equity(cur, equity)
-                if peak > 0 and equity <= peak * (1 - config.DRAWDOWN_CIRCUIT_PCT):
-                    derisk = True
+                dd_scale = risk.drawdown_scale(equity, peak, config.DRAWDOWN_TIERS)
+                if dd_scale < 1.0:
                     dd = (equity / peak - 1) if peak else 0.0
-                    print(f"  [CIRCUIT BREAKER] equity ${equity:,.0f} is {dd:+.1%} vs peak "
-                          f"${peak:,.0f} -> de-risk x{config.DRAWDOWN_DERISK_FACTOR}, opens paused")
+                    print(f"  [DRAWDOWN] equity ${equity:,.0f} is {dd:+.1%} vs peak "
+                          f"${peak:,.0f} -> targets x{dd_scale}"
+                          + ("  (opens paused)" if dd_scale <= config.DRAWDOWN_OPEN_PAUSE_SCALE else ""))
+            derisk = dd_scale <= config.DRAWDOWN_OPEN_PAUSE_SCALE
+
+            # Market-regime filter: benchmark below its SMA -> lighter gross.
+            rg_scale = 1.0
+            if config.REGIME_FILTER_ENABLED:
+                xbi_hist = list(reversed(_trailing_closes(
+                    cur, config.BENCHMARK_TICKER, config.REGIME_SMA_DAYS)))
+                rg_scale = risk.regime_scale(xbi_hist, config.REGIME_SMA_DAYS,
+                                             config.REGIME_DERISK_FACTOR)
+                if rg_scale < 1.0:
+                    print(f"  [REGIME] {config.BENCHMARK_TICKER} below its "
+                          f"{config.REGIME_SMA_DAYS}d SMA -> targets x{rg_scale}")
+
+            scale = dd_scale * rg_scale
 
             print(f"\n=== PAPER AUTOPILOT  {today} ===")
             print(f"Action desk: {book['positions']} targets  "
@@ -379,10 +401,15 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
 
             targets = ps.build_targets(book_rows, equity, closes) if sync_book else {}
 
-            # --- 1) CLOSES ---
+            # --- 1) CLOSES (stop-loss first, then book sync) ---
             still_open: list[dict] = []
             for h in holds:
-                if sync_book:
+                px_now = closes.get(h["ticker"])
+                if (config.STOP_LOSS_ENABLED
+                        and risk.stop_loss_hit(h["side"], float(h["entry_price"]),
+                                               px_now, config.STOP_LOSS_PCT)):
+                    reason = "stop_loss"
+                elif sync_book:
                     reason = ps.close_reason(h, targets.get(h["ticker"]), today)
                 else:
                     ped = h.get("planned_exit_date")
@@ -399,20 +426,24 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                 cash += cd
                 realized_today += rp
                 closed += 1
+                if reason == "stop_loss":
+                    targets.pop(h["ticker"], None)  # do not re-buy a stopped name today
             holds = still_open
 
             # Recompute equity after closes for sizing new opens.
             if sync_book and targets:
                 equity = pf.account_summary(_holding_dicts(holds), cash, closes)["equity"]
-                targets = ps.build_targets(book_rows, equity, closes)
+                kept = set(targets.keys())
+                targets = {t: v for t, v in ps.build_targets(book_rows, equity, closes).items()
+                           if t in kept}
 
-                # Circuit breaker: shrink all targets and pause new opens.
-                if derisk:
+                # Risk overlays: shrink all targets by the combined scale.
+                if scale < 1.0:
                     for t in targets:
                         targets[t]["target_shares"] = round(
-                            targets[t]["target_shares"] * config.DRAWDOWN_DERISK_FACTOR, 2)
+                            targets[t]["target_shares"] * scale, 2)
                         targets[t]["target_dollars"] = round(
-                            targets[t]["target_dollars"] * config.DRAWDOWN_DERISK_FACTOR, 2)
+                            targets[t]["target_dollars"] * scale, 2)
 
                 # --- 1b) PARTIAL PROFIT-LOCK (mean reversion, longs only) ---
                 cd, rp, locked = _profit_lock_pass(
@@ -450,6 +481,11 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                     if h is None:
                         if derisk:
                             continue  # circuit breaker: no new opens while de-risked
+                        if config.LONG_ONLY and tgt["side"] != pf.LONG:
+                            # Execution-level guard: NEVER open a short in long-only
+                            # mode, no matter what upstream produced the target.
+                            print(f"  [refuse open] {t}: short target blocked (LONG_ONLY)")
+                            continue
                         cd = pf.cash_delta_on_open(tgt["side"], tgt["target_shares"], px)
                         if tgt["side"] == pf.LONG and -cd > cash + 1e-6:
                             print(f"  [skip open] {t}: need ${-cd:,.0f}, cash ${cash:,.0f}")

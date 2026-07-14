@@ -125,6 +125,29 @@ DRAWDOWN_CIRCUIT_ENABLED = os.getenv("DRAWDOWN_CIRCUIT_ENABLED", "1") not in ("0
 DRAWDOWN_CIRCUIT_PCT = float(os.getenv("DRAWDOWN_CIRCUIT_PCT", "0.10"))     # -10% from peak
 DRAWDOWN_DERISK_FACTOR = float(os.getenv("DRAWDOWN_DERISK_FACTOR", "0.5"))  # shrink targets to 50%
 
+# Graded drawdown tiers (act EARLIER and progressively instead of one -10% cliff).
+# (drawdown_from_peak, target_scale). New opens pause once scale <= OPEN_PAUSE_SCALE.
+DRAWDOWN_TIERS = [
+    (0.06, 0.75),   # -6% from peak: shrink targets to 75%
+    (0.10, 0.50),   # -10%: halve + pause new opens
+    (0.15, 0.25),   # -15%: quarter size (deep de-risk)
+]
+DRAWDOWN_OPEN_PAUSE_SCALE = float(os.getenv("DRAWDOWN_OPEN_PAUSE_SCALE", "0.50"))
+
+# Per-position hard stop (LONGS): close any long whose EOD mark is down more than
+# STOP_LOSS_PCT from entry. The per-name loss protocol (portfolio breaker alone
+# cannot stop a single name from bleeding).
+STOP_LOSS_ENABLED = os.getenv("STOP_LOSS_ENABLED", "1") not in ("0", "false", "False")
+STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", "0.15"))  # -15% from entry
+
+# Market-regime filter: when the benchmark (XBI) closes below its N-day simple
+# moving average, scale ALL target sizes down. Participate fully in an up-tape,
+# run lighter gross in a down-tape — the main lever for risk-adjusted return
+# vs a long-only index.
+REGIME_FILTER_ENABLED = os.getenv("REGIME_FILTER_ENABLED", "1") not in ("0", "false", "False")
+REGIME_SMA_DAYS = int(os.getenv("REGIME_SMA_DAYS", "20"))
+REGIME_DERISK_FACTOR = float(os.getenv("REGIME_DERISK_FACTOR", "0.60"))
+
 # Partial profit-lock (LONGS only): scale OUT a fraction of a winner when it is
 # both in profit AND stretched above its short-term mean (mean reversion). Keeps
 # a core position into the catalyst. Self-limiting: stops once the name reverts.
