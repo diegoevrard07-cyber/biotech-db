@@ -17,6 +17,39 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-07-14 — Rogue shorts incident + risk-hardening package
+
+**Branch/PR:** `cursor/risk-hardening-7e76`
+
+**Incident:** 8 shorts (the old fade book: ABOS QURE RGNX SLS ADCT KPTI ORIC OMER)
+were re-opened at 08:26 UTC by an autopilot run OUTSIDE GitHub Actions — timestamp
+matches the Mac launchd catch-up firing on wake (10:26 Brussels) from a checkout/env
+without long-only active. GH Actions' own run (00:16 UTC) was clean. Covered all 8
+immediately (≈$0 realized). **Owner action: remove the Mac scheduler**
+(`./scripts/setup_launchd_macos.sh --remove`) so GitHub Actions is the only execution
+venue.
+
+**Market context:** XBI −5.4% from its 7/10 high; portfolio −2.5% from peak
+($10,943→$10,670) — half the index downside. Same-window: portfolio +6.7% vs XBI +6.5%.
+
+**New protections (all config-gated, in `layers/portfolio/risk.py` + autopilot):**
+- **Per-position stop-loss (longs):** close at EOD when marked ≤ −15% from entry
+  (`STOP_LOSS_PCT`); stopped names not re-bought the same run. Fills the gap that
+  the portfolio breaker alone cannot cover.
+- **Graded drawdown de-risk:** tiers −6%→×0.75, −10%→×0.50 (+opens paused),
+  −15%→×0.25 (`DRAWDOWN_TIERS`) — acts earlier than the old single −10% cliff.
+- **Regime filter:** XBI close below its 20d SMA → all targets ×0.60
+  (`REGIME_*`). Full size restored above the SMA.
+- **Execution-level long-only guard:** short opens refused at execution regardless
+  of upstream targets (defense-in-depth vs stale checkouts/env).
+- Strategy page §9 reflects the live overlay config.
+
+**Verify:** 187 tests pass (3 new overlay tests); autopilot `--dry-run` on live DB
+shows overlays evaluated and no false triggers (worst name −10% vs −15% stop;
+DD −2.5% above first tier).
+
+---
+
 ## 2026-07-03 — Fix redesign UI overlap (stale content, chart title, toolbar)
 
 **Branch/PR:** `cursor/dashboard-redesign-7e76` (#9)
