@@ -2012,12 +2012,22 @@ def page_strategy() -> None:
 
     # ---- 9. Risk overlays ----
     st.subheader("9 · Risk overlays (paper autopilot)")
+    tiers_txt = " · ".join(f"−{lvl:.0%}→×{s}" for lvl, s in config.DRAWDOWN_TIERS)
     st.markdown(
-        f"- **Drawdown circuit breaker:** if equity falls more than "
-        f"`{config.DRAWDOWN_CIRCUIT_PCT:.0%}` below its prior peak, all target weights are "
-        f"scaled by `{config.DRAWDOWN_DERISK_FACTOR}` and new opens are paused until recovery. "
-        f"Catches correlated sector selloffs that per-name caps miss. "
+        f"- **Per-position stop-loss (longs):** close any long marked down more than "
+        f"`{config.STOP_LOSS_PCT:.0%}` from entry at EOD; the name is not re-bought the "
+        f"same run. {'**ON**' if config.STOP_LOSS_ENABLED else '**OFF**'}.\n"
+        f"- **Graded drawdown de-risk:** target sizes scale with drawdown from peak "
+        f"({tiers_txt}); new opens pause at scale ≤ "
+        f"`{config.DRAWDOWN_OPEN_PAUSE_SCALE}`. Catches correlated sector selloffs "
+        f"that per-name caps miss. "
         f"{'**ON**' if config.DRAWDOWN_CIRCUIT_ENABLED else '**OFF**'}.\n"
+        f"- **Regime filter:** when {config.BENCHMARK_TICKER} closes below its "
+        f"`{config.REGIME_SMA_DAYS}`-day SMA, all targets scale by "
+        f"`{config.REGIME_DERISK_FACTOR}` (full size restored above the SMA). "
+        f"{'**ON**' if config.REGIME_FILTER_ENABLED else '**OFF**'}.\n"
+        f"- **Execution guard:** short opens are refused at execution when long-only, "
+        f"regardless of upstream signals.\n"
         f"- **Mean-reversion profit-lock (longs only):** when an open long is up "
         f"≥ `{config.PROFIT_LOCK_GAIN_PCT:.0%}` **and** stretched ≥ "
         f"`{config.PROFIT_LOCK_ZSCORE}`σ above its `{config.PROFIT_LOCK_LOOKBACK_DAYS}`-day mean, "
