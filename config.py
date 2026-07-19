@@ -100,15 +100,15 @@ KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.25"))  # fractional Kelly
 MAX_SINGLE_NAME_WEIGHT = float(os.getenv("MAX_SINGLE_NAME_WEIGHT", "0.05"))  # 5% cap
 
 # Long-only mode: drop every short/fade (negative-weight) signal from the capped
-# book. When ON, the action desk and paper autopilot only ever hold longs, and any
-# existing open shorts fall out of the book and get covered on the next sync.
-# Owner preference: shorts/fades are experimental and were the main drag, so default ON.
+# book. Fades are also retired at the scorer (decide_trade → avoid). Default ON;
+# LONG_ONLY=0 is retained only as an emergency override and still cannot open
+# shorts at the execution guard while fade weights are forced to 0.
 LONG_ONLY = os.getenv("LONG_ONLY", "1") not in ("0", "false", "False")
 
 # Portfolio construction caps (action sheet)
 MAX_GROSS_LONG = float(os.getenv("MAX_GROSS_LONG", "1.0"))    # 100% long
-MAX_GROSS_SHORT = float(os.getenv("MAX_GROSS_SHORT", "0.30"))  # 30% short
-MAX_NET = float(os.getenv("MAX_NET", "0.60"))                  # net exposure
+MAX_GROSS_SHORT = float(os.getenv("MAX_GROSS_SHORT", "0.0"))   # shorts retired (was 30%)
+MAX_NET = float(os.getenv("MAX_NET", "0.60"))                  # unused when LONG_ONLY (net=gross long)
 MAX_GBM_WEIGHT = float(os.getenv("MAX_GBM_WEIGHT", "0.25"))    # GBM names are correlated
 MAX_SECTOR_WEIGHT = float(os.getenv("MAX_SECTOR_WEIGHT", "0.40"))  # per indication_category
 URGENT_DAYS = int(os.getenv("URGENT_DAYS", "7"))

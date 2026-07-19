@@ -17,6 +17,36 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-07-19 — Kill fades at source + fix long-only books
+
+**Branch/PR:** `cursor/kill-fades-fix-books-0203`
+
+Fades/shorts were still being *scored and shown* even with `LONG_ONLY` on, which kept
+polluting the Action Desk blotter and left a path for stale checkouts / leftover DB
+rows to mess up the paper book (see 2026-07-14 rogue-shorts incident).
+
+**What changed:**
+- **Scorer:** former fade rules in `decide_trade` now return `avoid`. `suggested_weight(fade)`
+  is forced to `0` — no negative weights emitted.
+- **Action book:** `compute_book` always drops `weight ≤ 0` (not only when `LONG_ONLY`).
+- **Paper sync:** refuses negative weights, `trade_type=fade`, and non-long sides.
+- **UI:** Action Desk filters / Portfolio add-trade / Strategy page no longer offer or
+  document fades as a live trade. Gross-short metrics hidden in long-only mode.
+- **Caps:** `MAX_GROSS_SHORT` default → `0`.
+- **GH Actions:** `LONG_ONLY=1` + `MAX_GROSS_SHORT=0` pinned; autopilot covers leftovers
+  before each sync.
+- **One-shot fixer:** `scripts/fix_long_only_book.py` covers open shorts, strips short
+  history (via `strip_shorts`), and retires stale `edge_scores` fade rows → avoid/0.
+
+**Live DB fixed (2026-07-19):** Actions run `cover-shorts-now` #29680502632 covered
+all 9 open fades (ABOS ADCT KPTI OMER ORIC QURE RGNX SLS WVE), realized −$14,
+stripped 68 short history rows, restated 15 performance snapshots, retired 33
+stale `edge_scores` fade rows → avoid. Proof: **zero open shorts/fades**.
+
+**Verify:** refresh Edge Terminal Portfolio — no fade rows; open book is long-only.
+
+---
+
 ## 2026-07-14 — Rogue shorts incident + risk-hardening package
 
 **Branch/PR:** `cursor/risk-hardening-7e76`

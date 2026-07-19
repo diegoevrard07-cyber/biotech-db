@@ -9,7 +9,7 @@ before the event using only data computable at that time:
 Then the realized return is simulated per trade type:
   - buy_the_rumor : enter ~30d pre-event, EXIT ~1d pre-event (sell the news)
   - hold_through  : raw return across the event window (catalyst_outcomes)
-  - fade          : short the event window (-raw_return)
+  - fade          : RETIRED (former fade setups now avoid; not backtested)
   - avoid         : skipped
 
 Honest caveats (printed): financing/positioning are NOT historical, so they are
@@ -34,7 +34,6 @@ from db import get_connection
 from layers.composite.backtest_metrics import summarize
 from layers.composite.scorer import (
     BUY_THE_RUMOR,
-    FADE,
     HOLD_THROUGH,
     decide_trade,
     score_base_rate,
@@ -102,31 +101,26 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
                 proximity=proximity, base=base, fin_tilt=0.0,
                 run_up_30d=run_up, edge_gap=None,
             )
-            if trade_type not in (BUY_THE_RUMOR, HOLD_THROUGH, FADE):
-                continue
+            if trade_type not in (BUY_THE_RUMOR, HOLD_THROUGH):
+                continue  # avoid (incl. former fades) — long-only backtest
 
-            # Realized return per trade type.
+            # Realized return per trade type (longs only).
             if trade_type == BUY_THE_RUMOR:
                 entry = _close_before(conn, cid, ed - timedelta(days=lead_days))
                 exit_ = _close_before(conn, cid, ed - timedelta(days=1))
                 raw = _ret(entry, exit_)
-                direction = 1.0
-            elif trade_type == HOLD_THROUGH:
+            else:  # HOLD_THROUGH
                 raw = float(r["raw_return"])
-                direction = 1.0
-            else:  # FADE
-                raw = float(r["raw_return"])
-                direction = -1.0
 
             if raw is None:
                 continue
 
-            directional = direction * raw - slippage
+            directional = raw - slippage
             w = suggested_weight(
                 trade_type, base=base, proximity=proximity,
                 kelly_fraction=config.KELLY_FRACTION, max_weight=config.MAX_SINGLE_NAME_WEIGHT,
             )
-            weighted = abs(w) * directional  # weight already carries sign via trade logic
+            weighted = abs(w) * directional
 
             trade_returns.append(directional)
             weighted_returns.append(weighted)

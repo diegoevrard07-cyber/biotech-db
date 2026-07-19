@@ -164,6 +164,11 @@ def decide_trade(
     edge_gap: float | None,
     date_reliable: bool = True,
 ) -> str:
+    """Pick a long trade or avoid. Fades/shorts are retired (unvalidated edge).
+
+    Former fade conditions (financing-stressed hype, low-base run-up, strong
+    overpricing) now return AVOID so they never enter the book.
+    """
     run_up = run_up_30d if run_up_30d is not None else 0.0
     # edge_gap = model expected move - market implied move.
     #   < 0  -> market prices a BIGGER move than the model justifies (overpaying)
@@ -172,15 +177,13 @@ def decide_trade(
     strongly_overpriced = edge_gap is not None and edge_gap < -0.10
     underpriced = edge_gap is not None and edge_gap > 0.10
 
-    # 1. Financing-stressed hype -> fade
+    # 1–3. Former fade setups → avoid (shorts/fades removed from the strategy).
     if fin_tilt <= -0.15 and run_up > 0.5:
-        return FADE
-    # 2. Low base rate + big run-up (and/or market overpaying for the move) -> fade
+        return AVOID
     if base < 0.25 and (run_up > 0.75 or overpriced):
-        return FADE
-    # 3. Divergence fade: market is paying up big for a coin-flip-or-worse event.
+        return AVOID
     if strongly_overpriced and base < 0.5:
-        return FADE
+        return AVOID
     # 4. Cheap optionality: market under-pricing a move on decent odds -> own the binary.
     if underpriced and base >= 0.45 and fin_tilt > -0.10:
         return HOLD_THROUGH
@@ -202,14 +205,15 @@ def suggested_weight(
     kelly_fraction: float,
     max_weight: float,
 ) -> float:
-    """Signed portfolio weight: positive = long, negative = short, capped."""
+    """Portfolio weight: positive = long. Fades/shorts always size to 0."""
     if trade_type == HOLD_THROUGH:
         w = kelly_fraction * kelly_weight(base)
     elif trade_type == BUY_THE_RUMOR:
         # Event-driven (exit before the print): smaller, base-agnostic, proximity-scaled.
         w = kelly_fraction * 0.5 * proximity
     elif trade_type == FADE:
-        w = -kelly_fraction * kelly_weight(1.0 - base)
+        # Retired: never emit a short weight, even if a stale fade label exists.
+        return 0.0
     else:
         return 0.0
     return round(max(-max_weight, min(max_weight, w)), 4)

@@ -189,13 +189,12 @@ Most support `--dry-run`, `--limit`, `--ticker`.
 calibrated** across all probability buckets. This is real but modest. It predicts
 *clinical trial success*, which is a FEATURE — not stock returns.
 
-**Live book:** `action_sheet.py` produces ~39 positions, long/short, all caps enforced
-(gross long ≤100%, gross short ≤30%, net ≤±60%, GBM ≤25%). 36 `fade` signals exist only
-because positioning/implied-move data is now populated.
+**Live book:** long-only. `action_sheet.py` drops every short/fade; scorer maps former
+fade setups to `avoid`. Caps: gross long ≤100%, gross short = 0, GBM ≤25%.
 
-**Honest risk:** the LONGS lean on the validated base-rate edge. The FADE/SHORTS are
-theory-driven and have ZERO realized validation. Trade longs at size; paper/half-size
-shorts until they earn a record.
+**Honest risk:** the LONGS lean on the validated base-rate edge. Fades/shorts are
+**retired** (unvalidated; were the main drag). Run `scripts/fix_long_only_book.py`
+on the live DB if any leftover shorts or stale fade scores remain.
 
 **Returns dataset — PARTIALLY UNBLOCKED (2026-06-21):** the earlier blocker
 ("no announcement dates") was wrong. `sec_filings` holds **2,028 8-K filings across 106

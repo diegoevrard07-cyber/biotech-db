@@ -40,14 +40,15 @@ def test_financing_tilt_dilution_negative():
     assert financing_tilt(36, 5_000_000, True) == -0.10
 
 
-def test_decide_fade_on_financing_stressed_hype():
+def test_decide_avoid_on_financing_stressed_hype():
+    # Former fade setup — shorts retired → avoid.
     tt = decide_trade(proximity=0.85, base=0.4, fin_tilt=-0.15, run_up_30d=0.8, edge_gap=None)
-    assert tt == FADE
+    assert tt == AVOID
 
 
-def test_decide_fade_low_base_high_runup():
+def test_decide_avoid_low_base_high_runup():
     tt = decide_trade(proximity=0.45, base=0.10, fin_tilt=0.0, run_up_30d=1.0, edge_gap=None)
-    assert tt == FADE
+    assert tt == AVOID
 
 
 def test_decide_buy_the_rumor():
@@ -80,10 +81,10 @@ def test_unreliable_date_blocks_buy_the_rumor():
     assert tt != BUY_THE_RUMOR
 
 
-def test_divergence_fade_when_strongly_overpriced():
-    # Market prices a much bigger move than the model on weak odds -> fade.
+def test_divergence_overpriced_is_avoid():
+    # Market prices a much bigger move than the model on weak odds -> avoid (no short).
     tt = decide_trade(proximity=0.45, base=0.45, fin_tilt=0.0, run_up_30d=0.0, edge_gap=-0.15)
-    assert tt == FADE
+    assert tt == AVOID
 
 
 def test_cheap_optionality_buys_underpriced_move():
@@ -99,7 +100,7 @@ def test_suggested_weight_bounds():
             w = suggested_weight(tt, base=base, proximity=1.0, kelly_fraction=0.25, max_weight=maxw)
             assert -maxw <= w <= maxw
     assert suggested_weight(AVOID, base=0.9, proximity=1.0, kelly_fraction=0.25, max_weight=maxw) == 0.0
-    assert suggested_weight(FADE, base=0.1, proximity=0.5, kelly_fraction=0.25, max_weight=maxw) < 0
+    assert suggested_weight(FADE, base=0.1, proximity=0.5, kelly_fraction=0.25, max_weight=maxw) == 0.0
     assert suggested_weight(HOLD_THROUGH, base=0.9, proximity=0.5, kelly_fraction=0.25, max_weight=maxw) > 0
 
 
