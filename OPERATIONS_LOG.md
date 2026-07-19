@@ -38,11 +38,12 @@ rows to mess up the paper book (see 2026-07-14 rogue-shorts incident).
 - **One-shot fixer:** `scripts/fix_long_only_book.py` covers open shorts, strips short
   history (via `strip_shorts`), and retires stale `edge_scores` fade rows → avoid/0.
 
-**Owner action (live DB):** run once against Supabase:
-`python scripts/fix_long_only_book.py` (dry-run first with `--dry-run`).
-Also re-run `run_composite.py` so new scores never reintroduce fade labels.
+**Live DB fixed (2026-07-19):** Actions run `cover-shorts-now` #29680502632 covered
+all 9 open fades (ABOS ADCT KPTI OMER ORIC QURE RGNX SLS WVE), realized −$14,
+stripped 68 short history rows, restated 15 performance snapshots, retired 33
+stale `edge_scores` fade rows → avoid. Proof: **zero open shorts/fades**.
 
-**Verify:** pytest green; `compute_book` gross_short == 0; no fade in Action Desk defaults.
+**Verify:** refresh Edge Terminal Portfolio — no fade rows; open book is long-only.
 
 ---
 
