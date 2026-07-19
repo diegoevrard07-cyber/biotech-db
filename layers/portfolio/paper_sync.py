@@ -22,10 +22,17 @@ def build_targets(
         px = prices.get(t)
         if not px:
             continue
-        sized = pf.size_from_weight(float(r["weight"]), equity, px)
+        weight = float(r["weight"])
+        if weight <= 0:
+            continue  # never target a short/fade
+        if r.get("trade_type") == "fade":
+            continue
+        sized = pf.size_from_weight(weight, equity, px)
         shares = sized["shares"]
         if not shares or shares <= 0:
             continue
+        if sized["side"] != pf.LONG:
+            continue  # defense-in-depth: refuse short targets
         ped, rule = pf.planned_exit(r["trade_type"], r["expected_date"])
         targets[t] = {
             "ticker": t,
@@ -33,7 +40,7 @@ def build_targets(
             "catalyst_id": r.get("catalyst_id"),
             "trade_type": r["trade_type"],
             "side": sized["side"],
-            "weight": float(r["weight"]),
+            "weight": weight,
             "target_shares": shares,
             "target_dollars": sized["dollars"],
             "price": px,

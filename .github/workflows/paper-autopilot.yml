@@ -28,6 +28,8 @@ jobs:
     env:
       TZ: UTC
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      LONG_ONLY: "1"
+      MAX_GROSS_SHORT: "0"
     steps:
       - name: Gate to weekdays (UTC)
         id: gate
@@ -54,6 +56,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Cover any leftover shorts (long-only hard)
+        if: steps.gate.outputs.run == 'true'
+        run: python scripts/paper_autopilot.py --cover-shorts
 
       - name: Run paper autopilot
         if: steps.gate.outputs.run == 'true'

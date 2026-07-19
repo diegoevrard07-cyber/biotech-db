@@ -307,8 +307,8 @@ def _action_desk_filters(sidebar: bool = True) -> dict:
         horizon = host.select_slider("Horizon (days)", [30, 90, 180, 365, 9999], value=90)
         act_days = host.slider("Act-now window (days)", 7, 180, 60)
         only_gbm = host.checkbox("GBM flagship only", value=False)
-        types = host.multiselect("Trade types", ["buy_the_rumor", "hold_through", "fade", "avoid"],
-                                 default=["buy_the_rumor", "hold_through", "fade"])
+        types = host.multiselect("Trade types", ["buy_the_rumor", "hold_through", "avoid"],
+                                 default=["buy_the_rumor", "hold_through"])
         min_w = host.slider("Min |weight|", 0.0, 0.05, 0.0, 0.005)
     return {"horizon": horizon, "act_days": act_days, "only_gbm": only_gbm,
             "types": types, "min_w": min_w}
@@ -894,13 +894,22 @@ def page_portfolio() -> None:
 
     # ---- account summary ----
     summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
-    m = st.columns(6)
-    m[0].metric("Account value", fmt_usd(summ["equity"]))
-    m[1].metric("Cash", fmt_usd(summ["cash"]))
-    m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
-    m[3].metric("Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"]))
-    m[4].metric("Gross short", f"{summ['gross_short_pct']:.0%}", help=fmt_usd(summ["gross_short_usd"]))
-    m[5].metric("Net", f"{summ['net_pct']:+.0%}", help=fmt_usd(summ["net_usd"]))
+    if config.LONG_ONLY:
+        m = st.columns(5)
+        m[0].metric("Account value", fmt_usd(summ["equity"]))
+        m[1].metric("Cash", fmt_usd(summ["cash"]))
+        m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
+        m[3].metric("Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"]))
+        cash_pct = (summ["cash"] / summ["equity"]) if summ["equity"] else 0.0
+        m[4].metric("Cash %", f"{cash_pct:.0%}")
+    else:
+        m = st.columns(6)
+        m[0].metric("Account value", fmt_usd(summ["equity"]))
+        m[1].metric("Cash", fmt_usd(summ["cash"]))
+        m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
+        m[3].metric("Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"]))
+        m[4].metric("Gross short", f"{summ['gross_short_pct']:.0%}", help=fmt_usd(summ["gross_short_usd"]))
+        m[5].metric("Net", f"{summ['net_pct']:+.0%}", help=fmt_usd(summ["net_usd"]))
     if acct["starting_capital"]:
         tot = summ["equity"] - float(acct["starting_capital"])
         st.caption(f"Total return since start: **{fmt_usd(tot)}** "
@@ -947,9 +956,16 @@ def page_portfolio() -> None:
         cc = st.columns([1, 1, 1, 1])
         tk = cc[0].selectbox("Ticker", companies["ticker"].tolist(), key="add_tk")
         cid = int(companies[companies["ticker"] == tk].iloc[0]["id"])
-        side = cc[1].selectbox("Side", ["long", "short"], key="add_side")
-        ttype = cc[2].selectbox("Trade type", ["buy_the_rumor", "hold_through", "fade", "manual"],
-                                key="add_tt")
+        if config.LONG_ONLY:
+            side = "long"
+            cc[1].selectbox("Side", ["long"], index=0, key="add_side", disabled=True)
+            ttype = cc[2].selectbox("Trade type", ["buy_the_rumor", "hold_through", "manual"],
+                                    key="add_tt")
+        else:
+            side = cc[1].selectbox("Side", ["long", "short"], key="add_side")
+            ttype = cc[2].selectbox("Trade type",
+                                    ["buy_the_rumor", "hold_through", "fade", "manual"],
+                                    key="add_tt")
         size_by = cc[3].radio("Size by", ["shares", "dollars"], horizontal=True, key="add_sizeby")
 
         cats = q("SELECT id, catalyst_type, expected_date FROM catalysts WHERE company_id=%s "
@@ -1311,13 +1327,13 @@ def page_glossary(*, embedded: bool = False) -> None:
          "sponsor type). Our most-validated number — it's the statistical 'reality' the crowd's "
          "mood is measured against."),
         ("Edge gap", "Our predicted move minus the move the options market is pricing in. "
-         "Positive = market underprices it (lean long). Negative = market overpays (lean fade/short)."),
+         "Positive = market underprices it (lean long). Negative = market overpays (avoid / no trade)."),
         ("Composite score / grade", "Overall quality of a setup (0–1): blends how soon the catalyst "
          "is, the base rate, and the company's cash runway. NO market sentiment in it."),
         ("Trade types", "buy_the_rumor = ride into the event, sell BEFORE the result. "
-         "hold_through = hold through the result. fade = short an overhyped name. avoid = no trade."),
+         "hold_through = hold through the result. avoid = no trade. (Fades/shorts are retired.)"),
         ("Suggested / target weight", "Fraction of your book the model would put on this name "
-         "(Kelly-fractional, capped). Long is +, short is −."),
+         "(Kelly-fractional, capped). Long-only — always ≥ 0."),
         ("Implied move", "How big a move the options market expects around the event (from option "
          "prices). Our read on 'what the crowd has priced in.'"),
         ("Run-up (30d)", "How much the stock already moved in the last 30 days — proxy for how "
@@ -1325,8 +1341,8 @@ def page_glossary(*, embedded: bool = False) -> None:
         ("Short % float", "Percent of tradeable shares sold short — a sentiment/positioning gauge."),
         ("Confidence", "How much to trust THIS row (more data + a reliable date = higher)."),
         ("Unrealized P&L", "Paper gain/loss on open positions at the latest close (not yet sold)."),
-        ("Gross long / short", "Total size of your long (or short) positions as % of account value."),
-        ("Net exposure", "Gross long minus gross short. +60% means net 60% bullish."),
+        ("Gross long", "Total size of long positions as % of account value."),
+        ("Net exposure", "In long-only mode, equals gross long (no shorts)."),
         ("Account value (equity)", "Cash + market value of your positions. Your true net worth in "
          "this account."),
     ]
@@ -1570,8 +1586,12 @@ def page_action_desk() -> None:
 
     m = st.columns(6)
     m[0].metric("Capped positions", book["positions"])
-    m[1].metric("Gross L/S", f"{book['gross_long']:.0%} / {book['gross_short']:.0%}")
-    m[2].metric("Net", f"{book['net']:+.0%}", help="cap ±60%")
+    if config.LONG_ONLY:
+        m[1].metric("Gross long", f"{book['gross_long']:.0%}")
+        m[2].metric("Net", f"{book['net']:+.0%}", help="long-only: net = gross long")
+    else:
+        m[1].metric("Gross L/S", f"{book['gross_long']:.0%} / {book['gross_short']:.0%}")
+        m[2].metric("Net", f"{book['net']:+.0%}", help="cap ±60%")
     m[3].metric("GBM", f"{book['gbm_pct']:.0%}", help="cap 25%")
     m[4].metric("All signals", len(_filter_blotter(blotter, flt)))
     m[5].metric("Account", fmt_usd(equity) if equity else "—")
@@ -1617,7 +1637,7 @@ def page_action_desk() -> None:
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Filtered signals", len(f))
         c2.metric("Buy-the-rumor", int((f["trade_type"] == "buy_the_rumor").sum()))
-        c3.metric("Fade", int((f["trade_type"] == "fade").sum()))
+        c3.metric("Hold-through", int((f["trade_type"] == "hold_through").sum()))
         c4.metric("In capped book", int(f["ticker"].isin(sized["ticker"]).sum()) if not sized.empty else 0)
 
         in_book = set(sized["ticker"]) if not sized.empty else set()
@@ -1932,17 +1952,19 @@ def page_strategy() -> None:
         "carry the largest expected move (~0.40), lopsided ones the smallest (~0.20).\n"
         "- **implied_move** is the options-market expected move around the event.\n"
         "- `edge_gap < 0` → market pays for a **bigger** move than justified → overpriced "
-        "(fade candidate). `edge_gap > 0` → market **underprices** the move → own the binary."
+        "→ **avoid** (do not short). `edge_gap > 0` → market **underprices** the move → "
+        "own the binary."
     )
 
     # ---- 5. Trade-type decision ----
     st.subheader("5 · Trade-type decision rules")
     st.markdown(
         "Evaluated in order; first match wins. `run_up` = 30-day pre-event return, "
-        "`fin_tilt` ≤ 0 = dilution pressure.\n\n"
-        "1. `fin_tilt ≤ −0.15` **and** `run_up > 0.50` → **fade** (financing-stressed hype).\n"
-        "2. `base < 0.25` **and** (`run_up > 0.75` **or** edge_gap < −0.05) → **fade**.\n"
-        "3. `edge_gap < −0.10` **and** `base < 0.5` → **fade** (paying up for a coin-flip).\n"
+        "`fin_tilt` ≤ 0 = dilution pressure. **Fades/shorts are retired** — former fade "
+        "setups map to **avoid**.\n\n"
+        "1. `fin_tilt ≤ −0.15` **and** `run_up > 0.50` → **avoid** (financing-stressed hype).\n"
+        "2. `base < 0.25` **and** (`run_up > 0.75` **or** edge_gap < −0.05) → **avoid**.\n"
+        "3. `edge_gap < −0.10` **and** `base < 0.5` → **avoid** (paying up for a coin-flip).\n"
         "4. `edge_gap > 0.10` **and** `base ≥ 0.45` **and** `fin_tilt > −0.10` → "
         "**hold_through** (cheap optionality).\n"
         "5. `proximity ≥ 0.85` **and** `base ≥ 0.35` **and** `fin_tilt > −0.10` **and** "
@@ -1952,23 +1974,23 @@ def page_strategy() -> None:
         "`buy_the_rumor` requires a reliable (SEC-confirmed or medium/high-confidence) date "
         "because it lives or dies on timing."
     )
-    if config.LONG_ONLY:
-        st.markdown(
-            "**Long-only mode is ON:** `fade` (short) signals are still computed and shown "
-            "as research, but they are dropped from the capped book — none are traded, and "
-            "open shorts are covered on the next sync. Set `LONG_ONLY=0` to re-enable shorts."
-        )
+    st.markdown(
+        "**Long-only is hard:** the scorer never emits `fade`, negative weights are dropped "
+        "from the capped book, paper targets refuse short sides, and the execution guard "
+        "blocks any short open. Run `python scripts/fix_long_only_book.py` to cover "
+        "leftover shorts, strip their history, and retire stale fade scores in the DB."
+    )
 
     # ---- 6. Sizing ----
     st.subheader("6 · Position sizing")
     st.latex(r"f^\star = \frac{p\,(b+1) - 1}{b}, \qquad b = 1 \;\text{(symmetric payoff)}")
     st.markdown(
-        f"Raw signed weight by trade type, then scaled by fractional Kelly "
-        f"`λ = {config.KELLY_FRACTION}` and clamped to ±`{config.MAX_SINGLE_NAME_WEIGHT:.0%}` "
+        f"Raw long weight by trade type, then scaled by fractional Kelly "
+        f"`λ = {config.KELLY_FRACTION}` and clamped to `+{config.MAX_SINGLE_NAME_WEIGHT:.0%}` "
         f"per name:\n\n"
         "- **hold_through:** `λ · kelly(base)` (long).\n"
         "- **buy_the_rumor:** `λ · 0.5 · proximity` (long, base-agnostic, event-driven).\n"
-        "- **fade:** `−λ · kelly(1 − base)` (short).\n"
+        "- **fade:** retired — weight forced to `0`.\n"
         "- Net insider buying nudges long conviction up (still capped).\n\n"
         "**Risk haircut (magnitude control).** Before portfolio caps, each weight is "
         "multiplied by a market-cap tier multiplier — smaller caps blow up harder, so they "
@@ -1988,15 +2010,14 @@ def page_strategy() -> None:
         "date), scaling signed weights within each constraint:\n\n"
         f"1. **Sector** (per indication category): gross ≤ `{config.MAX_SECTOR_WEIGHT:.0%}`.\n"
         f"2. **GBM cluster** (correlated): gross ≤ `{config.MAX_GBM_WEIGHT:.0%}`.\n"
-        f"3. **Gross long** ≤ `{config.MAX_GROSS_LONG:.0%}`, **gross short** ≤ "
-        f"`{config.MAX_GROSS_SHORT:.0%}`.\n"
-        f"4. **Net exposure** clamped to ±`{config.MAX_NET:.0%}` (dominant side scaled down).\n\n"
+        f"3. **Gross long** ≤ `{config.MAX_GROSS_LONG:.0%}` "
+        f"(gross short cap is `{config.MAX_GROSS_SHORT:.0%}` — shorts retired).\n"
+        f"4. **Net exposure** = gross long in long-only mode "
+        f"(legacy ±`{config.MAX_NET:.0%}` throttle skipped).\n\n"
         f"Names below 0.1% weight are dropped. Catalysts within `{config.URGENT_DAYS}` days "
-        "are flagged urgent."
-        + (f"\n\n**Long-only:** the net throttle is skipped (net = gross long), so deployment "
-           f"is governed by the gross-long cap `{config.MAX_GROSS_LONG:.0%}`, not the "
-           f"`{config.MAX_NET:.0%}` net cap — freed short capital is redeployed into longs."
-           if config.LONG_ONLY else "")
+        "are flagged urgent.\n\n"
+        f"**Long-only:** deployment is governed by the gross-long cap "
+        f"`{config.MAX_GROSS_LONG:.0%}`."
     )
 
     # ---- 8. Exit timing ----
@@ -2004,8 +2025,7 @@ def page_strategy() -> None:
     st.markdown(
         "Exit date is derived from the linked catalyst:\n\n"
         "- **buy_the_rumor** → exit ~1 trading day **before** the catalyst.\n"
-        "- **hold_through** → exit shortly **after** the readout.\n"
-        "- **fade** → cover **after** the print.\n\n"
+        "- **hold_through** → exit shortly **after** the readout.\n\n"
         "No linked catalyst ⇒ manual exit. The action center surfaces exits that are "
         "overdue or due within 7 days."
     )
@@ -2067,9 +2087,8 @@ def page_strategy() -> None:
     st.markdown(
         "- `expected_move` and `base_rate` are heuristics; calibration refines them but they "
         "are not market-derived.\n"
-        "- Fade/short signals are the weakest leg — the run-up→reversal relationship is a weak "
-        "barbell, not a clean fade. Shorts and fades are experimental until they earn a track "
-        "record.\n"
+        "- Fade/short signals are **retired** (unvalidated; were the main P&L drag). Former "
+        "fade setups now map to avoid — the book is long-only.\n"
         "- Options-implied move and short-interest data are sparse for the smallest names.\n"
         "- No transaction-cost, borrow-cost, or slippage model; paper fills at prior close."
     )

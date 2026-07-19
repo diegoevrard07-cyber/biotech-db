@@ -1,11 +1,12 @@
 """
 Lever 2 (moneymaxxing) - Daily sized ACTION SHEET.
 
-Turns raw per-name edge scores into an executable, risk-capped book:
+Turns raw per-name edge scores into an executable, risk-capped long book:
   1. one best signal per ticker (avoids double-counting a name's catalysts)
-  2. sector caps (per indication_category) and a GBM-correlation cap
-  3. gross-long / gross-short / net exposure caps
-  4. concrete action + timing per trade type
+  2. drop every short/fade (negative weight) — fades are retired
+  3. sector caps (per indication_category) and a GBM-correlation cap
+  4. gross-long / net exposure caps
+  5. concrete action + timing per trade type
 
 Output: a dated table (OPEN/HOLD/EXIT timing, target weight) + portfolio summary,
 written to data/raw/action_sheet_<date>.csv. Read-only on the DB.
@@ -36,7 +37,6 @@ log = setup_logger("action_sheet")
 TIMING = {
     "buy_the_rumor": "ENTER now; EXIT ~1 trading day BEFORE the print",
     "hold_through": "ENTER; HOLD through the readout; exit after",
-    "fade": "SHORT now; COVER after the print",
 }
 
 
@@ -187,8 +187,9 @@ def compute_book(*, horizon_days: int = 365) -> dict:
     with get_connection() as conn:
         raw = conn.execute(text(_SIGNAL_SQL), {"h": horizon_days}).mappings().all()
     picks = _best_per_ticker(raw)
-    if config.LONG_ONLY:
-        picks = [p for p in picks if p["weight"] > 0]  # drop shorts/fades entirely
+    # Always drop shorts/fades — the fade edge is retired. LONG_ONLY also skips
+    # the net throttle so freed capital redeploys into longs.
+    picks = [p for p in picks if p["weight"] > 0]
     apply_risk_haircut(picks)   # de-risk tiny-caps BEFORE applying portfolio caps
     rows, summary = size_book(picks)
     return {"rows": rows, "today": today, "horizon_days": horizon_days, **summary}
