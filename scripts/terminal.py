@@ -874,9 +874,41 @@ def render_action_center(open_df: pd.DataFrame) -> None:
         (st.error if a["level"] == "now" else st.warning)(line)
 
 
+def _purge_open_shorts_once() -> None:
+    """On Portfolio load: if long-only and any open short/fade remains, cover them.
+
+    Runs at most once per Streamlit session so a refresh after deploy flattens
+    the book immediately (does not wait for the weekday GH Actions autopilot).
+    """
+    if not config.LONG_ONLY:
+        return
+    if st.session_state.get("_shorts_purged"):
+        return
+    check = q(
+        "SELECT COUNT(*) AS n FROM portfolio_holdings "
+        "WHERE status='open' AND (side='short' OR trade_type='fade')"
+    )
+    n = int(check.iloc[0]["n"]) if not check.empty else 0
+    st.session_state["_shorts_purged"] = True
+    if n <= 0:
+        return
+    st.warning(f"Long-only: covering {n} leftover short/fade position(s) now…")
+    try:
+        from paper_autopilot import cover_shorts
+        from strip_shorts import run as strip_shorts_run
+        cover_shorts(dry_run=False)
+        strip_shorts_run(dry_run=False)
+        st.cache_data.clear()
+        st.success(f"Covered/stripped {n} short/fade position(s). Totals refreshed.")
+        st.rerun()
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Failed to cover shorts: {exc}")
+
+
 def page_portfolio() -> None:
     st.title("Portfolio")
     ensure_account()
+    _purge_open_shorts_once()
     acct = get_account()
     prices = latest_prices()
     open_df = load_holdings("open")

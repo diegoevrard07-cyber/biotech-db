@@ -585,11 +585,30 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
              realized_total=round(realized_total, 2))
 
 
+def _load_open_shorts_and_fades(cur) -> list[dict]:
+    """Every open short OR fade — not limited to notes='PAPER'.
+
+    The Portfolio UI shows all open holdings; leftover fades from rogue runs
+    must be coverable even if notes differ.
+    """
+    cur.execute("""
+        SELECT id, ticker, company_id, catalyst_id, side, trade_type, entry_date,
+               shares, entry_price, cost_basis_usd, planned_exit_date, planned_exit_rule,
+               notes
+        FROM portfolio_holdings
+        WHERE status='open' AND (side='short' OR trade_type='fade')
+        ORDER BY ticker, id
+    """)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
 def cover_shorts(*, dry_run: bool = False) -> None:
-    """Close every open PAPER short at last close and free the cash. One-shot.
+    """Close every open short/fade at last close and free the cash. One-shot.
 
     Use to flatten shorts immediately (e.g. when switching to long-only) rather than
-    waiting for the daily sync to drop them as not_in_book.
+    waiting for the daily sync to drop them as not_in_book. Catches side='short'
+    OR trade_type='fade' across all notes (not just PAPER).
     """
     today = date.today()
     with get_connection() as conn:
@@ -601,19 +620,33 @@ def cover_shorts(*, dry_run: bool = False) -> None:
             cur.execute("SELECT cash_usd FROM portfolio_account WHERE id=1")
             cash = float((cur.fetchone() or (0.0,))[0] or 0.0)
 
-            shorts = [h for h in _load_open_paper(cur) if h["side"] == pf.SHORT]
+            shorts = _load_open_shorts_and_fades(cur)
             print(f"\n=== COVER SHORTS  {today} ===")
             if not shorts:
-                print("  No open PAPER shorts.")
+                print("  No open shorts/fades.")
                 return
             tickers = [h["ticker"] for h in shorts]
             n_px = 0 if dry_run else _refresh_prices(cur, tickers)
             closes = _latest_closes(cur, tickers)
-            print(f"  Open shorts: {len(shorts)}   price rows refreshed: {n_px}")
+            print(f"  Open shorts/fades: {len(shorts)}   price rows refreshed: {n_px}")
+            for h in shorts:
+                print(f"    {h['ticker']:<6} side={h['side']:<5} type={h['trade_type']:<13} "
+                      f"notes={h.get('notes')!r} shares={float(h['shares']):.2f}")
 
             covered = 0
             realized_today = 0.0
             for h in shorts:
+                # Fade rows that somehow have side≠short: force short semantics
+                # so cover P&L/cash and strip_shorts both see them as shorts.
+                if h["side"] != pf.SHORT:
+                    print(f"  [coerce] {h['ticker']}: {h['side']}/{h['trade_type']} → short")
+                    if not dry_run:
+                        cur.execute(
+                            "UPDATE portfolio_holdings SET side=%s, updated_at=NOW() WHERE id=%s",
+                            (pf.SHORT, h["id"]),
+                        )
+                    h = dict(h)
+                    h["side"] = pf.SHORT
                 px = closes.get(h["ticker"])
                 if px is None:
                     print(f"  [skip] {h['ticker']}: no price")
