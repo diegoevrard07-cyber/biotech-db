@@ -1,0 +1,19 @@
+{
+  "should_match": false,
+  "event_type": "crl",
+  "drug_name": null,
+  "indication": null,
+  "confidence": null,
+  "items": [
+    "7.01",
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ADIL",
+    "accession": "0001213900-20-032495",
+    "filed_date": "2020-10-21",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1513525/000121390020032495/ea128690-8k_adialpharma.htm"
+  },
+  "notes": "Clinical hold lifted \u2014 opposite of CRL"
+}

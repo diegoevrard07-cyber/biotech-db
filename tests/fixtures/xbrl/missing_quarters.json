@@ -1,0 +1,18 @@
+{
+  "cik": "0000000005",
+  "entityName": "Fixture Co Missing Q2",
+  "facts": {
+    "us-gaap": {
+      "ResearchAndDevelopmentExpense": {
+        "label": "Research and Development Expense",
+        "units": {
+          "USD": [
+            {"start": "2024-01-01", "end": "2024-03-31", "val": 8000000, "fy": 2024, "fp": "Q1", "form": "10-Q", "filed": "2024-05-01", "accn": "0000000005-24-000001"},
+            {"start": "2024-07-01", "end": "2024-09-30", "val": 9000000, "fy": 2024, "fp": "Q3", "form": "10-Q", "filed": "2024-11-01", "accn": "0000000005-24-000003"},
+            {"start": "2024-01-01", "end": "2024-12-31", "val": 35000000, "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-02-01", "accn": "0000000005-24-000004"}
+          ]
+        }
+      }
+    }
+  }
+}

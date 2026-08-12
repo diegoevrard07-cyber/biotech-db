@@ -1,0 +1,17 @@
+{
+  "should_match": false,
+  "event_type": "pdufa_assigned",
+  "drug_name": null,
+  "indication": null,
+  "confidence": null,
+  "items": [
+    "8.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ALDX",
+    "accession": "0001193125-23-256532",
+    "filed_date": "2023-10-16",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1341235/000119312523256532/d760002d8k.htm"
+  },
+  "notes": "Forward-looking PDUFA risk language, not an assignment"
+}

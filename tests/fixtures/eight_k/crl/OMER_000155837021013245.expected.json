@@ -1,0 +1,21 @@
+{
+  "should_match": true,
+  "event_type": "crl",
+  "event_date": "2021-10-18",
+  "drug_name": "narsoplimab",
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "5.02",
+    "7.01",
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "OMER",
+    "accession": "0001558370-21-013245",
+    "filed_date": "2021-10-18",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1285819/000155837021013245/omer-20211014x8k.htm"
+  },
+  "notes": "CRL for narsoplimab BLA in HSCT-TMA"
+}

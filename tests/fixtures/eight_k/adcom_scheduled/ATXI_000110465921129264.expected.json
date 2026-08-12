@@ -1,0 +1,18 @@
+{
+  "should_match": true,
+  "event_type": "adcom_scheduled",
+  "event_date": null,
+  "drug_name": null,
+  "indication": null,
+  "confidence": "medium",
+  "items": [
+    "8.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ATXI",
+    "accession": "0001104659-21-129264",
+    "filed_date": "2021-10-25",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1644963/000110465921129264/tm2130925d1_8k.htm"
+  },
+  "notes": "AdCom meeting for ATXI product; date not in truncated excerpt"
+}

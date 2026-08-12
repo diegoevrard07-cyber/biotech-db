@@ -1,0 +1,19 @@
+{
+  "should_match": false,
+  "event_type": "approval",
+  "drug_name": null,
+  "indication": null,
+  "confidence": null,
+  "items": [
+    "7.01",
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "OGEN",
+    "accession": "0001493152-20-008008",
+    "filed_date": "2020-05-08",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1174940/000149315220008008/form8-k.htm"
+  },
+  "notes": "Partner drug approved; filer is not the asset owner"
+}

@@ -1,0 +1,19 @@
+{
+  "should_match": true,
+  "event_type": "pdufa_delayed",
+  "event_date": null,
+  "drug_name": "nirogacestat",
+  "indication": null,
+  "confidence": "medium",
+  "items": [
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "SWTX",
+    "accession": "0001104659-23-067823",
+    "filed_date": "2023-06-05",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1773427/000110465923067823/tm2317772d1_8k.htm"
+  },
+  "notes": "PDUFA action date updated/extended; new date not in truncated excerpt"
+}

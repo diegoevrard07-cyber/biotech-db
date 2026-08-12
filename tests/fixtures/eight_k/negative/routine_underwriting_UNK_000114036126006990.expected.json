@@ -1,0 +1,23 @@
+{
+  "should_match": false,
+  "event_type": "offering",
+  "drug_name": null,
+  "indication": null,
+  "confidence": null,
+  "items": [
+    "1.01",
+    "2.01",
+    "2.03",
+    "3.02",
+    "5.02",
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "UNK",
+    "accession": "0001140361-26-006990",
+    "filed_date": "2026-02-26",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/2064307/000114036126006990/ef20066612_8k.htm"
+  },
+  "notes": "Shelf/incorporation by reference, not active offering"
+}

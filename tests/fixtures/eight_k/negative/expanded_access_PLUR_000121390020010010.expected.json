@@ -1,0 +1,17 @@
+{
+  "should_match": false,
+  "event_type": "approval",
+  "drug_name": null,
+  "indication": null,
+  "confidence": null,
+  "items": [
+    "8.01"
+  ],
+  "filing_metadata": {
+    "ticker": "PLUR",
+    "accession": "0001213900-20-010010",
+    "filed_date": "2020-04-24",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1158780/000121390020010010/ea121023-8k_pluristem.htm"
+  },
+  "notes": "Expanded access mention, not approval milestone"
+}

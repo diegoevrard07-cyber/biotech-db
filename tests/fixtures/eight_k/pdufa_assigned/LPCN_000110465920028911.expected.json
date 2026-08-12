@@ -1,0 +1,19 @@
+{
+  "should_match": true,
+  "event_type": "pdufa_assigned",
+  "event_date": "2020-08-28",
+  "drug_name": "TLANDO",
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "LPCN",
+    "accession": "0001104659-20-028911",
+    "filed_date": "2020-03-04",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1535955/000110465920028911/tm2011618d1_8k.htm"
+  },
+  "notes": "Press release announcing TLANDO PDUFA Date of August 28, 2020"
+}

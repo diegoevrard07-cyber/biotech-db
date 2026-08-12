@@ -1,0 +1,20 @@
+{
+  "should_match": true,
+  "event_type": "approval",
+  "event_date": "2024-10-25",
+  "drug_name": "ORLYNVAH",
+  "indication": null,
+  "confidence": "high",
+  "items": [
+    "7.01",
+    "8.01",
+    "9.01"
+  ],
+  "filing_metadata": {
+    "ticker": "ITRM",
+    "accession": "0000950170-24-117270",
+    "filed_date": "2024-10-25",
+    "primary_doc_url": "https://www.sec.gov/Archives/edgar/data/1659323/000095017024117270/itrm-20241025.htm"
+  },
+  "notes": "FDA approved ORLYNVAH for uUTI"
+}
