@@ -62,6 +62,7 @@ def retire_fade_scores(*, dry_run: bool = False) -> int:
 
 
 def run(*, dry_run: bool = False) -> None:
+    """Cover open paper shorts, strip short history, and retire fade scores (one-shot)."""
     print(f"=== FIX LONG-ONLY BOOK  dry_run={dry_run} ===")
     cover_shorts(dry_run=dry_run)
     strip_shorts_run(dry_run=dry_run)
@@ -71,6 +72,7 @@ def run(*, dry_run: bool = False) -> None:
 
 
 def main() -> None:
+    """CLI entry: migrate the paper book to the retired-fade / long-only strategy."""
     ap = argparse.ArgumentParser(description="Cover shorts, strip history, retire fade scores")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()

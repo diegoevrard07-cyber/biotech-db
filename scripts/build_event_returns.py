@@ -114,6 +114,7 @@ def _load_event_types(conn) -> dict[str, str]:
 
 
 def build(*, dry_run: bool = False) -> dict:
+    """Compute per-filing abnormal returns over hold windows and upsert event_returns."""
     summary = {"filings": 0, "computed": 0, "no_price": 0, "rows": 0}
     with get_connection() as conn:
         prices, bench = _load_prices(conn)
@@ -211,6 +212,7 @@ def _pct(xs: list[float], q: float) -> float:
 
 
 def analyze(hold: int = 3) -> None:
+    """Print distribution stats, the fade-the-run-up quintile test, and per-event-type sanity."""
     with get_connection() as conn:
         rows = conn.execute(
             text(
@@ -274,6 +276,7 @@ def analyze(hold: int = 3) -> None:
 
 
 def main() -> None:
+    """CLI entry: build the event_returns validation table, then print the analysis."""
     parser = argparse.ArgumentParser(description="Build + analyze event-return validation set")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--analyze-only", action="store_true")

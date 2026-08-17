@@ -26,6 +26,7 @@ def _cell(row, col: str) -> str | None:
 
 
 def load_companies(dry_run: bool = False) -> dict[str, int]:
+    """Upsert the seed CSV into companies and delete rows no longer in the seed."""
     df = load_company_seeds()
     required = {
         "ticker",
@@ -162,6 +163,7 @@ def load_companies(dry_run: bool = False) -> dict[str, int]:
 
 
 def main() -> None:
+    """CLI entry: load the company universe seed CSV into the companies table."""
     parser = argparse.ArgumentParser(description="Load companies from seed CSV")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

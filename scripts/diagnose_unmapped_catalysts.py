@@ -32,6 +32,7 @@ def _classify(api_phase_str: str | None, db_phase: str | None, parsed_phase: str
 
 
 def diagnose(fix_trials: bool = False) -> list[dict]:
+    """Explain why each upcoming catalyst lacks a base rate; optionally backfill trial phase."""
     engine = get_engine()
     results: list[dict] = []
 
@@ -99,6 +100,7 @@ def diagnose(fix_trials: bool = False) -> list[dict]:
 
 
 def main() -> None:
+    """CLI entry: diagnose catalysts missing base rates (Layer 3 debugging aid)."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--fix-trials", action="store_true", help="Update trials.phase when API has phase but DB is null")
     args = parser.parse_args()

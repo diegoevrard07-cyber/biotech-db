@@ -73,12 +73,14 @@ def ingest(
     limit: int | None = None,
     dry_run: bool = False,
 ) -> dict:
+    """Stream completed CT.gov studies and upsert labeled outcomes into historical_trials."""
     stats = ExtractionStats()
     upserted = 0
     errors = 0
     pending: list[dict] = []
 
     def flush() -> None:
+        """Upsert the pending batch of parsed trial rows."""
         nonlocal upserted
         if not pending:
             return
@@ -145,6 +147,7 @@ def ingest(
 
 
 def main() -> None:
+    """CLI entry: ingest historical trial outcomes from CT.gov (Layer 3 training data)."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-year", type=int, default=2010)
     parser.add_argument("--end-year", type=int, default=2024)

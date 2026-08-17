@@ -23,7 +23,7 @@ _last_request_at = 0.0
 
 
 class CTGovHistoricalError(Exception):
-    pass
+    """Raised on CT.gov API failures (incl. 429 rate limiting); triggers retry."""
 
 
 def _rate_limit() -> None:
@@ -59,6 +59,7 @@ def _get(params: dict) -> dict:
 
 
 def fetch_year_page(year: int, page_token: str | None = None, page_size: int = 100) -> dict:
+    """One cached page of completed interventional studies with results for a year."""
     cache_key = f"v2_interventional:year:{year}:token:{page_token or 'start'}:size:{page_size}"
     cache_path = CACHE_DIR / f"{hashlib.sha256(cache_key.encode()).hexdigest()[:16]}.json"
     if cache_path.exists():

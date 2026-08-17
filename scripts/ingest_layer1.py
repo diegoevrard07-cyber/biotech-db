@@ -152,6 +152,7 @@ def ingest(
     ticker: str | None = None,
     limit: int | None = None,
 ) -> dict:
+    """Fetch CT.gov trials per company, extract + dedupe catalysts, upsert both tables."""
     summary = {
         "companies_processed": 0,
         "trials_ingested": 0,
@@ -264,6 +265,7 @@ def ingest(
 
 
 def main() -> None:
+    """CLI entry: Layer 1 ingestion — CT.gov trials and upcoming catalysts into Postgres."""
     parser = argparse.ArgumentParser(description="Ingest Layer 1 trials and catalysts")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--ticker", type=str, help="Process single ticker")

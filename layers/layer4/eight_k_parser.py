@@ -23,6 +23,8 @@ except ImportError:
 
 @dataclass
 class ExtractedEvent:
+    """One material event (PDUFA, CRL, approval, offering, etc.) parsed from an 8-K."""
+
     event_type: str
     event_date: Optional[date]
     drug_name: Optional[str]

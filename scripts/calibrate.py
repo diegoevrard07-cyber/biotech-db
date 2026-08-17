@@ -32,6 +32,7 @@ FAVORABLE_TRADES = ("buy_the_rumor", "hold_through")
 
 
 def calibrate(*, store: bool = True) -> dict:
+    """Score predictions against resolved outcomes (Brier, reliability, lift); snapshot to DB."""
     with get_connection() as conn:
         rows = conn.execute(
             text(
@@ -105,6 +106,7 @@ def calibrate(*, store: bool = True) -> dict:
 
 
 def main() -> None:
+    """CLI entry: calibrate edge_scores against catalyst_outcomes (Phase 7)."""
     parser = argparse.ArgumentParser(description="Calibrate predictions vs outcomes")
     parser.add_argument("--no-store", action="store_true")
     args = parser.parse_args()

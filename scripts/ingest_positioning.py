@@ -111,6 +111,7 @@ _UPSERT = text(
 
 
 def ingest(*, dry_run: bool = False, limit: int | None = None, ticker: str | None = None) -> dict:
+    """Snapshot short interest, implied move, and 30d run-up per ticker into positioning."""
     today = date.today().isoformat()
     summary = {
         "tickers": 0, "with_short": 0, "with_implied_move": 0,
@@ -218,6 +219,7 @@ def ingest(*, dry_run: bool = False, limit: int | None = None, ticker: str | Non
 
 
 def main() -> None:
+    """CLI entry: ingest positioning/sentiment data from yfinance into positioning."""
     parser = argparse.ArgumentParser(description="Ingest positioning / sentiment (yfinance)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)

@@ -52,6 +52,7 @@ def _run(name: str, args: list[str]) -> int:
 
 
 def main() -> None:
+    """CLI entry: run every pipeline stage in order (fail-soft), exit non-zero on failures."""
     parser = argparse.ArgumentParser(description="Refresh the full Rung 2 pipeline (fail-soft)")
     parser.add_argument("--skip", nargs="*", default=[], help="Script names to skip")
     args = parser.parse_args()

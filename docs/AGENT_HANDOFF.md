@@ -104,7 +104,7 @@ few factors, near-equal weights, no kitchen-sink overfitting.
 
 Orchestrator: `scripts/refresh_all.py` (fail-soft, runs stages in order). Key stages:
 
-1. `apply_schema.py` — idempotent schema (`schema.sql`).
+1. `scripts/apply_schema.py` — idempotent schema (`schema.sql`).
 2. Ingestion: companies/trials/catalysts/financials (existing), then
    `classify_universe.py` (oncology/CNS categories, GBM flag, small-cap filter),
    `ingest_prices.py` (OHLCV via yfinance), `ingest_positioning.py` (short interest,

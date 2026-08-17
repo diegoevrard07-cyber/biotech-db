@@ -23,6 +23,7 @@ EVENT_TO_CATALYST_TYPE: dict[str, str] = {
 
 
 def catalyst_type_for_event(event_type: str) -> str | None:
+    """Map an SEC 8-K event type to its catalyst_type, or None when unmappable."""
     return EVENT_TO_CATALYST_TYPE.get(event_type)
 
 
@@ -36,6 +37,8 @@ EVENT_TYPE_MAP: dict[str, tuple[str, ...]] = {
 
 @dataclass
 class CatalystRow:
+    """A catalysts-table row (CT.gov-estimated date) to reconcile against SEC events."""
+
     id: int
     ticker: str
     catalyst_type: str
@@ -49,6 +52,8 @@ class CatalystRow:
 
 @dataclass
 class MaterialEvent:
+    """An SEC 8-K material event candidate for confirming/overwriting a catalyst date."""
+
     ticker: str
     event_type: str
     event_date: Optional[date]
@@ -60,12 +65,19 @@ class MaterialEvent:
 
 
 def fuzzy_match(a: str, b: str, *, threshold: int = 90) -> bool:
+    """Return True when two drug names match fuzzily; empty inputs count as matching."""
     if not a or not b:
         return True
     return fuzz.token_set_ratio(a.lower(), b.lower()) >= threshold
 
 
 def event_matches_catalyst(catalyst: CatalystRow, event: MaterialEvent) -> bool:
+    """
+    Decide whether an SEC event plausibly refers to the same catalyst.
+
+    Requires same ticker and compatible event family, fuzzy drug-name agreement,
+    and (for not-yet-confirmed catalysts) event dates within 90 days.
+    """
     allowed = EVENT_TYPE_MAP.get(catalyst.catalyst_type, ())
     if event.event_type not in allowed:
         return False

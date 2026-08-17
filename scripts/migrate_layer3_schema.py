@@ -16,6 +16,7 @@ log = setup_logger("migrate_layer3_schema")
 
 
 def migrate() -> None:
+    """Drop and recreate historical_trials and base_rates with the Layer 3 schema."""
     with get_connection() as conn:
         conn.execute(text("DROP TABLE IF EXISTS base_rates CASCADE"))
         conn.execute(text("DROP TABLE IF EXISTS historical_trials CASCADE"))

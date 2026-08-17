@@ -24,6 +24,7 @@ UNMAPPED_LOG = config.LOGS_DIR / "unmapped_catalysts.jsonl"
 
 
 def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
+    """Stamp each upcoming catalyst with its Layer 3 base-rate slice; log unmapped ones."""
     mapped = 0
     unmapped = 0
     unmappable_no_phase = 0
@@ -159,6 +160,7 @@ def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
 
 
 def main() -> None:
+    """CLI entry: apply base rates to upcoming catalysts (Layer 3 scoring stage)."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--min-confidence", default="medium")
     parser.add_argument("--dry-run", action="store_true")

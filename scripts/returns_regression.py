@@ -88,6 +88,7 @@ def _features(px: dict, mcap: dict, cid, filing_date):
         return None
 
     def runup(n):
+        """Pre-event return over the n bars ending at the last bar before filing."""
         j = i - n
         return c0 / close[j] - 1.0 if j >= 0 and close[j] > 0 else None
 
@@ -137,6 +138,7 @@ def _r2(y, p):
 
 
 def run(lam: float = 10.0, test_frac: float = 0.30) -> dict:
+    """Fit signed + magnitude ridge models on a temporal split; print OOS metrics/verdict."""
     with get_connection() as conn:
         px, mcap, events = _load(conn)
 
@@ -233,6 +235,7 @@ def run(lam: float = 10.0, test_frac: float = 0.30) -> dict:
 
 
 def main() -> None:
+    """CLI entry: signed/magnitude returns regression on the event_returns dataset."""
     ap = argparse.ArgumentParser(description="Signed/magnitude returns regression on event_returns")
     ap.add_argument("--lam", type=float, default=10.0, help="ridge L2 strength")
     ap.add_argument("--test-frac", type=float, default=0.30)

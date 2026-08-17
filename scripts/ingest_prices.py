@@ -136,6 +136,7 @@ def ingest(
     lookback_days: int | None = None,
     since_last: bool = False,
 ) -> dict:
+    """Batch-download daily bars (universe + XBI benchmark) and upsert price_history."""
     lookback_days = lookback_days or config.PRICE_LOOKBACK_DAYS
     summary = {"tickers": 0, "rows": 0, "empty": [], "errors": []}
 
@@ -212,6 +213,7 @@ def ingest(
 
 
 def main() -> None:
+    """CLI entry: ingest daily price history from yfinance into price_history."""
     parser = argparse.ArgumentParser(description="Ingest daily price history (yfinance)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)

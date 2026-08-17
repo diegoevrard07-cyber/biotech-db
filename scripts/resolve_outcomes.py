@@ -94,6 +94,7 @@ _UPSERT = text(
 
 
 def resolve(*, dry_run: bool = False, limit: int | None = None) -> dict:
+    """Label past catalysts hit/miss/ambiguous from price reaction; upsert catalyst_outcomes."""
     win = config.EVENT_WINDOW_DAYS
     threshold = config.OUTCOME_MOVE_THRESHOLD
     bench = config.BENCHMARK_TICKER
@@ -165,6 +166,7 @@ def resolve(*, dry_run: bool = False, limit: int | None = None) -> dict:
 
 
 def main() -> None:
+    """CLI entry: resolve past catalyst outcomes from price history."""
     parser = argparse.ArgumentParser(description="Resolve catalyst outcomes from price history")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)

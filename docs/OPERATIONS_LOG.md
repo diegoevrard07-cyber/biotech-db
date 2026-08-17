@@ -1,7 +1,7 @@
 # Operations Log
 
 A running record of operational changes to the GBM Sentiment Arbitrage system so they
-can be reviewed and evaluated later. This complements `AGENT_HANDOFF.md` (intent +
+can be reviewed and evaluated later. This complements `docs/AGENT_HANDOFF.md` (intent +
 current state) and `.cursorrules` (coding standards): this file is a chronological
 journal of **what changed, when, why, and how to evaluate it.**
 
@@ -14,6 +14,35 @@ journal of **what changed, when, why, and how to evaluate it.**
   pipeline changes, schema migrations, and notable UI changes that affect how decisions
   are read.
 - Keep it terse. One entry per logical change. Link the PR/branch when there is one.
+
+---
+
+## 2026-08-17 — Public-release cleanup (GitHub-ready)
+
+**Branch/PR:** `cursor/github-ready-0203`
+
+Repo prepared for public release. No scientific logic, parameters, or results changed.
+
+- **Layout:** root scripts moved into `scripts/` (`apply_schema.py`, `verify.py`,
+  `test_connection.py` → `check_db_connection.py`, no longer echoes the DSN host
+  with credentials adjacent); ops docs moved to `docs/`.
+- **Dead code removed:** 4 unreferenced one-off scripts (`_layer3_report`,
+  `_layer3_status`, `_apply_triage`, `_generate_companies_seed`), 4 empty shim
+  packages (`layer1_catalysts`, `layer2_science`, `layer3_base_rates`,
+  `layer4_financials`), auto-generated Windows wrapper `.ps1` files with personal
+  machine paths, and the superseded launchd installers (GH Actions is the venue).
+- **Reproducibility:** `pyproject.toml` (pytest/black/isort), expanded `.gitignore`,
+  MIT LICENSE, `data/README.md` (data provenance), `certifi` pinned; unused
+  `openai`/`pdfplumber`/`lxml` moved to commented optional section.
+- **CI:** `.github/workflows/tests.yml` runs pytest on push/PR; DB-backed tests
+  auto-skip without `DATABASE_URL` (`tests/conftest.py`).
+- **Docs:** README rewritten (results table, architecture, quickstart, limitations);
+  personal paths/timezone/machine references sanitized; scheduler TZ default → UTC.
+- **Docstrings:** every package `__init__` and public function documented; scorer
+  decision thresholds extracted to named, justified constants (values unchanged).
+
+**Verify:** `python -m pytest` → 180 passed, 7 skipped (DB-gated); black/isort clean;
+all CLIs compile and `--help` runs.
 
 ---
 

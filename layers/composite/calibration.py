@@ -44,6 +44,7 @@ def reliability_table(pairs: list[tuple[float, int]], *, n_buckets: int = 5) -> 
 
 
 def hit_rate(actuals: list[int]) -> float | None:
+    """Observed fraction of hits; the base rate a calibrated model must beat."""
     if not actuals:
         return None
     return round(sum(actuals) / len(actuals), 4)

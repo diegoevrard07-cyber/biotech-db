@@ -75,6 +75,7 @@ def _sec_get(url: str, *, as_json: bool = True) -> requests.Response:
 
 
 def search_filings(query: str, *, size: int = 20) -> list[dict]:
+    """Full-text search EDGAR for 8-K filings matching the query; return hit sources."""
     params = {
         "q": query,
         "forms": "8-K",
@@ -144,6 +145,7 @@ def resolve_primary_doc(cik: str, adsh: str) -> tuple[str, str] | None:
 
 
 def download_primary_html(cik: str, adsh: str, filename: str) -> str:
+    """Download the primary document HTML for one accession from EDGAR."""
     cik_int = str(int(cik))
     acc_nodash = adsh.replace("-", "")
     url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/{filename}"
@@ -187,6 +189,8 @@ def smart_truncate_html(html: str, category: str, max_bytes: int = 5120) -> str:
 
 
 def fetch_negative(limit_per_query: int = 1) -> list[dict]:
+    """Fetch near-miss 8-Ks that mention trigger words but are NOT the event (parser
+    must reject these)."""
     results: list[dict] = []
     seen: set[str] = set()
     for meta, query in zip(NEGATIVE_META, SEARCH_QUERIES["negative"]):
@@ -235,6 +239,7 @@ def fetch_negative(limit_per_query: int = 1) -> list[dict]:
 
 
 def fetch_category(category: str, limit: int = 4) -> list[dict]:
+    """Fetch up to `limit` real 8-K fixture records for one event category."""
     queries = SEARCH_QUERIES.get(category, [])
     seen_adsh: set[str] = set()
     results: list[dict] = []
@@ -297,6 +302,7 @@ def fetch_category(category: str, limit: int = 4) -> list[dict]:
 
 
 def save_fixture(record: dict, *, negative: bool = False) -> Path:
+    """Write the fixture .html plus a starter .expected.json under tests/fixtures/eight_k."""
     category = record["category"]
     acc_slug = record["accession"].replace("-", "")
     if negative:
@@ -337,6 +343,7 @@ def save_fixture(record: dict, *, negative: bool = False) -> Path:
 
 
 def main() -> None:
+    """CLI entry: fetch 8-K fixture corpus from EDGAR and write tests/fixtures/eight_k."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--category", action="append", help="Category to fetch")
     parser.add_argument("--limit", type=int, default=4)

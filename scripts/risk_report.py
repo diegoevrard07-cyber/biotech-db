@@ -50,6 +50,7 @@ def _sharpe(rets: list[float]) -> float | None:
 
 
 def run() -> None:
+    """Print risk/reward stats: live equity curve, closed-trade distribution, XBI yardstick."""
     with get_connection() as conn:
         cur = conn.connection.cursor()
         try:
@@ -136,6 +137,7 @@ def run() -> None:
 
 
 def main() -> None:
+    """CLI entry: print the paper book's risk/reward report."""
     config.preflight()
     run()
 

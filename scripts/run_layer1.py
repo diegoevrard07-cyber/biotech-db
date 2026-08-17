@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
+    """CLI entry: Layer 1 refresh — delegates to ingest_layer1.py."""
     subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "ingest_layer1.py"), *sys.argv[1:]],
         cwd=str(ROOT),

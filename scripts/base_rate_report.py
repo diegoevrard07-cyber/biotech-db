@@ -51,6 +51,7 @@ def _fetch(cur, *, resolved_only: bool) -> list[dict]:
 
 
 def run(*, resolved_only: bool = True) -> None:
+    """Print win-rate vs predicted base rate, reliability buckets, and Brier score."""
     with get_connection() as conn:
         cur = conn.connection.cursor()
         try:
@@ -96,6 +97,7 @@ def run(*, resolved_only: bool = True) -> None:
 
 
 def main() -> None:
+    """CLI entry: edge-vs-luck calibration report on closed paper trades."""
     ap = argparse.ArgumentParser(description="Compare closed trades vs predicted base rates")
     ap.add_argument("--all", action="store_true",
                     help="include trades closed before their catalyst fired")

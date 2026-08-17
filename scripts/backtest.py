@@ -63,6 +63,7 @@ def _ret(a, b):
 
 
 def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | None = None) -> dict:
+    """Replay resolved catalysts with as-of decision rules; return summary metrics."""
     trade_returns: list[float] = []
     weighted_returns: list[float] = []
     by_type: dict[str, int] = {}
@@ -159,6 +160,7 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
 
 
 def main() -> None:
+    """CLI entry: run the walk-forward backtest over resolved catalyst outcomes."""
     parser = argparse.ArgumentParser(description="Walk-forward event backtest")
     parser.add_argument("--lead-days", type=int, default=30)
     parser.add_argument("--slippage", type=float, default=0.005)

@@ -85,6 +85,7 @@ def _parse_approval(record: dict, start_year: int, end_year: int) -> list[dict]:
 
 
 def ingest(start_year: int = 2010, end_year: int = 2024, limit: int | None = None, dry_run: bool = False) -> dict:
+    """Page through openFDA drugsfda and upsert approvals into fda_approvals."""
     upserted = 0
     skip = 0
     batch_size = 100
@@ -125,6 +126,7 @@ def ingest(start_year: int = 2010, end_year: int = 2024, limit: int | None = Non
                 )
 
     def flush() -> None:
+        """Write the pending batch and add it to the upserted count."""
         nonlocal upserted
         if not pending:
             return
@@ -168,6 +170,7 @@ def ingest(start_year: int = 2010, end_year: int = 2024, limit: int | None = Non
 
 
 def main() -> None:
+    """CLI entry: ingest FDA approval history from openFDA (Layer 3 base-rate input)."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-year", type=int, default=2010)
     parser.add_argument("--end-year", type=int, default=2024)

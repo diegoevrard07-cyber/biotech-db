@@ -41,6 +41,7 @@ def _split_conditions(indication: str | None) -> list[str]:
 
 
 def classify(*, dry_run: bool = False) -> dict:
+    """Tag every company with indication_category, is_gbm_focused, and in_universe."""
     summary = {
         "companies": 0,
         "gbm_focused": 0,
@@ -137,6 +138,7 @@ def classify(*, dry_run: bool = False) -> dict:
 
 
 def main() -> None:
+    """CLI entry: classify the company universe from its trials (Phase 1)."""
     parser = argparse.ArgumentParser(description="Classify the broadened universe")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

@@ -24,6 +24,8 @@ _last_request_at = 0.0
 
 
 class CTGovError(Exception):
+    """Raised when ClinicalTrials.gov returns an HTTP error or rate-limits the client."""
+
     pass
 
 

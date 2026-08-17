@@ -206,6 +206,7 @@ GROUND_TRUTH: dict[str, dict] = {
 
 
 def main() -> None:
+    """Merge GROUND_TRUTH labels into each fixture's .expected.json (8-K parser test data)."""
     updated = 0
     for html_path in FIXTURES.rglob("*.html"):
         stem = html_path.stem

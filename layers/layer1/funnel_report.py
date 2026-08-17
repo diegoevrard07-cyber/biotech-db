@@ -8,6 +8,7 @@ log = setup_logger("catalyst_funnel")
 
 
 def print_funnel(stats: dict[str, int]) -> None:
+    """Print and log how many candidate catalysts survive each extraction filter."""
     final = stats.get("final_upcoming", 0)
     lines = [
         "\n=== Catalyst Filter Funnel ===",

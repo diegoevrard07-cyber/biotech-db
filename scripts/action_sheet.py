@@ -196,6 +196,7 @@ def compute_book(*, horizon_days: int = 365) -> dict:
 
 
 def build(*, horizon_days: int = 365, csv_out: str | None = None) -> dict:
+    """Print the sized action sheet, write the dated CSV, and return summary stats."""
     book = compute_book(horizon_days=horizon_days)
     rows = book["rows"]
     today = book["today"]
@@ -245,6 +246,7 @@ def build(*, horizon_days: int = 365, csv_out: str | None = None) -> dict:
 
 
 def main() -> None:
+    """CLI entry: build the risk-capped long book from edge_scores and write the CSV."""
     parser = argparse.ArgumentParser(description="Build the daily sized action sheet")
     parser.add_argument("--horizon-days", type=int, default=365)
     parser.add_argument("--csv", type=str)

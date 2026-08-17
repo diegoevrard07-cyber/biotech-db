@@ -71,6 +71,7 @@ def _write_slice(conn, phase, indication, sponsor, n, successes) -> bool:
 
 
 def compute(dry_run: bool = False) -> dict:
+    """Aggregate historical_trials (+ FDA approvals) into base_rates slices; rewrite computed rows."""
     written = 0
     with get_connection() as conn:
         if not dry_run:
@@ -164,6 +165,7 @@ def compute(dry_run: bool = False) -> dict:
 
 
 def main() -> None:
+    """CLI entry: recompute the base_rates table from historical trial outcomes."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

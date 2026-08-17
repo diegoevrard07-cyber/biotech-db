@@ -80,6 +80,7 @@ def ingest_financials(
     ticker: str | None = None,
     limit: int | None = None,
 ) -> dict:
+    """Pull XBRL companyfacts per company; upsert cash, burn, and runway into financials."""
     stats = {"companies": 0, "written": 0, "skipped": 0, "errors": 0}
 
     with get_connection() as conn:
@@ -192,6 +193,7 @@ def ingest_financials(
 
 
 def main() -> None:
+    """CLI entry: ingest SEC XBRL financials (cash/burn/runway) for the universe."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--ticker")

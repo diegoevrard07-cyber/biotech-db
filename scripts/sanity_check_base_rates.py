@@ -45,6 +45,7 @@ def _classify(rate: float, lo: float, hi: float) -> str:
 
 
 def main() -> None:
+    """CLI entry: compare computed base_rates slices against industry benchmark ranges."""
     engine = get_engine()
     print("\n=== Base Rate Sanity Check ===\n")
     print(f"{'Slice':<45} {'Actual':>8} {'Expected':>12} {'Flag':>6}")

@@ -89,8 +89,9 @@ lookup — findings that directly shaped the final design.
 
 ## Quickstart
 
-Requires Python 3.12+ and a Postgres database (a free
-[Supabase](https://supabase.com) project works).
+Requires Python 3.12+ and a Postgres database — either a free
+[Supabase](https://supabase.com) project or local Docker
+(`docker compose up -d`, then `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/biotech`).
 
 ```bash
 git clone https://github.com/diegoevrard07-cyber/biotech-db.git

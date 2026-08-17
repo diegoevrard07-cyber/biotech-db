@@ -84,6 +84,7 @@ def run_query(sql: str, params: tuple | None = None) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 @st.cache_data(ttl=300)
 def load_watchlist() -> pd.DataFrame:
+    """Load scored catalysts joined to companies/trials/financials; adds days_until."""
     sql = """
         SELECT
             co.ticker,
@@ -137,6 +138,7 @@ def load_watchlist() -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def load_material_events(ticker: str) -> pd.DataFrame:
+    """Load SEC material events for one ticker, newest first."""
     df = run_query(
         """
         SELECT ticker, event_type, event_date, filing_date, confidence,
@@ -155,6 +157,7 @@ def load_material_events(ticker: str) -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def load_financials(company_id: int) -> pd.DataFrame:
+    """Load the financials time series (cash, burn, runway) for one company."""
     df = run_query(
         """
         SELECT period_end, cash_and_equivalents_usd, total_liquidity_usd,
@@ -175,6 +178,7 @@ def load_financials(company_id: int) -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def load_score_history(catalyst_id: int) -> pd.DataFrame:
+    """Load the score_history time series for one catalyst."""
     df = run_query(
         """
         SELECT computed_at, composite_score, layer1_score, layer3_score, layer4_score
@@ -195,6 +199,7 @@ def load_score_history(catalyst_id: int) -> pd.DataFrame:
 # Formatting helpers
 # ---------------------------------------------------------------------------
 def fmt_usd(value) -> str:
+    """Format a dollar value as $B/$M/$K shorthand (em dash when missing)."""
     if value is None or pd.isna(value):
         return "—"
     value = float(value)
@@ -208,11 +213,13 @@ def fmt_usd(value) -> str:
 
 
 def catalyst_label(row) -> str:
+    """Catalyst type prefixed with its display emoji."""
     emoji = CATALYST_EMOJI.get(row["catalyst_type"], "•")
     return f"{emoji} {row['catalyst_type']}"
 
 
 def color_score(val):
+    """CSS color style for a 0-1 score cell (red <0.3, yellow <0.6, else green)."""
     if val is None or pd.isna(val) or val == "—":
         return ""
     try:
@@ -227,6 +234,7 @@ def color_score(val):
 
 
 def color_runway(val):
+    """CSS color style for a runway-in-months cell (red <6, yellow <=12, else green)."""
     if val is None or pd.isna(val) or val == "—":
         return ""
     try:
@@ -244,6 +252,7 @@ def color_runway(val):
 # SECTION 1 — CATALYST WATCHLIST
 # ===========================================================================
 def page_watchlist() -> None:
+    """Render the Catalyst Watchlist page: filterable ranked table of scored catalysts."""
     st.title("🧬 GBM Edge — Catalyst Watchlist")
     df = load_watchlist()
 
@@ -338,6 +347,7 @@ def page_watchlist() -> None:
 # SECTION 2 — CATALYST DETAIL
 # ===========================================================================
 def page_detail() -> None:
+    """Render the Catalyst Detail page: trial facts, score breakdown, events, history."""
     st.title("🔬 Catalyst Detail")
     df = load_watchlist()
     if df.empty:
@@ -475,6 +485,7 @@ def page_detail() -> None:
 # SECTION 3 — COMPANY VIEW
 # ===========================================================================
 def page_company() -> None:
+    """Render the Company View page: pipeline, upcoming catalysts, financials, events."""
     st.title("🏢 Company View")
     df = load_watchlist()
     companies = run_query(
@@ -562,6 +573,7 @@ def page_company() -> None:
 # SECTION 4 — CATALYST CALENDAR
 # ===========================================================================
 def page_calendar() -> None:
+    """Render the Catalyst Calendar page: date-vs-ticker scatter sized by composite score."""
     st.title("📅 Catalyst Calendar")
     df = load_watchlist()
     if df.empty:
@@ -610,6 +622,7 @@ def page_calendar() -> None:
 # ===========================================================================
 @st.cache_data(ttl=300)
 def table_counts() -> dict:
+    """Row counts for the core pipeline tables (data-health KPIs)."""
     tables = ["companies", "trials", "catalysts", "material_events",
               "financials", "edge_scores"]
     out = {}
@@ -621,6 +634,7 @@ def table_counts() -> dict:
 
 @st.cache_data(ttl=300)
 def last_updated() -> pd.DataFrame:
+    """Most recent refresh timestamp per pipeline table."""
     specs = [
         ("companies", "updated_at"),
         ("trials", "fetched_at"),
@@ -640,6 +654,7 @@ def last_updated() -> pd.DataFrame:
 
 
 def page_health() -> None:
+    """Render the Data Health page: table counts, freshness, layer status, quality warnings."""
     st.title("🩺 Data Health")
 
     counts = table_counts()
@@ -733,6 +748,7 @@ PAGES = {
 
 
 def main() -> None:
+    """Streamlit entry: sidebar navigation router for the legacy dashboard."""
     st.sidebar.title("🧬 GBM Edge")
     choice = st.sidebar.radio("Navigate", list(PAGES.keys()))
     st.sidebar.markdown("---")

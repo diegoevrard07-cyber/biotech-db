@@ -71,6 +71,7 @@ def _liquidity(conn, ticker: str) -> dict | None:
 
 
 def run(days: int = 60, sleeve: float | None = None) -> None:
+    """Print per-name ADV / fill-risk flags for near-term book candidates at the sleeve size."""
     with get_connection() as conn:
         if sleeve is None:
             sc = conn.execute(text("SELECT starting_capital_usd FROM portfolio_account WHERE id=1")).scalar()
@@ -123,6 +124,7 @@ def run(days: int = 60, sleeve: float | None = None) -> None:
 
 
 def main() -> None:
+    """CLI entry: pre-trade liquidity check on upcoming catalyst names."""
     ap = argparse.ArgumentParser(description="Pre-trade liquidity / fill-risk check")
     ap.add_argument("--days", type=int, default=60)
     ap.add_argument("--sleeve", type=float, default=None, help="sleeve $ (defaults to account starting capital)")

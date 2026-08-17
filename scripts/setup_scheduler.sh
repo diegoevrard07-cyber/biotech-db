@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Install schedulers for unattended paper trading.
+# Install cron jobs for unattended paper trading (Linux).
 #
 #   ./scripts/setup_scheduler.sh              # install with defaults
 #   ./scripts/setup_scheduler.sh --dry-run    # show what would be installed
 #   ./scripts/setup_scheduler.sh --remove     # remove biotech-db jobs
 #
-# macOS: uses launchd (missed jobs run when Mac wakes).
-# Linux: uses cron.
+# NOTE: the supported automation path is GitHub Actions (see .github/workflows/);
+# this script is an optional self-hosting alternative. Use ONE execution venue —
+# running both double-trades the paper book.
 #
 # Defaults (override via env):
-#   SCHED_TZ=Europe/Brussels    local timezone for cron times
+#   SCHED_TZ=UTC                 local timezone for cron times
 #   REFRESH_TIME=23:00           daily data refresh (after US market close)
 #   AUTOPILOT_TIME=23:30         weekday paper sync (after refresh)
 set -euo pipefail
@@ -18,10 +19,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  exec "$SCRIPT_DIR/setup_launchd_macos.sh" "$@"
+  echo "macOS: use GitHub Actions (.github/workflows/) — the supported scheduler." >&2
+  exit 1
 fi
 
-SCHED_TZ="${SCHED_TZ:-Europe/Brussels}"
+SCHED_TZ="${SCHED_TZ:-UTC}"
 REFRESH_TIME="${REFRESH_TIME:-23:00}"
 AUTOPILOT_TIME="${AUTOPILOT_TIME:-23:30}"
 

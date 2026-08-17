@@ -81,6 +81,7 @@ def ingest(
     ticker: str | None = None,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
 ) -> dict:
+    """Fetch recent Form 4 filings per company and upsert insider transactions."""
     since = date.today() - timedelta(days=lookback_days)
     summary = {"companies": 0, "filings": 0, "transactions": 0, "purchases": 0, "errors": []}
 
@@ -174,6 +175,7 @@ def ingest(
 
 
 def main() -> None:
+    """CLI entry: ingest SEC Form 4 insider transactions into insider_transactions."""
     parser = argparse.ArgumentParser(description="Ingest SEC Form 4 insider transactions")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)

@@ -75,6 +75,7 @@ _HIST_TEMPLATE = (
 
 
 def run_composite(*, dry_run: bool = False, limit: int | None = None) -> dict:
+    """Score every catalyst with the composite model; upsert edge_scores + score_history."""
     stats = {"scored": 0, "skipped": 0, "trade_types": {}}
 
     sql = """
@@ -203,6 +204,7 @@ def run_composite(*, dry_run: bool = False, limit: int | None = None) -> dict:
 
 
 def main() -> None:
+    """CLI entry: run the composite scoring stage (layers 1/3/4 -> edge_scores)."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)

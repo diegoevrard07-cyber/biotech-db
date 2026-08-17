@@ -334,6 +334,8 @@ def _update_metadata(cur, h: dict, tgt: dict, *, dry_run: bool) -> None:
 
 def run(*, dry_run: bool = False, sync_book: bool = True,
         horizon_days: int | None = None) -> None:
+    """One daily autopilot cycle: refresh prices, close due exits, sync to the capped
+    book, and snapshot performance."""
     today = date.today()
     horizon = horizon_days or config.AUTOPILOT_HORIZON_DAYS
     tol = config.AUTOPILOT_REBALANCE_PCT
@@ -673,6 +675,7 @@ def cover_shorts(*, dry_run: bool = False) -> None:
 
 
 def main() -> None:
+    """CLI entry: run the paper-trading autopilot (daily sync / exits-only / cover-shorts)."""
     ap = argparse.ArgumentParser(description="Paper autopilot — sync to capped action desk")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--exits-only", action="store_true",

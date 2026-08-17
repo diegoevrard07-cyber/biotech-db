@@ -19,6 +19,14 @@ from typing import Any
 
 @dataclass
 class ScoreInputs:
+    """Everything known about one catalyst at decision time.
+
+    Groups the three grade inputs (timing, trial odds, balance sheet), the
+    market-pricing inputs (implied move, run-up, short interest), and the
+    data-quality flags (SEC confirmation, date confidence) that gate whether a
+    signal is tradable at all.
+    """
+
     catalyst_id: int
     company_id: int
     expected_date: date | None
@@ -50,13 +58,17 @@ AVOID = "avoid"
 
 
 def score_proximity(expected_date: date | None, *, today: date | None = None) -> float:
-    """Higher when catalyst is nearer (0-1)."""
+    """Map days-to-catalyst to [0, 1] — nearer catalysts are more actionable.
+
+    Coarse steps, not a smooth curve: catalyst dates are estimates, so timing
+    precision finer than a month would be false precision.
+    """
     if not expected_date:
-        return 0.3
+        return 0.3  # no date: below the 1-year step — barely tradable on timing
     today = today or date.today()
     days = (expected_date - today).days
     if days < 0:
-        return 0.1
+        return 0.1  # already passed: no timing value
     if days <= 30:
         return 1.0
     if days <= 90:
@@ -69,16 +81,23 @@ def score_proximity(expected_date: date | None, *, today: date | None = None) ->
 
 
 def score_base_rate(base_rate: float | None) -> float:
+    """Clamp the empirical P(success) to [0, 1]; 0.5 (max uncertainty) when unknown."""
     if base_rate is None:
         return 0.5
     return max(0.0, min(1.0, float(base_rate)))
 
 
 def score_financial(runway_months: float | None, quarterly_burn: float | None) -> float:
+    """Map balance-sheet survivability to [0, 1].
+
+    A company that cannot fund itself to its catalyst cannot realize the edge —
+    under ~3 months of runway it is effectively distressed (0.1); self-funding
+    (non-positive burn) scores a full 1.0.
+    """
     if quarterly_burn is not None and quarterly_burn <= 0:
         return 1.0
     if runway_months is None:
-        return 0.4
+        return 0.4  # unknown balance sheet: below mid — survivability unproven
     if runway_months >= 24:
         return 1.0
     if runway_months >= 12:
@@ -93,6 +112,37 @@ def score_financial(runway_months: float | None, quarterly_burn: float | None) -
 # ---------------------------------------------------------------------------
 # Decision layer
 # ---------------------------------------------------------------------------
+# Decision thresholds. Each is a deliberate, coarse band — implied moves are
+# sparse and approximate for small caps, so only disagreements well outside
+# estimation noise are actionable. Fine-tuning these would be overfitting
+# (the *Noise* lesson the scorer is built on).
+
+# edge_gap bands (model expected move − options-implied move).
+EDGE_GAP_OVERPRICED = -0.05  # < −5pp: market pays for a bigger move than justified
+EDGE_GAP_STRONGLY_OVERPRICED = -0.10  # < −10pp: paying up for a coin-flip
+EDGE_GAP_UNDERPRICED = 0.10  # > +10pp: market underprices the move — own the binary
+
+# Dilution pressure (financing_tilt ≤ 0). −0.15 ≈ runway < 6 months or repeated
+# offerings: the company likely cannot wait for its own catalyst.
+FIN_TILT_DISTRESS = -0.15
+FIN_TILT_MIN_FOR_LONG = -0.10  # milder dilution still tolerable for a long
+
+# 30-day pre-event run-up levels marking crowded hype.
+RUNUP_HEATED = 0.50  # +50% in a month: hope is largely priced in
+RUNUP_MANIA = 0.75  # +75% on a long-shot trial: classic avoid
+
+# Base-rate bands: <0.25 is a long-shot trial; 0.45/0.55 are decent and strong odds.
+BASE_LONG_SHOT = 0.25
+BASE_COIN_FLIP = 0.50
+BASE_DECENT = 0.45
+BASE_STRONG = 0.55
+BASE_RUMOR_MIN = 0.35  # below this, even a near-term catalyst isn't worth riding
+
+# Buy-the-rumor needs a near-term catalyst: 0.85 on the proximity step scale
+# corresponds to ≤ ~90 days out.
+PROXIMITY_RUMOR_MIN = 0.85
+
+
 def financing_tilt(
     runway_months: float | None,
     quarterly_burn: float | None,
@@ -173,26 +223,31 @@ def decide_trade(
     # edge_gap = model expected move - market implied move.
     #   < 0  -> market prices a BIGGER move than the model justifies (overpaying)
     #   > 0  -> market prices a SMALLER move than the model expects (underpriced)
-    overpriced = edge_gap is not None and edge_gap < -0.05
-    strongly_overpriced = edge_gap is not None and edge_gap < -0.10
-    underpriced = edge_gap is not None and edge_gap > 0.10
+    overpriced = edge_gap is not None and edge_gap < EDGE_GAP_OVERPRICED
+    strongly_overpriced = edge_gap is not None and edge_gap < EDGE_GAP_STRONGLY_OVERPRICED
+    underpriced = edge_gap is not None and edge_gap > EDGE_GAP_UNDERPRICED
 
     # 1–3. Former fade setups → avoid (shorts/fades removed from the strategy).
-    if fin_tilt <= -0.15 and run_up > 0.5:
+    if fin_tilt <= FIN_TILT_DISTRESS and run_up > RUNUP_HEATED:
         return AVOID
-    if base < 0.25 and (run_up > 0.75 or overpriced):
+    if base < BASE_LONG_SHOT and (run_up > RUNUP_MANIA or overpriced):
         return AVOID
-    if strongly_overpriced and base < 0.5:
+    if strongly_overpriced and base < BASE_COIN_FLIP:
         return AVOID
     # 4. Cheap optionality: market under-pricing a move on decent odds -> own the binary.
-    if underpriced and base >= 0.45 and fin_tilt > -0.10:
+    if underpriced and base >= BASE_DECENT and fin_tilt > FIN_TILT_MIN_FOR_LONG:
         return HOLD_THROUGH
     # 5. Near-term catalyst, acceptable odds, financing OK -> ride the run-up.
     #    Buy-the-rumor lives or dies on timing, so it requires a RELIABLE date.
-    if proximity >= 0.85 and base >= 0.35 and fin_tilt > -0.10 and date_reliable:
+    if (
+        proximity >= PROXIMITY_RUMOR_MIN
+        and base >= BASE_RUMOR_MIN
+        and fin_tilt > FIN_TILT_MIN_FOR_LONG
+        and date_reliable
+    ):
         return BUY_THE_RUMOR
     # 6. Strong base rate, financing OK, model not out-priced -> take the binary
-    if base >= 0.55 and fin_tilt > -0.10 and not overpriced:
+    if base >= BASE_STRONG and fin_tilt > FIN_TILT_MIN_FOR_LONG and not overpriced:
         return HOLD_THROUGH
     return AVOID
 
@@ -226,16 +281,20 @@ def compute_edge_score(
     kelly_fraction: float = 0.25,
     max_weight: float = 0.05,
 ) -> dict[str, Any]:
+    """Score one catalyst end-to-end: grade → decision → size.
+
+    Answers the project's central question for a single event: *is the market's
+    priced-in move out of line with this catalyst's intrinsic grade, and if so,
+    is the gap big enough to act on — and with how much capital?* Returns the
+    full record persisted to `edge_scores` (composite grade, confidence, trade
+    type, edge gap, tilts, Kelly-capped weight, and a human-readable rationale).
+    """
     w = weights or DEFAULT_WEIGHTS
     proximity = score_proximity(inputs.expected_date)
     base = score_base_rate(inputs.base_rate)
     financial = score_financial(inputs.runway_months, inputs.quarterly_burn)
 
-    composite = (
-        w["proximity"] * proximity
-        + w["base_rate"] * base
-        + w["financial"] * financial
-    )
+    composite = w["proximity"] * proximity + w["base_rate"] * base + w["financial"] * financial
     if inputs.sec_confirmed:
         composite = min(1.0, composite + 0.03)
 
@@ -264,12 +323,19 @@ def compute_edge_score(
     edge_gap = round(exp_move - imp_move, 4) if imp_move is not None else None
 
     trade_type = decide_trade(
-        proximity=proximity, base=base, fin_tilt=fin_tilt,
-        run_up_30d=inputs.run_up_30d, edge_gap=edge_gap, date_reliable=date_reliable,
+        proximity=proximity,
+        base=base,
+        fin_tilt=fin_tilt,
+        run_up_30d=inputs.run_up_30d,
+        edge_gap=edge_gap,
+        date_reliable=date_reliable,
     )
     weight = suggested_weight(
-        trade_type, base=base, proximity=proximity,
-        kelly_fraction=kelly_fraction, max_weight=max_weight,
+        trade_type,
+        base=base,
+        proximity=proximity,
+        kelly_fraction=kelly_fraction,
+        max_weight=max_weight,
     )
     # Insider buying nudges long conviction up a touch (still capped).
     if weight > 0 and ins_tilt > 0:

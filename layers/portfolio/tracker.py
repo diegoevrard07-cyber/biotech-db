@@ -56,6 +56,7 @@ def market_value(side: str, shares: float, price: float | None) -> float | None:
 
 def unrealized_pnl(side: str, shares: float, entry_price: float,
                    current_price: float | None) -> float | None:
+    """Open P&L in dollars: shares * (current - entry) for longs, inverted for shorts."""
     if current_price is None:
         return None
     sh, e, c = float(shares), float(entry_price), float(current_price)
@@ -64,6 +65,7 @@ def unrealized_pnl(side: str, shares: float, entry_price: float,
 
 def unrealized_pnl_pct(side: str, entry_price: float,
                        current_price: float | None) -> float | None:
+    """Open P&L as a fraction of the entry price (side-aware)."""
     if current_price is None or not entry_price:
         return None
     e, c = float(entry_price), float(current_price)
@@ -71,6 +73,7 @@ def unrealized_pnl_pct(side: str, entry_price: float,
 
 
 def realized_pnl(side: str, shares: float, entry_price: float, exit_price: float) -> float:
+    """Closed P&L in dollars between entry and exit (side-aware)."""
     sh, e, x = float(shares), float(entry_price), float(exit_price)
     return sh * (x - e) if side == LONG else sh * (e - x)
 
@@ -88,6 +91,7 @@ def cash_delta_on_close(side: str, shares: float, price: float) -> float:
 
 
 def shares_from_dollars(dollars: float, price: float | None) -> float | None:
+    """Convert a dollar amount into a share count at the given price (None if unpriced)."""
     if not price:
         return None
     return float(dollars) / float(price)

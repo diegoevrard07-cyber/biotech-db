@@ -21,6 +21,7 @@ log = setup_logger("refresh_catalysts")
 
 
 def main() -> None:
+    """CLI entry: re-extract and replace ctgov_v2 catalysts from stored trial JSON."""
     total = 0
     funnel = new_funnel_stats()
 

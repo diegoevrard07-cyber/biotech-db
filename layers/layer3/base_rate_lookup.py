@@ -15,6 +15,8 @@ ADCOM_TYPES = {"adcom", "advisory_committee"}
 
 
 class BaseRateResult(BaseModel):
+    """Empirical success-rate estimate for one slice: rate, CI, tier, and provenance."""
+
     slice_key: str
     n_trials: int
     n_successes: int

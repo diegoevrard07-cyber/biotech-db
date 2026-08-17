@@ -46,6 +46,7 @@ def _parse_date(value) -> date | None:
 
 
 def load_catalysts(conn, *, ticker: str | None = None) -> list[CatalystRow]:
+    """Load SEC-relevant catalysts (pdufa/adcom/approval/crl) as CatalystRow records."""
     sql = """
         SELECT c.id, co.ticker, c.catalyst_type, c.expected_date,
                COALESCE(c.raw_data->>'drug_name', c.description) AS drug_name,
@@ -78,6 +79,7 @@ def load_catalysts(conn, *, ticker: str | None = None) -> list[CatalystRow]:
 
 
 def load_material_events(conn, *, since: date | None = None) -> list[MaterialEvent]:
+    """Load material_events (optionally filed since a date) as MaterialEvent records."""
     sql = """
         SELECT ticker, event_type, event_date, confidence, accession_number,
                filing_date, drug_name, extracted_data
@@ -105,6 +107,7 @@ def load_material_events(conn, *, since: date | None = None) -> list[MaterialEve
 
 
 def load_filing_dates(conn) -> dict[str, date]:
+    """Map accession_number -> filing_date from sec_filings (recency guard input)."""
     rows = conn.execute(
         text("SELECT accession_number, filing_date FROM sec_filings WHERE filing_date IS NOT NULL")
     ).mappings().all()
@@ -116,6 +119,7 @@ def load_filing_dates(conn) -> dict[str, date]:
 
 
 def apply_update(conn, catalyst_id: int, updates: dict, history_entry: dict) -> None:
+    """Write one reconciled date change, preserving the original and appending history."""
     conn.execute(
         text(
             """
@@ -251,6 +255,7 @@ def run(
     limit: int | None = None,
     create_missing: bool = False,
 ) -> dict:
+    """Match SEC events to catalysts and overwrite dates per the reconciliation rules."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     log_path = Path(__file__).resolve().parents[1] / "data" / "logs" / f"pdufa_reconciliation_{ts}.jsonl"
 
@@ -326,6 +331,7 @@ def run(
 
 
 def main() -> None:
+    """CLI entry: reconcile catalyst dates against SEC-confirmed material events."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dry-run",

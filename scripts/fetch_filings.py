@@ -147,6 +147,7 @@ def fetch_filings(
     max_filings_per_company: int = 20,
     reparse: bool = False,
 ) -> dict:
+    """Fetch recent 8-Ks per company, parse material events, upsert filings + events."""
     since = since or DEFAULT_SINCE
     stats = {
         "companies": 0,
@@ -255,6 +256,7 @@ def fetch_filings(
 
 
 def main() -> None:
+    """CLI entry: Layer 4 ingestion — pull 8-K filings from EDGAR into sec_filings/material_events."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--since", help="YYYY-MM-DD")
