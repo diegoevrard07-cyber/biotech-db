@@ -87,8 +87,7 @@ def ingest(
         with get_connection() as conn:
             for row in pending:
                 conn.execute(
-                    text(
-                        """
+                    text("""
                         INSERT INTO historical_trials (
                             nct_id, phase, conditions, indication_category, sponsor_name,
                             sponsor_class, primary_completion_date, enrollment,
@@ -113,8 +112,7 @@ def ingest(
                             extraction_method = EXCLUDED.extraction_method,
                             raw_results = EXCLUDED.raw_results,
                             source = EXCLUDED.source
-                        """
-                    ),
+                        """),
                     row,
                 )
                 upserted += 1

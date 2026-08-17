@@ -82,15 +82,11 @@ def apply_schema(dry_run: bool = False) -> list[str]:
     # Verify tables exist
     engine = get_engine()
     with engine.connect() as conn:
-        result = conn.execute(
-            text(
-                """
+        result = conn.execute(text("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
                 ORDER BY table_name
-                """
-            )
-        )
+                """))
         existing = {row[0] for row in result}
 
     missing = [t for t in EXPECTED_TABLES if t not in existing]

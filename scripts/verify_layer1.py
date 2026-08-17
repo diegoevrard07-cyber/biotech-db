@@ -38,9 +38,12 @@ def verify_layer1() -> bool:
                 "(document diff if intentional)"
             )
 
-        trial_companies = conn.execute(
-            text("SELECT COUNT(DISTINCT company_id) FROM trials WHERE company_id IS NOT NULL")
-        ).scalar() or 0
+        trial_companies = (
+            conn.execute(
+                text("SELECT COUNT(DISTINCT company_id) FROM trials WHERE company_id IS NOT NULL")
+            ).scalar()
+            or 0
+        )
         pct = (trial_companies / db_companies * 100) if db_companies else 0
         if db_companies and pct < 80:
             failures.append(
@@ -48,9 +51,7 @@ def verify_layer1() -> bool:
             )
 
         # Catalysts per company with trials
-        missing_cats = conn.execute(
-            text(
-                """
+        missing_cats = conn.execute(text("""
                 SELECT c.ticker FROM companies c
                 JOIN trials t ON t.company_id = c.id
                 LEFT JOIN catalysts cat ON cat.company_id = c.id
@@ -59,9 +60,7 @@ def verify_layer1() -> bool:
                   AND (t.primary_completion_date + INTERVAL '90 days') >= CURRENT_DATE
                 GROUP BY c.id, c.ticker
                 HAVING COUNT(DISTINCT cat.id) = 0
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
         if missing_cats:
             failures.append(
                 f"{len(missing_cats)} companies with upcoming Phase 2/3 readouts but zero catalysts: "
@@ -74,70 +73,55 @@ def verify_layer1() -> bool:
             ("trials", "company_id", "companies"),
         ]
         for child, fk, parent in orphan_checks:
-            orphans = conn.execute(
-                text(
-                    f"""
+            orphans = conn.execute(text(f"""
                     SELECT COUNT(*) FROM {child} c
                     LEFT JOIN {parent} p ON c.{fk} = p.id
                     WHERE c.{fk} IS NOT NULL AND p.id IS NULL
-                    """
-                )
-            ).scalar() or 0
+                    """)).scalar() or 0
             if orphans > 0:
                 failures.append(f"Orphan FK: {child}.{fk} ({orphans})")
 
-        stale = conn.execute(
-            text(
-                """
+        stale = conn.execute(text("""
                 SELECT COUNT(*) FROM catalysts
                 WHERE expected_date < CURRENT_DATE - INTERVAL '30 days'
-                """
-            )
-        ).scalar() or 0
+                """)).scalar() or 0
         total_cats = conn.execute(text("SELECT COUNT(*) FROM catalysts")).scalar() or 0
         if total_cats and stale / total_cats > 0.2:
             failures.append(
                 f"Too many stale catalysts: {stale}/{total_cats} ({100*stale/total_cats:.0f}%) >30 days past"
             )
 
-        bad_types = conn.execute(
-            text(
-                """
+        bad_types = conn.execute(text("""
                 SELECT DISTINCT catalyst_type FROM catalysts
                 WHERE catalyst_type IS NOT NULL
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
         for (ctype,) in bad_types:
             if ctype not in ALLOWED_TYPES:
                 failures.append(f"Invalid catalyst_type: {ctype}")
 
-        by_type = conn.execute(
-            text(
-                """
+        by_type = conn.execute(text("""
                 SELECT catalyst_type, COUNT(*) FROM catalysts
                 GROUP BY catalyst_type ORDER BY COUNT(*) DESC
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
 
-        manual = conn.execute(
-            text("SELECT COUNT(*) FROM catalysts WHERE requires_manual_verification = TRUE")
-        ).scalar() or 0
+        manual = (
+            conn.execute(
+                text("SELECT COUNT(*) FROM catalysts WHERE requires_manual_verification = TRUE")
+            ).scalar()
+            or 0
+        )
         manual_pct = (manual / total_cats * 100) if total_cats else 0
         if total_cats and manual_pct > 80:
-            failures.append(f"Catalyst validation failure: {manual_pct:.0f}% require manual verification")
+            failures.append(
+                f"Catalyst validation failure: {manual_pct:.0f}% require manual verification"
+            )
 
-        top = conn.execute(
-            text(
-                """
+        top = conn.execute(text("""
                 SELECT c.ticker, COUNT(cat.id) AS n
                 FROM companies c
                 LEFT JOIN catalysts cat ON cat.company_id = c.id
                 GROUP BY c.ticker ORDER BY n DESC LIMIT 10
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
 
     print("\n=== Layer 1 Verification ===\n")
     print(f"Seed CSV companies:     {seed_count}")

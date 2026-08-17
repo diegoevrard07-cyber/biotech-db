@@ -32,8 +32,9 @@ def format_exit_rule(rule: str | None) -> str | None:
     return _TRAILING_HINT.sub("", rule).strip()
 
 
-def planned_exit(trade_type: str | None, catalyst_date: date | None,
-                 *, lead_days: int = 1) -> tuple[date | None, str]:
+def planned_exit(
+    trade_type: str | None, catalyst_date: date | None, *, lead_days: int = 1
+) -> tuple[date | None, str]:
     """Return (exit_date, plain-language rule) given the trade type and catalyst date."""
     tt = (trade_type or "").lower()
     rule = EXIT_RULES.get(tt, "Review around the catalyst date.")
@@ -54,8 +55,9 @@ def market_value(side: str, shares: float, price: float | None) -> float | None:
     return sign * float(shares) * float(price)
 
 
-def unrealized_pnl(side: str, shares: float, entry_price: float,
-                   current_price: float | None) -> float | None:
+def unrealized_pnl(
+    side: str, shares: float, entry_price: float, current_price: float | None
+) -> float | None:
     """Open P&L in dollars: shares * (current - entry) for longs, inverted for shorts."""
     if current_price is None:
         return None
@@ -63,8 +65,7 @@ def unrealized_pnl(side: str, shares: float, entry_price: float,
     return sh * (c - e) if side == LONG else sh * (e - c)
 
 
-def unrealized_pnl_pct(side: str, entry_price: float,
-                       current_price: float | None) -> float | None:
+def unrealized_pnl_pct(side: str, entry_price: float, current_price: float | None) -> float | None:
     """Open P&L as a fraction of the entry price (side-aware)."""
     if current_price is None or not entry_price:
         return None
@@ -108,14 +109,13 @@ def zscore(current: float, history: list[float]) -> float | None:
         return None
     mean = sum(vals) / len(vals)
     var = sum((v - mean) ** 2 for v in vals) / len(vals)
-    sd = var ** 0.5
+    sd = var**0.5
     if sd <= 0:
         return None
     return (float(current) - mean) / sd
 
 
-def size_from_weight(weight: float, equity: float,
-                     price: float | None) -> dict[str, Any]:
+def size_from_weight(weight: float, equity: float, price: float | None) -> dict[str, Any]:
     """Translate a target portfolio weight (signed fraction) into $ and shares."""
     dollars = float(weight) * float(equity)
     return {
@@ -125,8 +125,9 @@ def size_from_weight(weight: float, equity: float,
     }
 
 
-def account_summary(holdings: list[dict], cash: float,
-                    price_map: dict[str, float]) -> dict[str, Any]:
+def account_summary(
+    holdings: list[dict], cash: float, price_map: dict[str, float]
+) -> dict[str, Any]:
     """Aggregate open holdings + cash into account-level numbers.
 
     Each holding dict needs: ticker, side, shares, entry_price.
@@ -167,8 +168,7 @@ def account_summary(holdings: list[dict], cash: float,
     }
 
 
-def exit_alerts(open_holdings: list[dict], today: date,
-                *, soon_days: int = 7) -> list[dict]:
+def exit_alerts(open_holdings: list[dict], today: date, *, soon_days: int = 7) -> list[dict]:
     """Pressing actions: positions whose planned exit is overdue or within soon_days.
 
     Each holding needs: ticker, side, trade_type, planned_exit_date (date|None),
@@ -187,14 +187,20 @@ def exit_alerts(open_holdings: list[dict], today: date,
         else:
             continue
         action = "SELL" if h.get("side") == LONG else "COVER"
-        out.append({
-            "ticker": h["ticker"],
-            "action": action,
-            "level": level,
-            "days": days,
-            "exit_date": ped,
-            "reason": format_exit_rule(h.get("planned_exit_rule") or EXIT_RULES.get(
-                (h.get("trade_type") or "").lower(), "Review around the catalyst date.")),
-        })
+        out.append(
+            {
+                "ticker": h["ticker"],
+                "action": action,
+                "level": level,
+                "days": days,
+                "exit_date": ped,
+                "reason": format_exit_rule(
+                    h.get("planned_exit_rule")
+                    or EXIT_RULES.get(
+                        (h.get("trade_type") or "").lower(), "Review around the catalyst date."
+                    )
+                ),
+            }
+        )
     out.sort(key=lambda a: a["days"])
     return out

@@ -153,37 +153,43 @@ def run_composite(*, dry_run: bool = False, limit: int | None = None) -> dict:
             stats["trade_types"][tt] = stats["trade_types"].get(tt, 0) + 1
 
             if dry_run:
-                print(f"DRY RUN catalyst {inputs.catalyst_id}: composite={scores['composite_score']}")
+                print(
+                    f"DRY RUN catalyst {inputs.catalyst_id}: composite={scores['composite_score']}"
+                )
                 stats["scored"] += 1
                 continue
 
-            edge_rows.append({
-                "company_id": inputs.company_id,
-                "catalyst_id": inputs.catalyst_id,
-                "proximity": scores["catalyst_proximity_score"],
-                "science": scores["science_score"],
-                "base_rate": scores["base_rate_score"],
-                "financial": scores["financial_score"],
-                "composite": scores["composite_score"],
-                "confidence": scores["confidence"],
-                "weights": json.dumps(scores["weights_json"]),
-                "trade_type": scores["trade_type"],
-                "expected_move": scores["expected_move"],
-                "implied_move": scores["implied_move"],
-                "edge_gap": scores["edge_gap"],
-                "financing_tilt": scores["financing_tilt"],
-                "insider_tilt": scores["insider_tilt"],
-                "suggested_weight": scores["suggested_weight"],
-                "rationale": scores["rationale"],
-            })
-            hist_rows.append({
-                "catalyst_id": inputs.catalyst_id,
-                "composite": scores["composite_score"],
-                "proximity": scores["catalyst_proximity_score"],
-                "base_rate": scores["base_rate_score"],
-                "financial": scores["financial_score"],
-                "breakdown": json.dumps(scores),
-            })
+            edge_rows.append(
+                {
+                    "company_id": inputs.company_id,
+                    "catalyst_id": inputs.catalyst_id,
+                    "proximity": scores["catalyst_proximity_score"],
+                    "science": scores["science_score"],
+                    "base_rate": scores["base_rate_score"],
+                    "financial": scores["financial_score"],
+                    "composite": scores["composite_score"],
+                    "confidence": scores["confidence"],
+                    "weights": json.dumps(scores["weights_json"]),
+                    "trade_type": scores["trade_type"],
+                    "expected_move": scores["expected_move"],
+                    "implied_move": scores["implied_move"],
+                    "edge_gap": scores["edge_gap"],
+                    "financing_tilt": scores["financing_tilt"],
+                    "insider_tilt": scores["insider_tilt"],
+                    "suggested_weight": scores["suggested_weight"],
+                    "rationale": scores["rationale"],
+                }
+            )
+            hist_rows.append(
+                {
+                    "catalyst_id": inputs.catalyst_id,
+                    "composite": scores["composite_score"],
+                    "proximity": scores["catalyst_proximity_score"],
+                    "base_rate": scores["base_rate_score"],
+                    "financial": scores["financial_score"],
+                    "breakdown": json.dumps(scores),
+                }
+            )
             stats["scored"] += 1
 
         if not dry_run and edge_rows:
@@ -196,8 +202,12 @@ def run_composite(*, dry_run: bool = False, limit: int | None = None) -> dict:
             finally:
                 cur.close()
 
-    log.info("run_composite_complete", scored=stats["scored"], skipped=stats["skipped"],
-             trade_types=stats["trade_types"])
+    log.info(
+        "run_composite_complete",
+        scored=stats["scored"],
+        skipped=stats["skipped"],
+        trade_types=stats["trade_types"],
+    )
     print(f"Composite: scored={stats['scored']}, skipped={stats['skipped']}")
     print(f"Trade types: {stats['trade_types']}")
     return stats

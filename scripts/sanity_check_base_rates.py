@@ -61,14 +61,12 @@ def main() -> None:
                 clauses = ["phase = :phase", "indication_category = :ind", "sponsor_class IS NULL"]
                 params["ind"] = ind
             row = conn.execute(
-                text(
-                    f"""
+                text(f"""
                     SELECT success_rate, n_trials FROM base_rates
                     WHERE {' AND '.join(clauses)}
                       AND (source IS NULL OR source = 'computed')
                     LIMIT 1
-                    """
-                ),
+                    """),
                 params,
             ).first()
             if not row:

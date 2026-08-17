@@ -77,14 +77,10 @@ def verify(phase: str = "0", expect_rows: dict[str, int] | None = None) -> bool:
 
     with engine.connect() as conn:
         # 1. Tables exist
-        result = conn.execute(
-            text(
-                """
+        result = conn.execute(text("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-                """
-            )
-        )
+                """))
         existing = {row[0] for row in result}
         missing = [t for t in EXPECTED_TABLES if t not in existing]
         if missing:
@@ -112,15 +108,11 @@ def verify(phase: str = "0", expect_rows: dict[str, int] | None = None) -> bool:
         for child, fk_col, parent, pk_col in FK_CHECKS:
             if child not in existing or parent not in existing:
                 continue
-            orphans = conn.execute(
-                text(
-                    f"""
+            orphans = conn.execute(text(f"""
                     SELECT COUNT(*) FROM {child} c
                     LEFT JOIN {parent} p ON c.{fk_col} = p.{pk_col}
                     WHERE c.{fk_col} IS NOT NULL AND p.{pk_col} IS NULL
-                    """
-                )
-            ).scalar() or 0
+                    """)).scalar() or 0
             status = "OK" if orphans == 0 else f"FAIL ({orphans})"
             print(f"  {child}.{fk_col} -> {parent}: {status}")
             if orphans > 0:
@@ -128,9 +120,7 @@ def verify(phase: str = "0", expect_rows: dict[str, int] | None = None) -> bool:
 
         # 4. updated_at freshness (companies only — not all tables have it)
         if "companies" in existing:
-            row = conn.execute(
-                text("SELECT MAX(updated_at) FROM companies")
-            ).scalar()
+            row = conn.execute(text("SELECT MAX(updated_at) FROM companies")).scalar()
             if row:
                 print(f"\ncompanies.updated_at (latest): {row}")
 
@@ -144,7 +134,10 @@ def verify(phase: str = "0", expect_rows: dict[str, int] | None = None) -> bool:
             print(f"  {table}:")
             for r in rows:
                 # Mask any URL-like values
-                summary = {k: (v if k not in ("raw_json", "raw_response", "weights_json") else "<json>") for k, v in dict(r).items()}
+                summary = {
+                    k: (v if k not in ("raw_json", "raw_response", "weights_json") else "<json>")
+                    for k, v in dict(r).items()
+                }
                 print(f"    {summary}")
 
     print(f"\nChecked at: {datetime.now(timezone.utc).isoformat()}")

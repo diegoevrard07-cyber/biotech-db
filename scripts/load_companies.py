@@ -52,29 +52,27 @@ def load_companies(dry_run: bool = False) -> dict[str, int]:
     with get_connection() as conn:
         existing_tickers = {
             row[0]
-            for row in conn.execute(text("SELECT ticker FROM companies WHERE ticker IS NOT NULL")).fetchall()
+            for row in conn.execute(
+                text("SELECT ticker FROM companies WHERE ticker IS NOT NULL")
+            ).fetchall()
         }
         orphan_tickers = existing_tickers - seed_tickers
         if orphan_tickers:
             tickers_list = list(orphan_tickers)
             conn.execute(
-                text(
-                    """
+                text("""
                     DELETE FROM catalysts WHERE company_id IN (
                         SELECT id FROM companies WHERE ticker = ANY(:tickers)
                     )
-                    """
-                ),
+                    """),
                 {"tickers": tickers_list},
             )
             conn.execute(
-                text(
-                    """
+                text("""
                     DELETE FROM trials WHERE company_id IN (
                         SELECT id FROM companies WHERE ticker = ANY(:tickers)
                     )
-                    """
-                ),
+                    """),
                 {"tickers": tickers_list},
             )
             conn.execute(
@@ -86,16 +84,18 @@ def load_companies(dry_run: bool = False) -> dict[str, int]:
 
         for _, row in df.iterrows():
             ticker = str(row["ticker"]).strip().upper()
-            existing = conn.execute(
-                text(
-                    """
+            existing = (
+                conn.execute(
+                    text("""
                     SELECT id, name, exchange, market_cap_bucket, primary_indication,
                            ctgov_sponsor_aliases, notes
                     FROM companies WHERE ticker = :t
-                    """
-                ),
-                {"t": ticker},
-            ).mappings().first()
+                    """),
+                    {"t": ticker},
+                )
+                .mappings()
+                .first()
+            )
 
             params = {
                 "ticker": ticker,
@@ -109,8 +109,7 @@ def load_companies(dry_run: bool = False) -> dict[str, int]:
 
             if existing is None:
                 conn.execute(
-                    text(
-                        """
+                    text("""
                         INSERT INTO companies (
                             ticker, name, exchange, market_cap_bucket, primary_indication,
                             ctgov_sponsor_aliases, notes
@@ -118,8 +117,7 @@ def load_companies(dry_run: bool = False) -> dict[str, int]:
                             :ticker, :name, :exchange, :market_cap_bucket, :primary_indication,
                             :ctgov_sponsor_aliases, :notes
                         )
-                        """
-                    ),
+                        """),
                     params,
                 )
                 stats["inserted"] += 1
@@ -137,8 +135,7 @@ def load_companies(dry_run: bool = False) -> dict[str, int]:
                 )
                 if changed:
                     conn.execute(
-                        text(
-                            """
+                        text("""
                             UPDATE companies SET
                                 name = :name, exchange = :exchange,
                                 market_cap_bucket = :market_cap_bucket,
@@ -146,8 +143,7 @@ def load_companies(dry_run: bool = False) -> dict[str, int]:
                                 ctgov_sponsor_aliases = :ctgov_sponsor_aliases,
                                 notes = :notes, updated_at = NOW()
                             WHERE ticker = :ticker
-                            """
-                        ),
+                            """),
                         params,
                     )
                     stats["updated"] += 1

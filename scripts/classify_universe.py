@@ -52,15 +52,11 @@ def classify(*, dry_run: bool = False) -> dict:
     }
 
     with get_connection() as conn:
-        companies = conn.execute(
-            text(
-                """
+        companies = conn.execute(text("""
                 SELECT id, ticker, name, market_cap_usd
                 FROM companies
                 ORDER BY ticker
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
         for co in companies:
             summary["companies"] += 1
@@ -102,16 +98,14 @@ def classify(*, dry_run: bool = False) -> dict:
                 continue
 
             conn.execute(
-                text(
-                    """
+                text("""
                     UPDATE companies
                     SET indication_category = :cat,
                         is_gbm_focused = :gbm,
                         in_universe = :inu,
                         updated_at = NOW()
                     WHERE id = :cid
-                    """
-                ),
+                    """),
                 {"cat": dominant, "gbm": gbm, "inu": in_universe, "cid": cid},
             )
 

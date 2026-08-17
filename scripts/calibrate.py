@@ -34,17 +34,13 @@ FAVORABLE_TRADES = ("buy_the_rumor", "hold_through")
 def calibrate(*, store: bool = True) -> dict:
     """Score predictions against resolved outcomes (Brier, reliability, lift); snapshot to DB."""
     with get_connection() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT es.base_rate_score, es.composite_score, es.trade_type,
                        o.outcome_label
                 FROM catalyst_outcomes o
                 JOIN edge_scores es ON es.catalyst_id = o.catalyst_id
                 WHERE o.outcome_label IN ('hit', 'miss')
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
     pairs: list[tuple[float, int]] = []
     favorable_actuals: list[int] = []
@@ -73,35 +69,41 @@ def calibrate(*, store: bool = True) -> dict:
         print(f"Model lift over naive:           {lift:+}")
     print("Reliability table:")
     for b in table:
-        print(f"  {b['bucket']}  n={b['n']:<4} pred={b['mean_predicted']:.3f} "
-              f"observed={b['observed_hit_rate']:.3f}")
+        print(
+            f"  {b['bucket']}  n={b['n']:<4} pred={b['mean_predicted']:.3f} "
+            f"observed={b['observed_hit_rate']:.3f}"
+        )
     if not all_actuals:
-        print("NOTE: no resolved hit/miss outcomes yet - run resolve_outcomes.py after "
-              "price ingestion. Calibration needs labeled history.")
+        print(
+            "NOTE: no resolved hit/miss outcomes yet - run resolve_outcomes.py after "
+            "price ingestion. Calibration needs labeled history."
+        )
 
     if store and all_actuals:
         with get_connection() as conn:
             conn.execute(
-                text(
-                    """
+                text("""
                     INSERT INTO calibration_runs (
                         n_pairs, brier_score, model_hit_rate, base_rate_hit_rate,
                         reliability_json, notes
                     ) VALUES (
                         :n, :brier, :model_hr, :base_hr, CAST(:rel AS jsonb), :notes
                     )
-                    """
-                ),
+                    """),
                 {
-                    "n": len(pairs), "brier": brier, "model_hr": model_hr,
-                    "base_hr": base_hr, "rel": json.dumps(table),
+                    "n": len(pairs),
+                    "brier": brier,
+                    "model_hr": model_hr,
+                    "base_hr": base_hr,
+                    "rel": json.dumps(table),
                     "notes": f"favorable={FAVORABLE_TRADES}",
                 },
             )
         print("Stored snapshot to calibration_runs.")
 
-    log.info("calibrate_complete", n=len(all_actuals), brier=brier,
-             base_hr=base_hr, model_hr=model_hr)
+    log.info(
+        "calibrate_complete", n=len(all_actuals), brier=brier, base_hr=base_hr, model_hr=model_hr
+    )
     return {"n": len(all_actuals), "brier": brier, "base_hr": base_hr, "model_hr": model_hr}
 
 

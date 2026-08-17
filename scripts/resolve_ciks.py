@@ -23,9 +23,15 @@ def resolve_ciks(*, dry_run: bool = False) -> dict[str, int]:
     stats = {"resolved": 0, "missing": 0, "unchanged": 0}
 
     with get_connection() as conn:
-        rows = conn.execute(
-            text("SELECT id, ticker, cik FROM companies WHERE ticker IS NOT NULL ORDER BY ticker")
-        ).mappings().all()
+        rows = (
+            conn.execute(
+                text(
+                    "SELECT id, ticker, cik FROM companies WHERE ticker IS NOT NULL ORDER BY ticker"
+                )
+            )
+            .mappings()
+            .all()
+        )
 
         for row in rows:
             ticker = str(row["ticker"]).upper()

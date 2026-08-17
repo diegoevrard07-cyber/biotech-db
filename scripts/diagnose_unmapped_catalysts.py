@@ -37,9 +37,7 @@ def diagnose(fix_trials: bool = False) -> list[dict]:
     results: list[dict] = []
 
     with engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT c.id, c.catalyst_type, c.expected_date, c.base_rate_slice_key,
                        t.nct_id, t.phase AS db_phase, t.title,
                        co.name AS sponsor
@@ -49,9 +47,7 @@ def diagnose(fix_trials: bool = False) -> list[dict]:
                 WHERE c.expected_date >= CURRENT_DATE
                   AND (c.base_rate IS NULL OR c.base_rate_slice_key = 'unmappable_no_phase')
                 ORDER BY c.id
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
     print(f"\n=== Unmapped catalyst diagnosis ({len(rows)} rows) ===\n")
 
@@ -102,7 +98,11 @@ def diagnose(fix_trials: bool = False) -> list[dict]:
 def main() -> None:
     """CLI entry: diagnose catalysts missing base rates (Layer 3 debugging aid)."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--fix-trials", action="store_true", help="Update trials.phase when API has phase but DB is null")
+    parser.add_argument(
+        "--fix-trials",
+        action="store_true",
+        help="Update trials.phase when API has phase but DB is null",
+    )
     args = parser.parse_args()
     diagnose(fix_trials=args.fix_trials)
 

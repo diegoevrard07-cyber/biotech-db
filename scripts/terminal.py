@@ -22,7 +22,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # project root (layers.*)
-sys.path.insert(0, str(Path(__file__).resolve().parent))      # scripts/ (action_sheet)
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ (action_sheet)
 
 import pandas as pd
 import plotly.express as px
@@ -41,8 +41,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-st.set_page_config(page_title="Edge Terminal", layout="wide", page_icon="◆",
-                   initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="Edge Terminal", layout="wide", page_icon="◆", initial_sidebar_state="collapsed"
+)
 
 # ---- Design tokens (Projection-Finance-style dark UI) ----
 THEME = {
@@ -72,8 +73,18 @@ TRADE_COLORS = {
 }
 
 # Ordered palette for allocation donuts / categorical charts.
-ALLOC_PALETTE = ["#2fd39a", "#6c8cff", "#f76a83", "#f4b740", "#8b7bff",
-                 "#39c0d3", "#e77ac6", "#9aa7bd", "#5b8def", "#57d9a3"]
+ALLOC_PALETTE = [
+    "#2fd39a",
+    "#6c8cff",
+    "#f76a83",
+    "#f4b740",
+    "#8b7bff",
+    "#39c0d3",
+    "#e77ac6",
+    "#9aa7bd",
+    "#5b8def",
+    "#57d9a3",
+]
 
 
 def _inject_css() -> None:
@@ -215,6 +226,7 @@ def _inject_css() -> None:
         unsafe_allow_html=True,
     )
 
+
 # Sidebar navigation: two areas, each with sub-pages (populated after page defs).
 NAV_SECTIONS: dict[str, dict[str, callable]] = {}
 
@@ -222,8 +234,14 @@ NAV_SECTIONS: dict[str, dict[str, callable]] = {}
 # ===========================================================================
 # Presentation helpers (Projection-Finance-style building blocks)
 # ===========================================================================
-def _stat_card(label: str, value: str, *, delta: str | None = None,
-               delta_dir: str = "flat", sub: str | None = None) -> str:
+def _stat_card(
+    label: str,
+    value: str,
+    *,
+    delta: str | None = None,
+    delta_dir: str = "flat",
+    sub: str | None = None,
+) -> str:
     """Return one KPI card as HTML. delta_dir in {up, down, flat}."""
     delta_html = f'<span class="pf-delta {delta_dir}">{delta}</span>' if delta else ""
     sub_html = f'<div class="pf-stat-sub">{sub}</div>' if sub else ""
@@ -231,7 +249,7 @@ def _stat_card(label: str, value: str, *, delta: str | None = None,
         '<div class="pf-card">'
         f'<div class="pf-stat-label">{label}</div>'
         f'<div class="pf-stat-row"><span class="pf-stat-val">{value}</span>{delta_html}</div>'
-        f'{sub_html}</div>'
+        f"{sub_html}</div>"
     )
 
 
@@ -240,8 +258,9 @@ def render_kpi_row(cards: list[str]) -> None:
     st.markdown(f'<div class="pf-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
-def render_page_header(title: str, *, badges: list[str] | None = None,
-                       chips: list[tuple[str, str]] | None = None) -> None:
+def render_page_header(
+    title: str, *, badges: list[str] | None = None, chips: list[tuple[str, str]] | None = None
+) -> None:
     """Top header strip: title + status badges + info chips."""
     bits = [f'<span style="font-size:1.4rem;font-weight:700;letter-spacing:-.02em;">{title}</span>']
     for b in badges or []:
@@ -252,30 +271,44 @@ def render_page_header(title: str, *, badges: list[str] | None = None,
     st.markdown(f'<div class="pf-header">{"".join(bits)}</div>', unsafe_allow_html=True)
 
 
-def _bucket_donut(buckets: dict[str, float], *, center_top: str, center_bot: str,
-                  title: str) -> go.Figure:
+def _bucket_donut(
+    buckets: dict[str, float], *, center_top: str, center_bot: str, title: str
+) -> go.Figure:
     """Allocation donut for a small set of named buckets (Cash / trade types)."""
     items = [(k, v) for k, v in buckets.items() if v and v > 0]
     if not items:
         items = [("Cash", 1.0)]
     labels = [k for k, _ in items]
     vals = [v for _, v in items]
-    fig = go.Figure(go.Pie(
-        labels=labels, values=vals, hole=0.7,
-        marker=dict(colors=ALLOC_PALETTE[: len(labels)],
-                    line=dict(color=THEME["card"], width=2)),
-        textinfo="none", sort=False, direction="clockwise",
-        hovertemplate="%{label}<br>$%{value:,.0f} · %{percent}<extra></extra>",
-    ))
+    fig = go.Figure(
+        go.Pie(
+            labels=labels,
+            values=vals,
+            hole=0.7,
+            marker=dict(
+                colors=ALLOC_PALETTE[: len(labels)], line=dict(color=THEME["card"], width=2)
+            ),
+            textinfo="none",
+            sort=False,
+            direction="clockwise",
+            hovertemplate="%{label}<br>$%{value:,.0f} · %{percent}<extra></extra>",
+        )
+    )
     fig.update_layout(
-        height=230, showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=8, r=8, t=34, b=8),
+        height=230,
+        showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=8, r=8, t=34, b=8),
         title=dict(text=title, font=dict(size=12, color=THEME["muted"]), x=0.5, xanchor="center"),
-        annotations=[dict(
-            text=f'<span style="color:{THEME["muted"]};font-size:11px">{center_top}</span>'
-                 f'<br><b style="font-size:17px">{center_bot}</b>',
-            showarrow=False, font=dict(color=THEME["text"]),
-        )],
+        annotations=[
+            dict(
+                text=f'<span style="color:{THEME["muted"]};font-size:11px">{center_top}</span>'
+                f'<br><b style="font-size:17px">{center_bot}</b>',
+                showarrow=False,
+                font=dict(color=THEME["text"]),
+            )
+        ],
     )
     return fig
 
@@ -309,11 +342,19 @@ def _action_desk_filters(sidebar: bool = True) -> dict:
         horizon = host.select_slider("Horizon (days)", [30, 90, 180, 365, 9999], value=90)
         act_days = host.slider("Act-now window (days)", 7, 180, 60)
         only_gbm = host.checkbox("GBM flagship only", value=False)
-        types = host.multiselect("Trade types", ["buy_the_rumor", "hold_through", "avoid"],
-                                 default=["buy_the_rumor", "hold_through"])
+        types = host.multiselect(
+            "Trade types",
+            ["buy_the_rumor", "hold_through", "avoid"],
+            default=["buy_the_rumor", "hold_through"],
+        )
         min_w = host.slider("Min |weight|", 0.0, 0.05, 0.0, 0.005)
-    return {"horizon": horizon, "act_days": act_days, "only_gbm": only_gbm,
-            "types": types, "min_w": min_w}
+    return {
+        "horizon": horizon,
+        "act_days": act_days,
+        "only_gbm": only_gbm,
+        "types": types,
+        "min_w": min_w,
+    }
 
 
 def _filter_blotter(df: pd.DataFrame, flt: dict) -> pd.DataFrame:
@@ -338,8 +379,13 @@ def _book_sized_table(book: dict, equity: float, prices: dict[str, float]) -> pd
     df["side"] = df["weight"].map(lambda w: "LONG" if w > 0 else "SHORT")
     df["dollars"] = df["weight"].map(lambda w: round(w * equity, 0) if equity else None)
     df["shares"] = df.apply(
-        lambda r: (round(abs(r["weight"] * equity) / prices[r["ticker"]], 0)
-                   if equity and prices.get(r["ticker"]) else None), axis=1)
+        lambda r: (
+            round(abs(r["weight"] * equity) / prices[r["ticker"]], 0)
+            if equity and prices.get(r["ticker"])
+            else None
+        ),
+        axis=1,
+    )
     df["timing"] = df["trade_type"].map(lambda t: TIMING.get(t, ""))
     df["urgent"] = df["days_until"].map(lambda d: "!" if d <= 7 else "")
     return df
@@ -414,8 +460,9 @@ def latest_prices() -> dict[str, float]:
 
 def ensure_account() -> None:
     """Insert the singleton portfolio_account row (id=1) if missing."""
-    exec_write("INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
-               "ON CONFLICT (id) DO NOTHING")
+    exec_write(
+        "INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) " "ON CONFLICT (id) DO NOTHING"
+    )
 
 
 @st.cache_data(ttl=30)
@@ -424,8 +471,10 @@ def get_account() -> dict:
     df = q("SELECT cash_usd, starting_capital_usd FROM portfolio_account WHERE id=1")
     if df.empty:
         return {"cash": 0.0, "starting_capital": None}
-    return {"cash": _f(df.iloc[0]["cash_usd"]) or 0.0,
-            "starting_capital": _f(df.iloc[0]["starting_capital_usd"])}
+    return {
+        "cash": _f(df.iloc[0]["cash_usd"]) or 0.0,
+        "starting_capital": _f(df.iloc[0]["starting_capital_usd"]),
+    }
 
 
 def set_account(cash: float, starting_capital: float | None) -> None:
@@ -434,7 +483,8 @@ def set_account(cash: float, starting_capital: float | None) -> None:
     exec_write(
         "UPDATE portfolio_account SET cash_usd=%s, starting_capital_usd="
         "COALESCE(%s, starting_capital_usd), updated_at=NOW() WHERE id=1",
-        (cash, starting_capital))
+        (cash, starting_capital),
+    )
 
 
 @st.cache_data(ttl=30)
@@ -455,8 +505,20 @@ def load_holdings(status: str | None = "open") -> pd.DataFrame:
     return q(sql, params)
 
 
-def add_holding(*, ticker, company_id, catalyst_id, side, trade_type, entry_date,
-                shares, entry_price, planned_exit_rule, planned_exit_date, notes) -> None:
+def add_holding(
+    *,
+    ticker,
+    company_id,
+    catalyst_id,
+    side,
+    trade_type,
+    entry_date,
+    shares,
+    entry_price,
+    planned_exit_rule,
+    planned_exit_date,
+    notes,
+) -> None:
     """Insert an open holding and apply its cash impact to the account."""
     cost = float(shares) * float(entry_price)
     cash_delta = pf.cash_delta_on_open(side, shares, entry_price)
@@ -469,17 +531,33 @@ def add_holding(*, ticker, company_id, catalyst_id, side, trade_type, entry_date
                     shares, entry_price, cost_basis_usd, planned_exit_rule,
                     planned_exit_date, status, notes)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open',%s)""",
-                (ticker, company_id, catalyst_id, side, trade_type, entry_date,
-                 shares, entry_price, cost, planned_exit_rule, planned_exit_date, notes))
-            cur.execute("UPDATE portfolio_account SET cash_usd=cash_usd+%s, updated_at=NOW() "
-                        "WHERE id=1", (cash_delta,))
+                (
+                    ticker,
+                    company_id,
+                    catalyst_id,
+                    side,
+                    trade_type,
+                    entry_date,
+                    shares,
+                    entry_price,
+                    cost,
+                    planned_exit_rule,
+                    planned_exit_date,
+                    notes,
+                ),
+            )
+            cur.execute(
+                "UPDATE portfolio_account SET cash_usd=cash_usd+%s, updated_at=NOW() " "WHERE id=1",
+                (cash_delta,),
+            )
         conn.commit()
     finally:
         conn.close()
 
 
-def close_holding(hid: int, side: str, shares: float, entry_price: float,
-                  exit_price: float, exit_date) -> None:
+def close_holding(
+    hid: int, side: str, shares: float, entry_price: float, exit_price: float, exit_date
+) -> None:
     """Close a holding at exit_price, booking realized P&L and the cash delta."""
     realized = pf.realized_pnl(side, shares, entry_price, exit_price)
     cash_delta = pf.cash_delta_on_close(side, shares, exit_price)
@@ -489,9 +567,12 @@ def close_holding(hid: int, side: str, shares: float, entry_price: float,
             cur.execute(
                 """UPDATE portfolio_holdings SET status='closed', exit_price=%s,
                    exit_date=%s, realized_pnl_usd=%s, updated_at=NOW() WHERE id=%s""",
-                (exit_price, exit_date, realized, hid))
-            cur.execute("UPDATE portfolio_account SET cash_usd=cash_usd+%s, updated_at=NOW() "
-                        "WHERE id=1", (cash_delta,))
+                (exit_price, exit_date, realized, hid),
+            )
+            cur.execute(
+                "UPDATE portfolio_account SET cash_usd=cash_usd+%s, updated_at=NOW() " "WHERE id=1",
+                (cash_delta,),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -501,8 +582,11 @@ def close_holding(hid: int, side: str, shares: float, entry_price: float,
 def data_freshness() -> dict:
     """Latest refresh timestamp per key pipeline table (prices, positioning, scores)."""
     out = {}
-    for tbl, col in [("price_history", "fetched_at"), ("positioning", "computed_at"),
-                     ("edge_scores", "computed_at")]:
+    for tbl, col in [
+        ("price_history", "fetched_at"),
+        ("positioning", "computed_at"),
+        ("edge_scores", "computed_at"),
+    ]:
         df = q(f"SELECT MAX({col}) ts FROM {tbl}")
         out[tbl] = df.iloc[0, 0] if not df.empty else None
     return out
@@ -528,8 +612,7 @@ def freshness_caption() -> None:
 def load_blotter() -> pd.DataFrame:
     """Load the signal blotter: edge_scores joined to companies, catalysts, positioning,
     and financials."""
-    df = q(
-        """
+    df = q("""
         SELECT co.ticker, co.name AS company, co.id AS company_id, co.is_gbm_focused,
                co.indication_category, co.market_cap_usd,
                c.id AS catalyst_id, c.catalyst_type, c.expected_date, c.sec_confirmed,
@@ -546,15 +629,25 @@ def load_blotter() -> pd.DataFrame:
                            WHERE company_id = co.id ORDER BY date DESC LIMIT 1) p ON TRUE
         LEFT JOIN LATERAL (SELECT runway_months FROM financials
                            WHERE company_id = co.id ORDER BY period_end DESC LIMIT 1) f ON TRUE
-        """
-    )
+        """)
     if df.empty:
         return df
     df["expected_date"] = pd.to_datetime(df["expected_date"], errors="coerce")
     df["days_until"] = (df["expected_date"] - pd.Timestamp(date.today())).dt.days
-    for c in ["composite_score", "suggested_weight", "edge_gap", "expected_move",
-              "implied_move", "run_up_30d", "short_pct_float", "runway_months",
-              "financing_tilt", "insider_tilt", "base_rate", "confidence"]:
+    for c in [
+        "composite_score",
+        "suggested_weight",
+        "edge_gap",
+        "expected_move",
+        "implied_move",
+        "run_up_30d",
+        "short_pct_float",
+        "runway_months",
+        "financing_tilt",
+        "insider_tilt",
+        "base_rate",
+        "confidence",
+    ]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
 
@@ -562,9 +655,17 @@ def load_blotter() -> pd.DataFrame:
 # ===========================================================================
 PERF_CSV = PROJECT_ROOT / "data" / "raw" / "paper_performance.csv"
 PERF_COLUMNS = [
-    "date", "equity", "cash", "open_positions", "unrealized_pnl",
-    "realized_to_date", "total_return_pct", "exits_today", "opens_today",
-    "resized_today", "desk_positions",
+    "date",
+    "equity",
+    "cash",
+    "open_positions",
+    "unrealized_pnl",
+    "realized_to_date",
+    "total_return_pct",
+    "exits_today",
+    "opens_today",
+    "resized_today",
+    "desk_positions",
 ]
 
 
@@ -577,18 +678,34 @@ def _plotly_theme(fig: go.Figure, *, height: int = 340, title: str | None = None
         font=dict(family=THEME["font"], color=THEME["text"], size=11),
         margin=dict(l=52, r=28, t=48 if title else 20, b=40),
         legend=dict(
-            orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02,
-            bgcolor="rgba(0,0,0,0)", font=dict(size=10),
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="left",
+            x=1.02,
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(size=10),
         ),
         uniformtext_minsize=9,
         uniformtext_mode="hide",
-        hoverlabel=dict(bgcolor=THEME["card2"], bordercolor=THEME["border"],
-                        font=dict(color=THEME["text"], size=11)),
+        hoverlabel=dict(
+            bgcolor=THEME["card2"],
+            bordercolor=THEME["border"],
+            font=dict(color=THEME["text"], size=11),
+        ),
     )
-    fig.update_xaxes(gridcolor=THEME["border_soft"], zerolinecolor=THEME["border_soft"],
-                     showgrid=True, linecolor=THEME["border_soft"])
-    fig.update_yaxes(gridcolor=THEME["border_soft"], zerolinecolor=THEME["border_soft"],
-                     showgrid=True, linecolor=THEME["border_soft"])
+    fig.update_xaxes(
+        gridcolor=THEME["border_soft"],
+        zerolinecolor=THEME["border_soft"],
+        showgrid=True,
+        linecolor=THEME["border_soft"],
+    )
+    fig.update_yaxes(
+        gridcolor=THEME["border_soft"],
+        zerolinecolor=THEME["border_soft"],
+        showgrid=True,
+        linecolor=THEME["border_soft"],
+    )
     return fig
 
 
@@ -596,12 +713,17 @@ def _pnl_bar_chart(hv: pd.DataFrame) -> go.Figure:
     pnl_df = hv.dropna(subset=["pnl_usd"]).sort_values("pnl_usd")
     colors = [THEME["green"] if v >= 0 else THEME["red"] for v in pnl_df["pnl_usd"]]
     h = max(280, min(720, 28 * len(pnl_df) + 80))
-    fig = go.Figure(go.Bar(
-        x=pnl_df["pnl_usd"], y=pnl_df["ticker"],
-        orientation="h", marker_color=colors,
-        text=[f"${v:+,.0f}" for v in pnl_df["pnl_usd"]],
-        textposition="outside", cliponaxis=False,
-    ))
+    fig = go.Figure(
+        go.Bar(
+            x=pnl_df["pnl_usd"],
+            y=pnl_df["ticker"],
+            orientation="h",
+            marker_color=colors,
+            text=[f"${v:+,.0f}" for v in pnl_df["pnl_usd"]],
+            textposition="outside",
+            cliponaxis=False,
+        )
+    )
     _plotly_theme(fig, height=h, title="Unrealized P&L by position")
     fig.update_layout(margin=dict(l=56, r=80, t=52, b=48))
     fig.update_xaxes(tickformat="$,.0f")
@@ -616,20 +738,35 @@ def _alloc_pie_chart(hv: pd.DataFrame) -> go.Figure:
     if len(alloc) > top_n:
         top = alloc.head(top_n)
         other = alloc.iloc[top_n:]["mkt_abs"].sum()
-        pie_df = pd.concat([top, pd.DataFrame([{
-            "ticker": f"Other ({len(alloc) - top_n})",
-            "mkt_abs": other,
-        }])], ignore_index=True)
+        pie_df = pd.concat(
+            [
+                top,
+                pd.DataFrame(
+                    [
+                        {
+                            "ticker": f"Other ({len(alloc) - top_n})",
+                            "mkt_abs": other,
+                        }
+                    ]
+                ),
+            ],
+            ignore_index=True,
+        )
     else:
         pie_df = alloc
     palette = (ALLOC_PALETTE + px.colors.qualitative.Set3)[: len(pie_df)]
-    fig = go.Figure(go.Pie(
-        labels=pie_df["ticker"], values=pie_df["mkt_abs"],
-        hole=0.6, marker=dict(colors=palette, line=dict(color=THEME["card"], width=2)),
-        textinfo="percent", textposition="inside",
-        insidetextorientation="horizontal",
-        hovertemplate="%{label}<br>$%{value:,.0f}<br>%{percent}<extra></extra>",
-    ))
+    fig = go.Figure(
+        go.Pie(
+            labels=pie_df["ticker"],
+            values=pie_df["mkt_abs"],
+            hole=0.6,
+            marker=dict(colors=palette, line=dict(color=THEME["card"], width=2)),
+            textinfo="percent",
+            textposition="inside",
+            insidetextorientation="horizontal",
+            hovertemplate="%{label}<br>$%{value:,.0f}<br>%{percent}<extra></extra>",
+        )
+    )
     _plotly_theme(fig, height=420, title="Portfolio allocation (|market value|)")
     fig.update_layout(
         showlegend=True,
@@ -661,8 +798,16 @@ def load_performance_history() -> pd.DataFrame:
         if rows:
             df = pd.DataFrame(rows, columns=cols)
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
-            for c in ("equity", "cash", "unrealized_pnl", "realized_to_date", "total_return_pct",
-                      "xbi_close", "xbi_return_pct", "benchmark_equity"):
+            for c in (
+                "equity",
+                "cash",
+                "unrealized_pnl",
+                "realized_to_date",
+                "total_return_pct",
+                "xbi_close",
+                "xbi_return_pct",
+                "benchmark_equity",
+            ):
                 if c in df.columns:
                     df[c] = pd.to_numeric(df[c], errors="coerce")
             return df
@@ -834,8 +979,10 @@ def enrich_plot_benchmark(
 @st.cache_data(ttl=10)
 def realized_pnl_total() -> float:
     """Total realized P&L across all closed holdings."""
-    df = q("SELECT COALESCE(SUM(realized_pnl_usd), 0) AS v FROM portfolio_holdings "
-           "WHERE status = 'closed'")
+    df = q(
+        "SELECT COALESCE(SUM(realized_pnl_usd), 0) AS v FROM portfolio_holdings "
+        "WHERE status = 'closed'"
+    )
     return float(df.iloc[0]["v"]) if not df.empty else 0.0
 
 
@@ -848,32 +995,45 @@ def enrich_holdings(open_df: pd.DataFrame, summ: dict, prices: dict[str, float])
         pnl = pf.unrealized_pnl(r.side, float(r.shares), float(r.entry_price), cur)
         pnl_pct = pf.unrealized_pnl_pct(r.side, float(r.entry_price), cur)
         cost = float(r.shares) * float(r.entry_price)
-        rows.append({
-            "ticker": r.ticker,
-            "side": r.side,
-            "type": r.trade_type,
-            "notes": getattr(r, "notes", None),
-            "shares": float(r.shares),
-            "entry": float(r.entry_price),
-            "cost_basis": cost,
-            "now": cur,
-            "mkt_value": abs(mv) if mv is not None else None,
-            "pct_book": (abs(mv) / summ["equity"] if mv is not None and summ["equity"] else None),
-            "pnl_usd": pnl,
-            "pnl_pct": pnl_pct,
-            "exit_by": r.planned_exit_date,
-            "days_to_exit": ((r.planned_exit_date - date.today()).days
-                             if r.planned_exit_date else None),
-            "rule": r.planned_exit_rule,
-        })
+        rows.append(
+            {
+                "ticker": r.ticker,
+                "side": r.side,
+                "type": r.trade_type,
+                "notes": getattr(r, "notes", None),
+                "shares": float(r.shares),
+                "entry": float(r.entry_price),
+                "cost_basis": cost,
+                "now": cur,
+                "mkt_value": abs(mv) if mv is not None else None,
+                "pct_book": (
+                    abs(mv) / summ["equity"] if mv is not None and summ["equity"] else None
+                ),
+                "pnl_usd": pnl,
+                "pnl_pct": pnl_pct,
+                "exit_by": r.planned_exit_date,
+                "days_to_exit": (
+                    (r.planned_exit_date - date.today()).days if r.planned_exit_date else None
+                ),
+                "rule": r.planned_exit_rule,
+            }
+        )
     return pd.DataFrame(rows)
 
 
 def _holding_dicts(df: pd.DataFrame) -> list[dict]:
-    return [{"ticker": r.ticker, "side": r.side, "shares": float(r.shares),
-             "entry_price": float(r.entry_price), "trade_type": r.trade_type,
-             "planned_exit_date": r.planned_exit_date,
-             "planned_exit_rule": r.planned_exit_rule} for r in df.itertuples()]
+    return [
+        {
+            "ticker": r.ticker,
+            "side": r.side,
+            "shares": float(r.shares),
+            "entry_price": float(r.entry_price),
+            "trade_type": r.trade_type,
+            "planned_exit_date": r.planned_exit_date,
+            "planned_exit_rule": r.planned_exit_rule,
+        }
+        for r in df.itertuples()
+    ]
 
 
 def render_action_center(open_df: pd.DataFrame) -> None:
@@ -914,6 +1074,7 @@ def _purge_open_shorts_once() -> None:
     try:
         from paper_autopilot import cover_shorts
         from strip_shorts import run as strip_shorts_run
+
         cover_shorts(dry_run=False)
         strip_shorts_run(dry_run=False)
         st.cache_data.clear()
@@ -933,11 +1094,17 @@ def page_portfolio() -> None:
     open_df = load_holdings("open")
 
     # ---- account setup ----
-    needs_setup = (acct["starting_capital"] is None and acct["cash"] == 0 and open_df.empty)
+    needs_setup = acct["starting_capital"] is None and acct["cash"] == 0 and open_df.empty
     with st.expander("⚙️ Account / cash", expanded=needs_setup):
-        cash = st.number_input("Cash balance ($)", value=float(acct["cash"]), step=100.0, format="%.2f")
-        start_cap = st.number_input("Starting capital ($) — for total-return tracking",
-                                    value=float(acct["starting_capital"] or 0.0), step=100.0, format="%.2f")
+        cash = st.number_input(
+            "Cash balance ($)", value=float(acct["cash"]), step=100.0, format="%.2f"
+        )
+        start_cap = st.number_input(
+            "Starting capital ($) — for total-return tracking",
+            value=float(acct["starting_capital"] or 0.0),
+            step=100.0,
+            format="%.2f",
+        )
         if st.button("Save account"):
             set_account(cash, start_cap or None)
             st.cache_data.clear()
@@ -950,7 +1117,9 @@ def page_portfolio() -> None:
         m[0].metric("Account value", fmt_usd(summ["equity"]))
         m[1].metric("Cash", fmt_usd(summ["cash"]))
         m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
-        m[3].metric("Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"]))
+        m[3].metric(
+            "Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"])
+        )
         cash_pct = (summ["cash"] / summ["equity"]) if summ["equity"] else 0.0
         m[4].metric("Cash %", f"{cash_pct:.0%}")
     else:
@@ -958,13 +1127,19 @@ def page_portfolio() -> None:
         m[0].metric("Account value", fmt_usd(summ["equity"]))
         m[1].metric("Cash", fmt_usd(summ["cash"]))
         m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
-        m[3].metric("Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"]))
-        m[4].metric("Gross short", f"{summ['gross_short_pct']:.0%}", help=fmt_usd(summ["gross_short_usd"]))
+        m[3].metric(
+            "Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"])
+        )
+        m[4].metric(
+            "Gross short", f"{summ['gross_short_pct']:.0%}", help=fmt_usd(summ["gross_short_usd"])
+        )
         m[5].metric("Net", f"{summ['net_pct']:+.0%}", help=fmt_usd(summ["net_usd"]))
     if acct["starting_capital"]:
         tot = summ["equity"] - float(acct["starting_capital"])
-        st.caption(f"Total return since start: **{fmt_usd(tot)}** "
-                   f"({tot/float(acct['starting_capital']):+.1%})")
+        st.caption(
+            f"Total return since start: **{fmt_usd(tot)}** "
+            f"({tot/float(acct['starting_capital']):+.1%})"
+        )
     freshness_caption()
 
     st.divider()
@@ -982,19 +1157,37 @@ def page_portfolio() -> None:
             mv = pf.market_value(r.side, float(r.shares), cur)
             pnl = pf.unrealized_pnl(r.side, float(r.shares), float(r.entry_price), cur)
             pnl_pct = pf.unrealized_pnl_pct(r.side, float(r.entry_price), cur)
-            rows.append({
-                "ticker": r.ticker, "side": r.side, "type": r.trade_type,
-                "shares": float(r.shares), "entry": float(r.entry_price),
-                "now": cur, "mkt_value": abs(mv) if mv is not None else None,
-                "% book": (abs(mv) / summ["equity"] if mv is not None and summ["equity"] else None),
-                "P&L $": pnl, "P&L %": pnl_pct,
-                "exit_by": r.planned_exit_date, "rule": pf.format_exit_rule(r.planned_exit_rule),
-            })
+            rows.append(
+                {
+                    "ticker": r.ticker,
+                    "side": r.side,
+                    "type": r.trade_type,
+                    "shares": float(r.shares),
+                    "entry": float(r.entry_price),
+                    "now": cur,
+                    "mkt_value": abs(mv) if mv is not None else None,
+                    "% book": (
+                        abs(mv) / summ["equity"] if mv is not None and summ["equity"] else None
+                    ),
+                    "P&L $": pnl,
+                    "P&L %": pnl_pct,
+                    "exit_by": r.planned_exit_date,
+                    "rule": pf.format_exit_rule(r.planned_exit_rule),
+                }
+            )
         hv = pd.DataFrame(rows)
-        sty = hv.style.format({
-            "entry": "{:.2f}", "now": "{:.2f}", "mkt_value": "${:,.0f}",
-            "% book": "{:.1%}", "P&L $": "${:,.0f}", "P&L %": "{:+.1%}",
-            "shares": "{:.0f}"}, na_rep="—")
+        sty = hv.style.format(
+            {
+                "entry": "{:.2f}",
+                "now": "{:.2f}",
+                "mkt_value": "${:,.0f}",
+                "% book": "{:.1%}",
+                "P&L $": "${:,.0f}",
+                "P&L %": "{:+.1%}",
+                "shares": "{:.0f}",
+            },
+            na_rep="—",
+        )
         st.dataframe(sty, use_container_width=True, hide_index=True, height=280)
 
     # ---- add trade ----
@@ -1010,28 +1203,47 @@ def page_portfolio() -> None:
         if config.LONG_ONLY:
             side = "long"
             cc[1].selectbox("Side", ["long"], index=0, key="add_side", disabled=True)
-            ttype = cc[2].selectbox("Trade type", ["buy_the_rumor", "hold_through", "manual"],
-                                    key="add_tt")
+            ttype = cc[2].selectbox(
+                "Trade type", ["buy_the_rumor", "hold_through", "manual"], key="add_tt"
+            )
         else:
             side = cc[1].selectbox("Side", ["long", "short"], key="add_side")
-            ttype = cc[2].selectbox("Trade type",
-                                    ["buy_the_rumor", "hold_through", "fade", "manual"],
-                                    key="add_tt")
+            ttype = cc[2].selectbox(
+                "Trade type", ["buy_the_rumor", "hold_through", "fade", "manual"], key="add_tt"
+            )
         size_by = cc[3].radio("Size by", ["shares", "dollars"], horizontal=True, key="add_sizeby")
 
-        cats = q("SELECT id, catalyst_type, expected_date FROM catalysts WHERE company_id=%s "
-                 "AND expected_date >= CURRENT_DATE ORDER BY expected_date", (cid,))
+        cats = q(
+            "SELECT id, catalyst_type, expected_date FROM catalysts WHERE company_id=%s "
+            "AND expected_date >= CURRENT_DATE ORDER BY expected_date",
+            (cid,),
+        )
         cat_map = {"(none — manual exit)": (None, None)}
         for r in cats.itertuples():
-            cat_map[f"{r.catalyst_type} @ {r.expected_date} (#{r.id})"] = (int(r.id), r.expected_date)
+            cat_map[f"{r.catalyst_type} @ {r.expected_date} (#{r.id})"] = (
+                int(r.id),
+                r.expected_date,
+            )
         c2 = st.columns([2, 1, 1, 1])
-        cat_label = c2[0].selectbox("Link catalyst (sets exit timing)", list(cat_map.keys()),
-                                    key="add_cat")
+        cat_label = c2[0].selectbox(
+            "Link catalyst (sets exit timing)", list(cat_map.keys()), key="add_cat"
+        )
         default_price = float(prices.get(tk, 0.0))
-        amount = c2[1].number_input(f"{'Shares' if size_by=='shares' else 'Dollars ($)'}",
-                                    min_value=0.0, value=0.0, step=1.0, key="add_amt")
-        price = c2[2].number_input("Entry price ($)", min_value=0.0, value=default_price,
-                                   step=0.01, format="%.2f", key="add_price")
+        amount = c2[1].number_input(
+            f"{'Shares' if size_by=='shares' else 'Dollars ($)'}",
+            min_value=0.0,
+            value=0.0,
+            step=1.0,
+            key="add_amt",
+        )
+        price = c2[2].number_input(
+            "Entry price ($)",
+            min_value=0.0,
+            value=default_price,
+            step=0.01,
+            format="%.2f",
+            key="add_price",
+        )
         entry_dt = c2[3].date_input("Entry date", value=date.today(), key="add_date")
         notes = st.text_input("Notes (optional)", key="add_notes")
 
@@ -1044,10 +1256,19 @@ def page_portfolio() -> None:
                 st.error("Enter a positive size and entry price.")
             else:
                 shares = amount if size_by == "shares" else round(amount / price, 4)
-                add_holding(ticker=tk, company_id=cid, catalyst_id=catalyst_id, side=side,
-                            trade_type=ttype, entry_date=entry_dt, shares=shares,
-                            entry_price=price, planned_exit_rule=exit_rule,
-                            planned_exit_date=exit_date, notes=notes or None)
+                add_holding(
+                    ticker=tk,
+                    company_id=cid,
+                    catalyst_id=catalyst_id,
+                    side=side,
+                    trade_type=ttype,
+                    entry_date=entry_dt,
+                    shares=shares,
+                    entry_price=price,
+                    planned_exit_rule=exit_rule,
+                    planned_exit_date=exit_date,
+                    notes=notes or None,
+                )
                 st.cache_data.clear()
                 st.success(f"Logged {side} {shares} {tk} @ ${price:.2f}")
                 st.rerun()
@@ -1056,20 +1277,28 @@ def page_portfolio() -> None:
     if not open_df.empty:
         st.divider()
         st.subheader("✅ Close a position")
-        lbl_map = {f"{r.ticker} {r.side} {float(r.shares):.0f}@{float(r.entry_price):.2f} (#{r.id})":
-                   r for r in open_df.itertuples()}
+        lbl_map = {
+            f"{r.ticker} {r.side} {float(r.shares):.0f}@{float(r.entry_price):.2f} (#{r.id})": r
+            for r in open_df.itertuples()
+        }
         cclose = st.columns([2, 1, 1])
         sel = cclose[0].selectbox("Position", list(lbl_map.keys()), key="close_sel")
         row = lbl_map[sel]
-        xprice = cclose[1].number_input("Exit price ($)", min_value=0.0,
-                                        value=float(prices.get(row.ticker, row.entry_price)),
-                                        step=0.01, format="%.2f", key="close_price")
+        xprice = cclose[1].number_input(
+            "Exit price ($)",
+            min_value=0.0,
+            value=float(prices.get(row.ticker, row.entry_price)),
+            step=0.01,
+            format="%.2f",
+            key="close_price",
+        )
         xdate = cclose[2].date_input("Exit date", value=date.today(), key="close_date")
         rp = pf.realized_pnl(row.side, float(row.shares), float(row.entry_price), xprice)
         st.caption(f"Realized P&L if closed here: **{fmt_usd(rp)}**")
         if st.button("Close position"):
-            close_holding(int(row.id), row.side, float(row.shares), float(row.entry_price),
-                          xprice, xdate)
+            close_holding(
+                int(row.id), row.side, float(row.shares), float(row.entry_price), xprice, xdate
+            )
             st.cache_data.clear()
             st.success(f"Closed {row.ticker}. Realized {fmt_usd(rp)}")
             st.rerun()
@@ -1079,11 +1308,11 @@ def page_portfolio() -> None:
 def _timeframe_control(key: str) -> str:
     opts = ["1W", "1M", "3M", "6M", "1Y", "ALL"]
     if hasattr(st, "segmented_control"):
-        v = st.segmented_control("Range", opts, default="ALL", key=key,
-                                 label_visibility="collapsed")
+        v = st.segmented_control(
+            "Range", opts, default="ALL", key=key, label_visibility="collapsed"
+        )
         return v or "ALL"
-    return st.radio("Range", opts, index=5, horizontal=True, key=key,
-                    label_visibility="collapsed")
+    return st.radio("Range", opts, index=5, horizontal=True, key=key, label_visibility="collapsed")
 
 
 def _dir(x: float | None) -> str:
@@ -1104,13 +1333,18 @@ def _alloc_legend_html(buckets: dict[str, float], total: float) -> str:
             f'<span style="flex:1;color:{THEME["muted"]}">{k}</span>'
             f'<span style="font-family:{THEME["mono"]}">{fmt_usd(v)}</span>'
             f'<span style="color:{THEME["faint"]};min-width:44px;text-align:right;">{pct:.0%}</span>'
-            '</div>'
+            "</div>"
         )
     return "".join(rows)
 
 
-def _cockpit_balance_chart(plot_df: pd.DataFrame, metric: str, start_cap: float,
-                           bench_line: pd.Series | None, bench_tk: str) -> go.Figure:
+def _cockpit_balance_chart(
+    plot_df: pd.DataFrame,
+    metric: str,
+    start_cap: float,
+    bench_line: pd.Series | None,
+    bench_tk: str,
+) -> go.Figure:
     """Area chart styled like the reference: soft-filled primary series + XBI overlay."""
     series_map = {
         "Portfolio value": ("equity", "$,.0f", THEME["accent"]),
@@ -1123,21 +1357,31 @@ def _cockpit_balance_chart(plot_df: pd.DataFrame, metric: str, start_cap: float,
     if col == "_ret":
         df["_ret"] = (df["equity"] / start_cap - 1) if start_cap else 0.0
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df["date"], y=df[col], mode="lines", name=metric,
-        line=dict(color=color, width=2.6, shape="spline", smoothing=0.6),
-        fill="tozeroy", fillcolor=color.replace(")", ",0.10)").replace("#", "rgba(") if False else None,
-        hovertemplate="%{x|%b %d}<br>%{y:" + tickfmt + "}<extra></extra>",
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=df["date"],
+            y=df[col],
+            mode="lines",
+            name=metric,
+            line=dict(color=color, width=2.6, shape="spline", smoothing=0.6),
+            fill="tozeroy",
+            fillcolor=color.replace(")", ",0.10)").replace("#", "rgba(") if False else None,
+            hovertemplate="%{x|%b %d}<br>%{y:" + tickfmt + "}<extra></extra>",
+        )
+    )
     # soft gradient-ish fill via a translucent hex
     fig.data[0].fillcolor = _rgba(color, 0.12)
     if col == "equity" and bench_line is not None and bench_line.notna().any():
-        fig.add_trace(go.Scatter(
-            x=df["date"], y=bench_line.reindex(df["date"]).values,
-            mode="lines", name=f"{bench_tk}",
-            line=dict(color=THEME["muted"], width=1.8, dash="dash"),
-            hovertemplate="%{x|%b %d}<br>" + bench_tk + " %{y:$,.0f}<extra></extra>",
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=df["date"],
+                y=bench_line.reindex(df["date"]).values,
+                mode="lines",
+                name=f"{bench_tk}",
+                line=dict(color=THEME["muted"], width=1.8, dash="dash"),
+                hovertemplate="%{x|%b %d}<br>" + bench_tk + " %{y:$,.0f}<extra></extra>",
+            )
+        )
     if col == "equity" and start_cap:
         fig.add_hline(y=start_cap, line_dash="dot", line_color=THEME["faint"], line_width=1)
     _plotly_theme(fig, height=320)
@@ -1172,8 +1416,11 @@ def page_home() -> None:
     bench_tk = config.BENCHMARK_TICKER
     bench_df = load_benchmark_closes(bench_tk)
     bench_px = resolve_benchmark_price(prices, bench_df)
-    bench_ret = (_benchmark_return_since_start(bench_df, track_start, bench_px)
-                 if track_start and bench_px is not None else None)
+    bench_ret = (
+        _benchmark_return_since_start(bench_df, track_start, bench_px)
+        if track_start and bench_px is not None
+        else None
+    )
     alpha = (tot_ret_pct - bench_ret) if tot_ret_pct is not None and bench_ret is not None else None
 
     # drawdown / risk posture from the equity history
@@ -1200,23 +1447,35 @@ def page_home() -> None:
     render_page_header("Cockpit", badges=badges, chips=chips)
 
     # ---------- KPI cards ----------
-    render_kpi_row([
-        _stat_card("Portfolio · start", fmt_usd(start_cap)),
-        _stat_card("Portfolio · now", fmt_usd(equity),
-                   delta=(f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else None),
-                   delta_dir=_dir(tot_ret_pct)),
-        _stat_card("Total return",
-                   (f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—"),
-                   delta=(fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None),
-                   delta_dir=_dir(tot_ret_usd),
-                   sub=f"vs {fmt_usd(start_cap)} start"),
-        _stat_card("Alpha vs XBI",
-                   (f"{alpha:+.1%}" if alpha is not None else "—"),
-                   delta_dir=_dir(alpha),
-                   sub=(f"XBI {bench_ret:+.1%}" if bench_ret is not None else "no benchmark")),
-        _stat_card("Risk of drawdown", "Elevated" if risk_elevated else "Low",
-                   sub=f"max DD {max_dd:.1%} · circuit {config.DRAWDOWN_CIRCUIT_PCT:.0%}"),
-    ])
+    render_kpi_row(
+        [
+            _stat_card("Portfolio · start", fmt_usd(start_cap)),
+            _stat_card(
+                "Portfolio · now",
+                fmt_usd(equity),
+                delta=(f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else None),
+                delta_dir=_dir(tot_ret_pct),
+            ),
+            _stat_card(
+                "Total return",
+                (f"{tot_ret_pct:+.1%}" if tot_ret_pct is not None else "—"),
+                delta=(fmt_usd(tot_ret_usd) if tot_ret_usd is not None else None),
+                delta_dir=_dir(tot_ret_usd),
+                sub=f"vs {fmt_usd(start_cap)} start",
+            ),
+            _stat_card(
+                "Alpha vs XBI",
+                (f"{alpha:+.1%}" if alpha is not None else "—"),
+                delta_dir=_dir(alpha),
+                sub=(f"XBI {bench_ret:+.1%}" if bench_ret is not None else "no benchmark"),
+            ),
+            _stat_card(
+                "Risk of drawdown",
+                "Elevated" if risk_elevated else "Low",
+                sub=f"max DD {max_dd:.1%} · circuit {config.DRAWDOWN_CIRCUIT_PCT:.0%}",
+            ),
+        ]
+    )
 
     # ---------- balance chart + allocation ----------
     left, right = st.columns([2, 1], gap="medium")
@@ -1229,26 +1488,48 @@ def page_home() -> None:
                 f'<div class="pf-big">{fmt_usd(equity)}</div>'
                 f'<span class="pf-delta {_dir(tot_ret_usd)}">'
                 f'{fmt_usd(tot_ret_usd) if tot_ret_usd is not None else "—"}</span>',
-                unsafe_allow_html=True)
-            metric = head[1].selectbox("Metric",
-                                       ["Portfolio value", "Total return %", "Cash", "Unrealized P&L"],
-                                       label_visibility="collapsed", key="bal_metric")
+                unsafe_allow_html=True,
+            )
+            metric = head[1].selectbox(
+                "Metric",
+                ["Portfolio value", "Total return %", "Cash", "Unrealized P&L"],
+                label_visibility="collapsed",
+                key="bal_metric",
+            )
             with head[2]:
                 tf = _timeframe_control("bal_tf")
 
             # build plot frame (history + live point)
             if perf.empty:
-                plot_df = pd.DataFrame([{
-                    "date": pd.Timestamp(date.today()), "equity": equity,
-                    "cash": summ["cash"], "unrealized_pnl": summ["unrealized_pnl_usd"],
-                }])
+                plot_df = pd.DataFrame(
+                    [
+                        {
+                            "date": pd.Timestamp(date.today()),
+                            "equity": equity,
+                            "cash": summ["cash"],
+                            "unrealized_pnl": summ["unrealized_pnl_usd"],
+                        }
+                    ]
+                )
             else:
                 plot_df = perf.copy()
                 if plot_df["date"].max().date() < date.today():
-                    plot_df = pd.concat([plot_df, pd.DataFrame([{
-                        "date": pd.Timestamp(date.today()), "equity": equity,
-                        "cash": summ["cash"], "unrealized_pnl": summ["unrealized_pnl_usd"],
-                    }])], ignore_index=True)
+                    plot_df = pd.concat(
+                        [
+                            plot_df,
+                            pd.DataFrame(
+                                [
+                                    {
+                                        "date": pd.Timestamp(date.today()),
+                                        "equity": equity,
+                                        "cash": summ["cash"],
+                                        "unrealized_pnl": summ["unrealized_pnl_usd"],
+                                    }
+                                ]
+                            ),
+                        ],
+                        ignore_index=True,
+                    )
             cutoff = _timeframe_cutoff(tf)
             if cutoff is not None:
                 floor = pd.Timestamp(date.today()) - pd.Timedelta(days=cutoff)
@@ -1262,30 +1543,41 @@ def page_home() -> None:
             elif track_start and start_cap:
                 bench_line = _benchmark_equity_series(plot_df, bench_df, start_cap, track_start)
 
-            st.plotly_chart(_cockpit_balance_chart(plot_df, metric, start_cap, bench_line, bench_tk),
-                            use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(
+                _cockpit_balance_chart(plot_df, metric, start_cap, bench_line, bench_tk),
+                use_container_width=True,
+                config={"displayModeBar": False},
+            )
             if alpha is not None:
                 st.markdown(
                     f'<div class="panel-caption">Portfolio <b>{tot_ret_pct:+.1%}</b> · '
-                    f'{bench_tk} <b>{bench_ret:+.1%}</b> · alpha '
+                    f"{bench_tk} <b>{bench_ret:+.1%}</b> · alpha "
                     f'<b style="color:{THEME["green"] if alpha>=0 else THEME["red"]}">{alpha:+.1%}</b> '
-                    f'· max DD <b>{max_dd:.1%}</b></div>', unsafe_allow_html=True)
+                    f"· max DD <b>{max_dd:.1%}</b></div>",
+                    unsafe_allow_html=True,
+                )
 
     with right:
         with st.container(border=True):
-            st.markdown('<div class="pf-stat-label">Allocation</div>',
-                        unsafe_allow_html=True)
+            st.markdown('<div class="pf-stat-label">Allocation</div>', unsafe_allow_html=True)
             now_buckets = {"Cash": max(summ["cash"], 0.0)}
             if not hv.empty:
-                label_map = {"buy_the_rumor": "Buy rumor", "hold_through": "Hold-through",
-                             "fade": "Fade", "manual": "Manual"}
+                label_map = {
+                    "buy_the_rumor": "Buy rumor",
+                    "hold_through": "Hold-through",
+                    "fade": "Fade",
+                    "manual": "Manual",
+                }
                 g = hv.dropna(subset=["mkt_value"]).groupby("type")["mkt_value"].sum()
                 for t, v in g.items():
                     now_buckets[label_map.get(t, str(t))] = float(v)
             st.plotly_chart(
-                _bucket_donut(now_buckets, center_top="Deployed", center_bot=fmt_usd(equity),
-                              title=""),
-                use_container_width=True, config={"displayModeBar": False})
+                _bucket_donut(
+                    now_buckets, center_top="Deployed", center_bot=fmt_usd(equity), title=""
+                ),
+                use_container_width=True,
+                config={"displayModeBar": False},
+            )
             st.markdown(_alloc_legend_html(now_buckets, equity), unsafe_allow_html=True)
 
     # ---------- kept charts: position breakdown + portfolio allocation ----------
@@ -1293,23 +1585,31 @@ def page_home() -> None:
         pcol = st.columns(2, gap="medium")
         with pcol[0]:
             with st.container(border=True):
-                st.markdown('<div class="pf-stat-label">Position breakdown</div>',
-                            unsafe_allow_html=True)
-                st.plotly_chart(_pnl_bar_chart(hv), use_container_width=True,
-                                config={"displayModeBar": False})
+                st.markdown(
+                    '<div class="pf-stat-label">Position breakdown</div>', unsafe_allow_html=True
+                )
+                st.plotly_chart(
+                    _pnl_bar_chart(hv), use_container_width=True, config={"displayModeBar": False}
+                )
         with pcol[1]:
             with st.container(border=True):
-                st.markdown('<div class="pf-stat-label">Portfolio allocation</div>',
-                            unsafe_allow_html=True)
-                st.plotly_chart(_alloc_pie_chart(hv), use_container_width=True,
-                                config={"displayModeBar": False})
+                st.markdown(
+                    '<div class="pf-stat-label">Portfolio allocation</div>', unsafe_allow_html=True
+                )
+                st.plotly_chart(
+                    _alloc_pie_chart(hv), use_container_width=True, config={"displayModeBar": False}
+                )
 
     # ---------- actions / holdings table ----------
     with st.container(border=True):
         htop = st.columns([3, 2])
         htop[0].markdown('<div class="pf-stat-label">Actions</div>', unsafe_allow_html=True)
-        search = htop[1].text_input("Search", placeholder="Filter ticker…",
-                                    label_visibility="collapsed", key="cockpit_search")
+        search = htop[1].text_input(
+            "Search",
+            placeholder="Filter ticker…",
+            label_visibility="collapsed",
+            key="cockpit_search",
+        )
         tab_open, tab_book, tab_closed = st.tabs(["Open positions", "Trade book", "Closed"])
 
         with tab_open:
@@ -1319,25 +1619,59 @@ def page_home() -> None:
                 show = hv.copy()
                 if search:
                     show = show[show["ticker"].str.contains(search.strip(), case=False, na=False)]
-                show = show[[
-                    "ticker", "type", "entry", "now", "cost_basis", "mkt_value",
-                    "pct_book", "pnl_usd", "pnl_pct", "exit_by", "days_to_exit",
-                ]].rename(columns={
-                    "type": "trade", "entry": "entry $", "now": "last $",
-                    "cost_basis": "cost $", "mkt_value": "mkt $", "pct_book": "% book",
-                    "pnl_usd": "P&L $", "pnl_pct": "P&L %", "exit_by": "exit date",
-                    "days_to_exit": "days left",
-                })
+                show = show[
+                    [
+                        "ticker",
+                        "type",
+                        "entry",
+                        "now",
+                        "cost_basis",
+                        "mkt_value",
+                        "pct_book",
+                        "pnl_usd",
+                        "pnl_pct",
+                        "exit_by",
+                        "days_to_exit",
+                    ]
+                ].rename(
+                    columns={
+                        "type": "trade",
+                        "entry": "entry $",
+                        "now": "last $",
+                        "cost_basis": "cost $",
+                        "mkt_value": "mkt $",
+                        "pct_book": "% book",
+                        "pnl_usd": "P&L $",
+                        "pnl_pct": "P&L %",
+                        "exit_by": "exit date",
+                        "days_to_exit": "days left",
+                    }
+                )
                 st.dataframe(
-                    show.style.format({
-                        "entry $": "{:.2f}", "last $": "{:.2f}", "cost $": "${:,.0f}",
-                        "mkt $": "${:,.0f}", "% book": "{:.1%}", "P&L $": "${:+,.0f}",
-                        "P&L %": "{:+.1%}", "days left": "{:.0f}",
-                    }, na_rep="—").map(
-                        lambda v: f"color:{THEME['green'] if (isinstance(v,(int,float)) and v>=0) else THEME['red']}"
-                        if isinstance(v, (int, float)) else "", subset=["P&L $", "P&L %"]),
-                    use_container_width=True, hide_index=True,
-                    height=min(420, 46 + 34 * len(show)))
+                    show.style.format(
+                        {
+                            "entry $": "{:.2f}",
+                            "last $": "{:.2f}",
+                            "cost $": "${:,.0f}",
+                            "mkt $": "${:,.0f}",
+                            "% book": "{:.1%}",
+                            "P&L $": "${:+,.0f}",
+                            "P&L %": "{:+.1%}",
+                            "days left": "{:.0f}",
+                        },
+                        na_rep="—",
+                    ).map(
+                        lambda v: (
+                            f"color:{THEME['green'] if (isinstance(v,(int,float)) and v>=0) else THEME['red']}"
+                            if isinstance(v, (int, float))
+                            else ""
+                        ),
+                        subset=["P&L $", "P&L %"],
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(420, 46 + 34 * len(show)),
+                )
 
         with tab_book:
             book = load_action_book(90)
@@ -1350,22 +1684,50 @@ def page_home() -> None:
                 cd = closed_df.copy()
                 if search:
                     cd = cd[cd["ticker"].str.contains(search.strip(), case=False, na=False)]
-                cd = cd[["ticker", "trade_type", "entry_date", "exit_date", "shares",
-                         "entry_price", "exit_price", "realized_pnl_usd"]].rename(columns={
-                    "trade_type": "trade", "entry_date": "entry", "exit_date": "exit",
-                    "entry_price": "entry $", "exit_price": "exit $", "realized_pnl_usd": "realized $",
-                })
+                cd = cd[
+                    [
+                        "ticker",
+                        "trade_type",
+                        "entry_date",
+                        "exit_date",
+                        "shares",
+                        "entry_price",
+                        "exit_price",
+                        "realized_pnl_usd",
+                    ]
+                ].rename(
+                    columns={
+                        "trade_type": "trade",
+                        "entry_date": "entry",
+                        "exit_date": "exit",
+                        "entry_price": "entry $",
+                        "exit_price": "exit $",
+                        "realized_pnl_usd": "realized $",
+                    }
+                )
                 for c in ("entry $", "exit $", "realized $", "shares"):
                     cd[c] = pd.to_numeric(cd[c], errors="coerce")
                 st.dataframe(
-                    cd.style.format({
-                        "shares": "{:.0f}", "entry $": "{:.2f}", "exit $": "{:.2f}",
-                        "realized $": "${:+,.0f}",
-                    }, na_rep="—").map(
-                        lambda v: f"color:{THEME['green'] if (isinstance(v,(int,float)) and v>=0) else THEME['red']}"
-                        if isinstance(v, (int, float)) else "", subset=["realized $"]),
-                    use_container_width=True, hide_index=True,
-                    height=min(420, 46 + 34 * len(cd)))
+                    cd.style.format(
+                        {
+                            "shares": "{:.0f}",
+                            "entry $": "{:.2f}",
+                            "exit $": "{:.2f}",
+                            "realized $": "${:+,.0f}",
+                        },
+                        na_rep="—",
+                    ).map(
+                        lambda v: (
+                            f"color:{THEME['green'] if (isinstance(v,(int,float)) and v>=0) else THEME['red']}"
+                            if isinstance(v, (int, float))
+                            else ""
+                        ),
+                        subset=["realized $"],
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(420, 46 + 34 * len(cd)),
+                )
 
     render_action_center(open_df)
 
@@ -1376,28 +1738,54 @@ def page_glossary(*, embedded: bool = False) -> None:
     if not embedded:
         st.title("Glossary")
     terms = [
-        ("Base rate", "The historical success rate for this kind of trial (by phase, disease, "
-         "sponsor type). Our most-validated number — it's the statistical 'reality' the crowd's "
-         "mood is measured against."),
-        ("Edge gap", "Our predicted move minus the move the options market is pricing in. "
-         "Positive = market underprices it (lean long). Negative = market overpays (avoid / no trade)."),
-        ("Composite score / grade", "Overall quality of a setup (0–1): blends how soon the catalyst "
-         "is, the base rate, and the company's cash runway. NO market sentiment in it."),
-        ("Trade types", "buy_the_rumor = ride into the event, sell BEFORE the result. "
-         "hold_through = hold through the result. avoid = no trade. (Fades/shorts are retired.)"),
-        ("Suggested / target weight", "Fraction of your book the model would put on this name "
-         "(Kelly-fractional, capped). Long-only — always ≥ 0."),
-        ("Implied move", "How big a move the options market expects around the event (from option "
-         "prices). Our read on 'what the crowd has priced in.'"),
-        ("Run-up (30d)", "How much the stock already moved in the last 30 days — proxy for how "
-         "much hope is already baked in before the event."),
-        ("Short % float", "Percent of tradeable shares sold short — a sentiment/positioning gauge."),
+        (
+            "Base rate",
+            "The historical success rate for this kind of trial (by phase, disease, "
+            "sponsor type). Our most-validated number — it's the statistical 'reality' the crowd's "
+            "mood is measured against.",
+        ),
+        (
+            "Edge gap",
+            "Our predicted move minus the move the options market is pricing in. "
+            "Positive = market underprices it (lean long). Negative = market overpays (avoid / no trade).",
+        ),
+        (
+            "Composite score / grade",
+            "Overall quality of a setup (0–1): blends how soon the catalyst "
+            "is, the base rate, and the company's cash runway. NO market sentiment in it.",
+        ),
+        (
+            "Trade types",
+            "buy_the_rumor = ride into the event, sell BEFORE the result. "
+            "hold_through = hold through the result. avoid = no trade. (Fades/shorts are retired.)",
+        ),
+        (
+            "Suggested / target weight",
+            "Fraction of your book the model would put on this name "
+            "(Kelly-fractional, capped). Long-only — always ≥ 0.",
+        ),
+        (
+            "Implied move",
+            "How big a move the options market expects around the event (from option "
+            "prices). Our read on 'what the crowd has priced in.'",
+        ),
+        (
+            "Run-up (30d)",
+            "How much the stock already moved in the last 30 days — proxy for how "
+            "much hope is already baked in before the event.",
+        ),
+        (
+            "Short % float",
+            "Percent of tradeable shares sold short — a sentiment/positioning gauge.",
+        ),
         ("Confidence", "How much to trust THIS row (more data + a reliable date = higher)."),
         ("Unrealized P&L", "Paper gain/loss on open positions at the latest close (not yet sold)."),
         ("Gross long", "Total size of long positions as % of account value."),
         ("Net exposure", "In long-only mode, equals gross long (no shorts)."),
-        ("Account value (equity)", "Cash + market value of your positions. Your true net worth in "
-         "this account."),
+        (
+            "Account value (equity)",
+            "Cash + market value of your positions. Your true net worth in " "this account.",
+        ),
     ]
     for name, desc in terms:
         st.markdown(f"**{name}** — {desc}")
@@ -1407,7 +1795,8 @@ def page_glossary(*, embedded: bool = False) -> None:
 def _ticker_dossier_data(ticker: str) -> dict | None:
     companies = q(
         "SELECT id, ticker, name, market_cap_usd, is_gbm_focused, indication_category "
-        "FROM companies WHERE ticker = %s", (ticker,)
+        "FROM companies WHERE ticker = %s",
+        (ticker,),
     )
     if companies.empty:
         return None
@@ -1419,26 +1808,31 @@ def _ticker_dossier_data(ticker: str) -> dict | None:
         "fin": q(
             "SELECT cash_and_equivalents_usd, total_liquidity_usd, quarterly_burn_usd, "
             "runway_months, shares_outstanding, period_end "
-            "FROM financials WHERE company_id=%s ORDER BY period_end DESC LIMIT 1", (cid,)
+            "FROM financials WHERE company_id=%s ORDER BY period_end DESC LIMIT 1",
+            (cid,),
         ),
         "pos": q(
             "SELECT short_pct_float, implied_move_pct, run_up_30d, atm_iv, days_to_cover "
-            "FROM positioning WHERE company_id=%s ORDER BY date DESC LIMIT 1", (cid,)
+            "FROM positioning WHERE company_id=%s ORDER BY date DESC LIMIT 1",
+            (cid,),
         ),
         "prices": q(
             "SELECT date, close, volume FROM price_history WHERE company_id=%s "
-            "AND close IS NOT NULL ORDER BY date", (cid,)
+            "AND close IS NOT NULL ORDER BY date",
+            (cid,),
         ),
         "cats": q(
             "SELECT id, catalyst_type, expected_date, base_rate, sec_confirmed "
             "FROM catalysts WHERE company_id=%s AND expected_date IS NOT NULL "
-            "ORDER BY expected_date", (cid,)
+            "ORDER BY expected_date",
+            (cid,),
         ),
         "insiders": q(
             "SELECT filing_date, transaction_date, insider_name, insider_role, "
             "transaction_code, shares, price_per_share, value_usd, is_purchase "
             "FROM insider_transactions WHERE company_id=%s "
-            "ORDER BY transaction_date DESC LIMIT 50", (cid,)
+            "ORDER BY transaction_date DESC LIMIT 50",
+            (cid,),
         ),
     }
 
@@ -1450,11 +1844,20 @@ def render_ticker_dossier(ticker: str, *, blotter: pd.DataFrame | None = None) -
         st.warning(f"No company record for {ticker}.")
         return
     crow = pack["crow"]
-    fin, pos, prices, cats, insiders = pack["fin"], pack["pos"], pack["prices"], pack["cats"], pack["insiders"]
+    fin, pos, prices, cats, insiders = (
+        pack["fin"],
+        pack["pos"],
+        pack["prices"],
+        pack["cats"],
+        pack["insiders"],
+    )
     if blotter is None:
         blotter = load_blotter()
-    sig = (blotter[blotter["ticker"] == ticker].sort_values("days_until").head(1)
-           if not blotter.empty else pd.DataFrame())
+    sig = (
+        blotter[blotter["ticker"] == ticker].sort_values("days_until").head(1)
+        if not blotter.empty
+        else pd.DataFrame()
+    )
 
     gbm = " · GBM flagship" if crow["is_gbm_focused"] else ""
     st.markdown(f"**{crow['name']}** · {crow['indication_category'] or '—'}{gbm}")
@@ -1463,56 +1866,129 @@ def render_ticker_dossier(ticker: str, *, blotter: pd.DataFrame | None = None) -
         s = sig.iloc[0]
         r1 = st.columns(8)
         r1[0].metric("Trade", str(s.get("trade_type", "—")))
-        r1[1].metric("Weight", f"{float(s['suggested_weight']):+.3f}"
-                     if pd.notna(s.get("suggested_weight")) else "—")
-        r1[2].metric("Composite", f"{float(s['composite_score']):.2f}"
-                     if pd.notna(s.get("composite_score")) else "—")
-        r1[3].metric("Base rate", f"{float(s['base_rate']):.2f}"
-                     if pd.notna(s.get("base_rate")) else "—")
-        r1[4].metric("Edge gap", f"{float(s['edge_gap']):+.2f}"
-                     if pd.notna(s.get("edge_gap")) else "—")
-        r1[5].metric("Confidence", f"{float(s['confidence']):.2f}"
-                     if pd.notna(s.get("confidence")) else "—")
-        r1[6].metric("Days to cat", f"{int(s['days_until'])}"
-                     if pd.notna(s.get("days_until")) else "—")
+        r1[1].metric(
+            "Weight",
+            f"{float(s['suggested_weight']):+.3f}" if pd.notna(s.get("suggested_weight")) else "—",
+        )
+        r1[2].metric(
+            "Composite",
+            f"{float(s['composite_score']):.2f}" if pd.notna(s.get("composite_score")) else "—",
+        )
+        r1[3].metric(
+            "Base rate", f"{float(s['base_rate']):.2f}" if pd.notna(s.get("base_rate")) else "—"
+        )
+        r1[4].metric(
+            "Edge gap", f"{float(s['edge_gap']):+.2f}" if pd.notna(s.get("edge_gap")) else "—"
+        )
+        r1[5].metric(
+            "Confidence", f"{float(s['confidence']):.2f}" if pd.notna(s.get("confidence")) else "—"
+        )
+        r1[6].metric(
+            "Days to cat", f"{int(s['days_until'])}" if pd.notna(s.get("days_until")) else "—"
+        )
         r1[7].metric("Catalyst", str(s.get("catalyst_type", "—"))[:14])
 
     r2 = st.columns(8)
     mcap = crow.get("market_cap_usd")
     r2[0].metric("Mkt cap", fmt_usd(_f(mcap)))
-    r2[1].metric("Short % float", f"{float(pos['short_pct_float'].iloc[0])*100:.1f}%"
-                 if not pos.empty and pd.notna(pos["short_pct_float"].iloc[0]) else "—")
-    r2[2].metric("Implied move", f"{float(pos['implied_move_pct'].iloc[0])*100:.0f}%"
-                 if not pos.empty and pd.notna(pos["implied_move_pct"].iloc[0]) else "—")
-    r2[3].metric("Run-up 30d", f"{float(pos['run_up_30d'].iloc[0])*100:+.0f}%"
-                 if not pos.empty and pd.notna(pos["run_up_30d"].iloc[0]) else "—")
-    r2[4].metric("ATM IV", f"{float(pos['atm_iv'].iloc[0])*100:.0f}%"
-                 if not pos.empty and pd.notna(pos["atm_iv"].iloc[0]) else "—")
-    r2[5].metric("Days to cover", f"{float(pos['days_to_cover'].iloc[0]):.1f}"
-                 if not pos.empty and pd.notna(pos["days_to_cover"].iloc[0]) else "—")
-    r2[6].metric("Runway", f"{float(fin['runway_months'].iloc[0]):.0f}mo"
-                 if not fin.empty and pd.notna(fin["runway_months"].iloc[0]) else "—")
-    r2[7].metric("Liquidity", fmt_usd(_f(fin["total_liquidity_usd"].iloc[0]))
-                 if not fin.empty and pd.notna(fin["total_liquidity_usd"].iloc[0]) else "—")
+    r2[1].metric(
+        "Short % float",
+        (
+            f"{float(pos['short_pct_float'].iloc[0])*100:.1f}%"
+            if not pos.empty and pd.notna(pos["short_pct_float"].iloc[0])
+            else "—"
+        ),
+    )
+    r2[2].metric(
+        "Implied move",
+        (
+            f"{float(pos['implied_move_pct'].iloc[0])*100:.0f}%"
+            if not pos.empty and pd.notna(pos["implied_move_pct"].iloc[0])
+            else "—"
+        ),
+    )
+    r2[3].metric(
+        "Run-up 30d",
+        (
+            f"{float(pos['run_up_30d'].iloc[0])*100:+.0f}%"
+            if not pos.empty and pd.notna(pos["run_up_30d"].iloc[0])
+            else "—"
+        ),
+    )
+    r2[4].metric(
+        "ATM IV",
+        (
+            f"{float(pos['atm_iv'].iloc[0])*100:.0f}%"
+            if not pos.empty and pd.notna(pos["atm_iv"].iloc[0])
+            else "—"
+        ),
+    )
+    r2[5].metric(
+        "Days to cover",
+        (
+            f"{float(pos['days_to_cover'].iloc[0]):.1f}"
+            if not pos.empty and pd.notna(pos["days_to_cover"].iloc[0])
+            else "—"
+        ),
+    )
+    r2[6].metric(
+        "Runway",
+        (
+            f"{float(fin['runway_months'].iloc[0]):.0f}mo"
+            if not fin.empty and pd.notna(fin["runway_months"].iloc[0])
+            else "—"
+        ),
+    )
+    r2[7].metric(
+        "Liquidity",
+        (
+            fmt_usd(_f(fin["total_liquidity_usd"].iloc[0]))
+            if not fin.empty and pd.notna(fin["total_liquidity_usd"].iloc[0])
+            else "—"
+        ),
+    )
 
     if not sig.empty:
         s = sig.iloc[0]
         r3 = st.columns(6)
-        r3[0].metric("Expected move", f"{float(s['expected_move']):.2f}"
-                     if pd.notna(s.get("expected_move")) else "—")
-        r3[1].metric("Financing tilt", f"{float(s['financing_tilt']):+.2f}"
-                     if pd.notna(s.get("financing_tilt")) else "—")
-        r3[2].metric("Insider tilt", f"{float(s['insider_tilt']):+.2f}"
-                     if pd.notna(s.get("insider_tilt")) else "—")
-        r3[3].metric("Q burn", fmt_usd(_f(fin["quarterly_burn_usd"].iloc[0]))
-                     if not fin.empty and pd.notna(fin["quarterly_burn_usd"].iloc[0]) else "—")
-        r3[4].metric("Cash", fmt_usd(_f(fin["cash_and_equivalents_usd"].iloc[0]))
-                     if not fin.empty and pd.notna(fin["cash_and_equivalents_usd"].iloc[0]) else "—")
-        r3[5].metric("Shares out", f"{float(fin['shares_outstanding'].iloc[0])/1e6:.1f}M"
-                      if not fin.empty and pd.notna(fin["shares_outstanding"].iloc[0]) else "—")
+        r3[0].metric(
+            "Expected move",
+            f"{float(s['expected_move']):.2f}" if pd.notna(s.get("expected_move")) else "—",
+        )
+        r3[1].metric(
+            "Financing tilt",
+            f"{float(s['financing_tilt']):+.2f}" if pd.notna(s.get("financing_tilt")) else "—",
+        )
+        r3[2].metric(
+            "Insider tilt",
+            f"{float(s['insider_tilt']):+.2f}" if pd.notna(s.get("insider_tilt")) else "—",
+        )
+        r3[3].metric(
+            "Q burn",
+            (
+                fmt_usd(_f(fin["quarterly_burn_usd"].iloc[0]))
+                if not fin.empty and pd.notna(fin["quarterly_burn_usd"].iloc[0])
+                else "—"
+            ),
+        )
+        r3[4].metric(
+            "Cash",
+            (
+                fmt_usd(_f(fin["cash_and_equivalents_usd"].iloc[0]))
+                if not fin.empty and pd.notna(fin["cash_and_equivalents_usd"].iloc[0])
+                else "—"
+            ),
+        )
+        r3[5].metric(
+            "Shares out",
+            (
+                f"{float(fin['shares_outstanding'].iloc[0])/1e6:.1f}M"
+                if not fin.empty and pd.notna(fin["shares_outstanding"].iloc[0])
+                else "—"
+            ),
+        )
 
-    tab_chart, tab_cat, tab_ins, tab_sig = st.tabs(
-        ["Price", "Catalysts", "Insiders", "Signals"])
+    tab_chart, tab_cat, tab_ins, tab_sig = st.tabs(["Price", "Catalysts", "Insiders", "Signals"])
 
     with tab_chart:
         if prices.empty:
@@ -1521,64 +1997,123 @@ def render_ticker_dossier(ticker: str, *, blotter: pd.DataFrame | None = None) -
             prices = prices.copy()
             prices["date"] = pd.to_datetime(prices["date"])
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=prices["date"], y=prices["close"], mode="lines", name="Close",
-                line=dict(color=THEME["accent"], width=1.6),
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=prices["date"],
+                    y=prices["close"],
+                    mode="lines",
+                    name="Close",
+                    line=dict(color=THEME["accent"], width=1.6),
+                )
+            )
             for _, cr in cats.iterrows():
-                fig.add_vline(x=pd.to_datetime(cr["expected_date"]),
-                              line_dash="dot", line_color=THEME["amber"], opacity=0.55)
-            buys = insiders[insiders["is_purchase"] == True] if not insiders.empty else pd.DataFrame()  # noqa: E712
+                fig.add_vline(
+                    x=pd.to_datetime(cr["expected_date"]),
+                    line_dash="dot",
+                    line_color=THEME["amber"],
+                    opacity=0.55,
+                )
+            buys = (
+                insiders[insiders["is_purchase"] == True] if not insiders.empty else pd.DataFrame()
+            )  # noqa: E712
             if not buys.empty:
                 buys = buys.copy()
                 buys["transaction_date"] = pd.to_datetime(buys["transaction_date"])
                 merged = pd.merge_asof(
                     buys.sort_values("transaction_date"),
                     prices.sort_values("date"),
-                    left_on="transaction_date", right_on="date", direction="nearest",
+                    left_on="transaction_date",
+                    right_on="date",
+                    direction="nearest",
                 )
-                fig.add_trace(go.Scatter(
-                    x=merged["transaction_date"], y=merged["close"], mode="markers",
-                    name="Insider buy", marker=dict(color=THEME["green"], size=8, symbol="triangle-up"),
-                ))
-            _plotly_theme(fig, height=360, title=f"{ticker} — amber = catalyst, green = insider buy")
+                fig.add_trace(
+                    go.Scatter(
+                        x=merged["transaction_date"],
+                        y=merged["close"],
+                        mode="markers",
+                        name="Insider buy",
+                        marker=dict(color=THEME["green"], size=8, symbol="triangle-up"),
+                    )
+                )
+            _plotly_theme(
+                fig, height=360, title=f"{ticker} — amber = catalyst, green = insider buy"
+            )
             st.plotly_chart(fig, use_container_width=True)
 
     with tab_cat:
-        st.dataframe(cats if not cats.empty else pd.DataFrame(),
-                     use_container_width=True, hide_index=True, height=240)
+        st.dataframe(
+            cats if not cats.empty else pd.DataFrame(),
+            use_container_width=True,
+            hide_index=True,
+            height=240,
+        )
 
     with tab_ins:
-        st.dataframe(insiders if not insiders.empty else pd.DataFrame(),
-                     use_container_width=True, hide_index=True, height=240)
+        st.dataframe(
+            insiders if not insiders.empty else pd.DataFrame(),
+            use_container_width=True,
+            hide_index=True,
+            height=240,
+        )
 
     with tab_sig:
         if blotter.empty:
             st.caption("No signals.")
         else:
             ts = blotter[blotter["ticker"] == ticker].copy()
-            view = pd.DataFrame({
-                "trade": ts["trade_type"], "wt": ts["suggested_weight"],
-                "cat": ts["catalyst_type"], "date": ts["expected_date"].dt.date.astype("object"),
-                "d->": ts["days_until"], "comp": ts["composite_score"], "base": ts["base_rate"],
-                "exp_mv": ts["expected_move"], "impl_mv": ts["implied_move"], "gap": ts["edge_gap"],
-                "runup": ts["run_up_30d"], "short%": ts["short_pct_float"],
-                "fin": ts["financing_tilt"], "ins": ts["insider_tilt"],
-                "runway": ts["runway_months"], "conf": ts["confidence"],
-            })
+            view = pd.DataFrame(
+                {
+                    "trade": ts["trade_type"],
+                    "wt": ts["suggested_weight"],
+                    "cat": ts["catalyst_type"],
+                    "date": ts["expected_date"].dt.date.astype("object"),
+                    "d->": ts["days_until"],
+                    "comp": ts["composite_score"],
+                    "base": ts["base_rate"],
+                    "exp_mv": ts["expected_move"],
+                    "impl_mv": ts["implied_move"],
+                    "gap": ts["edge_gap"],
+                    "runup": ts["run_up_30d"],
+                    "short%": ts["short_pct_float"],
+                    "fin": ts["financing_tilt"],
+                    "ins": ts["insider_tilt"],
+                    "runway": ts["runway_months"],
+                    "conf": ts["confidence"],
+                }
+            )
             st.dataframe(
-                _style_trade_col(view).format({
-                    "wt": "{:+.3f}", "comp": "{:.2f}", "base": "{:.2f}",
-                    "exp_mv": "{:.2f}", "impl_mv": "{:.2f}", "gap": "{:+.2f}",
-                    "runup": "{:+.0%}", "short%": "{:.0%}", "fin": "{:+.2f}", "ins": "{:+.2f}",
-                    "runway": "{:.0f}", "conf": "{:.2f}", "d->": "{:.0f}",
-                }, na_rep="—"),
-                use_container_width=True, hide_index=True, height=200,
+                _style_trade_col(view).format(
+                    {
+                        "wt": "{:+.3f}",
+                        "comp": "{:.2f}",
+                        "base": "{:.2f}",
+                        "exp_mv": "{:.2f}",
+                        "impl_mv": "{:.2f}",
+                        "gap": "{:+.2f}",
+                        "runup": "{:+.0%}",
+                        "short%": "{:.0%}",
+                        "fin": "{:+.2f}",
+                        "ins": "{:+.2f}",
+                        "runway": "{:.0f}",
+                        "conf": "{:.2f}",
+                        "d->": "{:.0f}",
+                    },
+                    na_rep="—",
+                ),
+                use_container_width=True,
+                hide_index=True,
+                height=200,
             )
 
 
-def render_trade_book_panel(book: dict, equity: float, prices: dict[str, float],
-                            *, act_days: int = 60, key_prefix: str = "book") -> None:
+def render_trade_book_panel(
+    book: dict,
+    equity: float,
+    prices: dict[str, float],
+    *,
+    act_days: int = 60,
+    key_prefix: str = "book",
+) -> None:
     """Interactive trade book: pick a row to expand full company dossier."""
     sized = _book_sized_table(book, equity, prices)
     if sized.empty:
@@ -1589,23 +2124,52 @@ def render_trade_book_panel(book: dict, equity: float, prices: dict[str, float],
         st.info(f"No trades within {act_days} days.")
         return
 
-    summary = act[[
-        "urgent", "ticker", "side", "trade_type", "weight", "dollars", "shares",
-        "expected_date", "days_until", "base_rate", "edge_gap", "timing",
-    ]].rename(columns={
-        "urgent": "!", "trade_type": "trade", "weight": "wt",
-        "expected_date": "catalyst", "days_until": "d->", "base_rate": "base", "edge_gap": "gap",
-    })
+    summary = act[
+        [
+            "urgent",
+            "ticker",
+            "side",
+            "trade_type",
+            "weight",
+            "dollars",
+            "shares",
+            "expected_date",
+            "days_until",
+            "base_rate",
+            "edge_gap",
+            "timing",
+        ]
+    ].rename(
+        columns={
+            "urgent": "!",
+            "trade_type": "trade",
+            "weight": "wt",
+            "expected_date": "catalyst",
+            "days_until": "d->",
+            "base_rate": "base",
+            "edge_gap": "gap",
+        }
+    )
     summary["catalyst"] = summary["catalyst"].dt.date
-    styled = _style_trade_col(summary, col="trade").format({
-        "wt": "{:+.3f}", "dollars": "${:,.0f}", "shares": "{:,.0f}",
-        "base": "{:.2f}", "gap": "{:+.2f}", "d->": "{:.0f}",
-    }, na_rep="")
+    styled = _style_trade_col(summary, col="trade").format(
+        {
+            "wt": "{:+.3f}",
+            "dollars": "${:,.0f}",
+            "shares": "{:,.0f}",
+            "base": "{:.2f}",
+            "gap": "{:+.2f}",
+            "d->": "{:.0f}",
+        },
+        na_rep="",
+    )
 
     pick = st.dataframe(
-        styled, use_container_width=True, hide_index=True,
+        styled,
+        use_container_width=True,
+        hide_index=True,
         height=min(420, 44 + 32 * len(summary)),
-        on_select="rerun", selection_mode="single-row",
+        on_select="rerun",
+        selection_mode="single-row",
         key=f"{key_prefix}_trade_table",
     )
     sel_rows = pick.selection.rows if pick.selection else []
@@ -1657,7 +2221,11 @@ def page_action_desk() -> None:
     # ---- ACT NOW ----
     with tab_act:
         render_trade_book_panel(
-            book, equity, prices, act_days=flt["act_days"], key_prefix="desk",
+            book,
+            equity,
+            prices,
+            act_days=flt["act_days"],
+            key_prefix="desk",
         )
 
     # ---- CAPPED BOOK ----
@@ -1665,25 +2233,46 @@ def page_action_desk() -> None:
         if sized.empty:
             st.warning("Empty capped book.")
         else:
-            view = pd.DataFrame({
-                "ticker": sized["ticker"], "trade": sized["trade_type"], "side": sized["side"],
-                "wt": sized["weight"], "$": sized["dollars"], "sh": sized["shares"],
-                "date": sized["expected_date"].dt.date.astype("object"),
-                "d->": sized["days_until"], "base": sized["base_rate"], "gap": sized["edge_gap"],
-                "conf": sized["confidence"], "sector": sized["sector"],
-                "gbm": sized["is_gbm"].map(lambda x: "★" if x else ""),
-                "timing": sized["timing"],
-            })
-            styled = _style_trade_col(view).format({
-                "wt": "{:+.3f}", "$": "${:,.0f}", "sh": "{:,.0f}",
-                "base": "{:.2f}", "gap": "{:+.2f}", "conf": "{:.2f}", "d->": "{:.0f}",
-            }, na_rep="—")
+            view = pd.DataFrame(
+                {
+                    "ticker": sized["ticker"],
+                    "trade": sized["trade_type"],
+                    "side": sized["side"],
+                    "wt": sized["weight"],
+                    "$": sized["dollars"],
+                    "sh": sized["shares"],
+                    "date": sized["expected_date"].dt.date.astype("object"),
+                    "d->": sized["days_until"],
+                    "base": sized["base_rate"],
+                    "gap": sized["edge_gap"],
+                    "conf": sized["confidence"],
+                    "sector": sized["sector"],
+                    "gbm": sized["is_gbm"].map(lambda x: "★" if x else ""),
+                    "timing": sized["timing"],
+                }
+            )
+            styled = _style_trade_col(view).format(
+                {
+                    "wt": "{:+.3f}",
+                    "$": "${:,.0f}",
+                    "sh": "{:,.0f}",
+                    "base": "{:.2f}",
+                    "gap": "{:+.2f}",
+                    "conf": "{:.2f}",
+                    "d->": "{:.0f}",
+                },
+                na_rep="—",
+            )
             st.dataframe(styled, use_container_width=True, hide_index=True, height=520)
             if not equity:
                 st.caption("No starting capital set — $/share sizing hidden.")
             csv = view.to_csv(index=False).encode("utf-8")
-            st.download_button("⬇ Download capped book (CSV)", csv,
-                               file_name=f"action_sheet_{book['today']}.csv", mime="text/csv")
+            st.download_button(
+                "⬇ Download capped book (CSV)",
+                csv,
+                file_name=f"action_sheet_{book['today']}.csv",
+                mime="text/csv",
+            )
 
     # ---- ALL SIGNALS (blotter) ----
     with tab_all:
@@ -1692,45 +2281,59 @@ def page_action_desk() -> None:
         c1.metric("Filtered signals", len(f))
         c2.metric("Buy-the-rumor", int((f["trade_type"] == "buy_the_rumor").sum()))
         c3.metric("Hold-through", int((f["trade_type"] == "hold_through").sum()))
-        c4.metric("In capped book", int(f["ticker"].isin(sized["ticker"]).sum()) if not sized.empty else 0)
+        c4.metric(
+            "In capped book", int(f["ticker"].isin(sized["ticker"]).sum()) if not sized.empty else 0
+        )
 
         in_book = set(sized["ticker"]) if not sized.empty else set()
-        view = pd.DataFrame({
-            "book": f["ticker"].map(lambda t: "✓" if t in in_book else ""),
-            "ticker": f["ticker"],
-            "trade": f["trade_type"],
-            "wt": f["suggested_weight"],
-            "cat": f["catalyst_type"],
-            "date": f["expected_date"].dt.date.astype("object"),
-            "d->": f["days_until"],
-            "comp": f["composite_score"],
-            "base": f["base_rate"],
-            "exp_mv": f["expected_move"],
-            "impl_mv": f["implied_move"],
-            "gap": f["edge_gap"],
-            "runup": f["run_up_30d"],
-            "short%": f["short_pct_float"],
-            "fin": f["financing_tilt"],
-            "ins": f["insider_tilt"],
-            "runway": f["runway_months"],
-            "conf": f["confidence"],
-            "gbm": f["is_gbm_focused"].map(lambda x: "★" if x else ""),
-        })
-        styled = _style_trade_col(view).format({
-            "wt": "{:+.3f}", "comp": "{:.2f}", "base": "{:.2f}",
-            "exp_mv": "{:.2f}", "impl_mv": "{:.2f}", "gap": "{:+.2f}",
-            "runup": "{:+.0%}", "short%": "{:.0%}", "fin": "{:+.2f}", "ins": "{:+.2f}",
-            "runway": "{:.0f}", "conf": "{:.2f}", "d->": "{:.0f}",
-        }, na_rep="—")
+        view = pd.DataFrame(
+            {
+                "book": f["ticker"].map(lambda t: "✓" if t in in_book else ""),
+                "ticker": f["ticker"],
+                "trade": f["trade_type"],
+                "wt": f["suggested_weight"],
+                "cat": f["catalyst_type"],
+                "date": f["expected_date"].dt.date.astype("object"),
+                "d->": f["days_until"],
+                "comp": f["composite_score"],
+                "base": f["base_rate"],
+                "exp_mv": f["expected_move"],
+                "impl_mv": f["implied_move"],
+                "gap": f["edge_gap"],
+                "runup": f["run_up_30d"],
+                "short%": f["short_pct_float"],
+                "fin": f["financing_tilt"],
+                "ins": f["insider_tilt"],
+                "runway": f["runway_months"],
+                "conf": f["confidence"],
+                "gbm": f["is_gbm_focused"].map(lambda x: "★" if x else ""),
+            }
+        )
+        styled = _style_trade_col(view).format(
+            {
+                "wt": "{:+.3f}",
+                "comp": "{:.2f}",
+                "base": "{:.2f}",
+                "exp_mv": "{:.2f}",
+                "impl_mv": "{:.2f}",
+                "gap": "{:+.2f}",
+                "runup": "{:+.0%}",
+                "short%": "{:.0%}",
+                "fin": "{:+.2f}",
+                "ins": "{:+.2f}",
+                "runway": "{:.0f}",
+                "conf": "{:.2f}",
+                "d->": "{:.0f}",
+            },
+            na_rep="—",
+        )
         st.dataframe(styled, use_container_width=True, hide_index=True, height=560)
         st.caption("✓ = in the risk-capped book.")
 
 
 # ===========================================================================
 def _intel_dossier_tab() -> None:
-    companies = q(
-        "SELECT ticker FROM companies WHERE ticker IS NOT NULL ORDER BY ticker"
-    )
+    companies = q("SELECT ticker FROM companies WHERE ticker IS NOT NULL ORDER BY ticker")
     if companies.empty:
         st.warning("No companies.")
         return
@@ -1752,20 +2355,35 @@ def _render_catalyst_calendar() -> None:
         return
     cal = df.dropna(subset=["expected_date"]).copy()
     today = pd.Timestamp(date.today())
-    cal = cal[(cal["expected_date"] >= today - pd.Timedelta(days=30)) &
-              (cal["expected_date"] <= today + pd.Timedelta(days=365))]
+    cal = cal[
+        (cal["expected_date"] >= today - pd.Timedelta(days=30))
+        & (cal["expected_date"] <= today + pd.Timedelta(days=365))
+    ]
     if cal.empty:
         st.info("No catalysts in window.")
         return
     cal["size_val"] = cal["suggested_weight"].abs().fillna(0.005).clip(lower=0.005)
-    fig = px.scatter(cal, x="expected_date", y="ticker", size="size_val",
-                     color="trade_type", color_discrete_map=TRADE_COLORS, size_max=20,
-                     hover_data=["company", "catalyst_type", "composite_score", "suggested_weight"])
+    fig = px.scatter(
+        cal,
+        x="expected_date",
+        y="ticker",
+        size="size_val",
+        color="trade_type",
+        color_discrete_map=TRADE_COLORS,
+        size_max=20,
+        hover_data=["company", "catalyst_type", "composite_score", "suggested_weight"],
+    )
     fig.add_vline(x=today, line_dash="dash", line_color=THEME["muted"])
-    fig.update_layout(height=max(440, 18 * cal["ticker"].nunique()),
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      font=dict(color=THEME["text"]), margin=dict(l=48, r=24, t=40, b=48),
-                      legend_title_text="", xaxis_title="", yaxis_title="")
+    fig.update_layout(
+        height=max(440, 18 * cal["ticker"].nunique()),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=THEME["text"]),
+        margin=dict(l=48, r=24, t=40, b=48),
+        legend_title_text="",
+        xaxis_title="",
+        yaxis_title="",
+    )
     fig.update_xaxes(gridcolor=THEME["border_soft"])
     fig.update_yaxes(gridcolor=THEME["border_soft"])
     st.plotly_chart(fig, use_container_width=True)
@@ -1773,31 +2391,42 @@ def _render_catalyst_calendar() -> None:
 
 
 def _render_data_health() -> None:
-    tables = ["companies", "trials", "catalysts", "edge_scores", "price_history",
-              "positioning", "insider_transactions", "catalyst_outcomes", "financials"]
+    tables = [
+        "companies",
+        "trials",
+        "catalysts",
+        "edge_scores",
+        "price_history",
+        "positioning",
+        "insider_transactions",
+        "catalyst_outcomes",
+        "financials",
+    ]
     counts = {t: int(q(f"SELECT COUNT(*) n FROM {t}").iloc[0, 0]) for t in tables}
     cols = st.columns(min(len(counts), 5))
     for col, (name, n) in zip(cols, counts.items()):
         col.metric(name, f"{n:,}")
 
     st.subheader("Coverage")
-    cov = q(
-        """
+    cov = q("""
         SELECT
           (SELECT COUNT(*) FROM companies WHERE ticker IS NOT NULL AND COALESCE(in_universe,TRUE)) AS universe,
           (SELECT COUNT(DISTINCT company_id) FROM price_history WHERE company_id IS NOT NULL) AS with_prices,
           (SELECT COUNT(DISTINCT company_id) FROM positioning) AS with_positioning,
           (SELECT COUNT(DISTINCT company_id) FROM insider_transactions) AS with_insider,
           (SELECT COUNT(*) FROM companies WHERE is_gbm_focused) AS gbm_focused
-        """
-    )
+        """)
     if not cov.empty:
         st.dataframe(cov, use_container_width=True, hide_index=True)
 
     st.subheader("Freshness")
-    specs = [("price_history", "fetched_at"), ("positioning", "computed_at"),
-             ("insider_transactions", "created_at"), ("edge_scores", "computed_at"),
-             ("catalyst_outcomes", "created_at")]
+    specs = [
+        ("price_history", "fetched_at"),
+        ("positioning", "computed_at"),
+        ("insider_transactions", "created_at"),
+        ("edge_scores", "computed_at"),
+        ("catalyst_outcomes", "created_at"),
+    ]
     rows = []
     for tbl, col in specs:
         ts = q(f"SELECT MAX({col}) ts FROM {tbl}").iloc[0, 0]
@@ -1834,12 +2463,18 @@ def page_validation(*, embedded: bool = False) -> None:
 
     # --- Event-study evidence: the REAL returns dataset (8-K reactions) ---
     st.subheader("Event-study evidence — abnormal returns around 8-K announcements")
-    st.caption("Abnormal return = name − XBI over the hold. "
-               "Build/refresh: `python scripts/build_event_returns.py`")
-    hold = st.radio("Hold window (trading days)", [1, 3, 5], index=1, horizontal=True,
-                    key="evt_hold")
-    er = q("SELECT abnormal_return, run_up_30d, event_type FROM event_returns "
-           "WHERE hold_days = %(h)s AND abnormal_return IS NOT NULL", {"h": int(hold)})
+    st.caption(
+        "Abnormal return = name − XBI over the hold. "
+        "Build/refresh: `python scripts/build_event_returns.py`"
+    )
+    hold = st.radio(
+        "Hold window (trading days)", [1, 3, 5], index=1, horizontal=True, key="evt_hold"
+    )
+    er = q(
+        "SELECT abnormal_return, run_up_30d, event_type FROM event_returns "
+        "WHERE hold_days = %(h)s AND abnormal_return IS NOT NULL",
+        {"h": int(hold)},
+    )
     if er.empty:
         st.info("No event_returns yet. Run: python scripts/build_event_returns.py")
     else:
@@ -1855,27 +2490,44 @@ def page_validation(*, embedded: bool = False) -> None:
         paired = er.dropna(subset=["run_up_30d"]).copy()
         if len(paired) >= 25:
             paired["run_up_30d"] = paired["run_up_30d"].astype(float)
-            paired["q"] = pd.qcut(paired["run_up_30d"], 5,
-                                  labels=["Q1 crashed", "Q2", "Q3", "Q4", "Q5 mooned"],
-                                  duplicates="drop")
+            paired["q"] = pd.qcut(
+                paired["run_up_30d"],
+                5,
+                labels=["Q1 crashed", "Q2", "Q3", "Q4", "Q5 mooned"],
+                duplicates="drop",
+            )
             grp = paired.groupby("q", observed=True)["abnormal_return"].mean().reset_index()
-            fig = px.bar(grp, x="q", y="abnormal_return",
-                         color="abnormal_return",
-                         color_continuous_scale=["#ff5c5c", "#6b7280", "#29d391"],
-                         title="Forward abnormal return by pre-event run-up quintile")
-            fig.update_layout(height=320, showlegend=False, coloraxis_showscale=False,
-                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                              font_color="#cfd3dc", yaxis_tickformat=".1%",
-                              xaxis_title="", yaxis_title="avg forward abnormal")
+            fig = px.bar(
+                grp,
+                x="q",
+                y="abnormal_return",
+                color="abnormal_return",
+                color_continuous_scale=["#ff5c5c", "#6b7280", "#29d391"],
+                title="Forward abnormal return by pre-event run-up quintile",
+            )
+            fig.update_layout(
+                height=320,
+                showlegend=False,
+                coloraxis_showscale=False,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#cfd3dc",
+                yaxis_tickformat=".1%",
+                xaxis_title="",
+                yaxis_title="avg forward abnormal",
+            )
             st.plotly_chart(fig, use_container_width=True)
             corr = paired["run_up_30d"].corr(paired["abnormal_return"])
             st.caption(f"corr(run-up, forward abnormal) = {corr:+.3f}")
 
         bytype = er.dropna(subset=["event_type"])
         if not bytype.empty:
-            tt = (bytype.groupby("event_type")["abnormal_return"]
-                  .agg(["mean", "median", "count"]).reset_index()
-                  .sort_values("mean"))
+            tt = (
+                bytype.groupby("event_type")["abnormal_return"]
+                .agg(["mean", "median", "count"])
+                .reset_index()
+                .sort_values("mean")
+            )
             tt["mean"] = (tt["mean"] * 100).round(2).astype(str) + "%"
             tt["median"] = (tt["median"] * 100).round(2).astype(str) + "%"
             st.markdown("**Abnormal return by event type**")
@@ -1893,20 +2545,40 @@ def page_validation(*, embedded: bool = False) -> None:
         st.info("No calibration run yet. Run scripts/calibrate.py after resolve_outcomes.py.")
     else:
         r = runs.iloc[0]
-        c1.metric("Brier score", f"{float(r['brier_score']):.3f}" if pd.notna(r['brier_score']) else "—")
-        c2.metric("Model hit rate", f"{float(r['model_hit_rate']):.0%}" if pd.notna(r['model_hit_rate']) else "—")
-        c3.metric("Base-rate hit rate", f"{float(r['base_rate_hit_rate']):.0%}" if pd.notna(r['base_rate_hit_rate']) else "—")
+        c1.metric(
+            "Brier score", f"{float(r['brier_score']):.3f}" if pd.notna(r["brier_score"]) else "—"
+        )
+        c2.metric(
+            "Model hit rate",
+            f"{float(r['model_hit_rate']):.0%}" if pd.notna(r["model_hit_rate"]) else "—",
+        )
+        c3.metric(
+            "Base-rate hit rate",
+            f"{float(r['base_rate_hit_rate']):.0%}" if pd.notna(r["base_rate_hit_rate"]) else "—",
+        )
         rel = r.get("reliability_json")
         if rel:
             try:
                 rel_df = pd.DataFrame(rel if isinstance(rel, list) else pd.read_json(rel))
                 if not rel_df.empty:
-                    fig = px.line(rel_df, x="mean_predicted", y="observed_hit_rate",
-                                  markers=True, range_x=[0, 1], range_y=[0, 1])
-                    fig.add_shape(type="line", x0=0, y0=0, x1=1, y1=1,
-                                  line=dict(dash="dash", color="#666"))
-                    fig.update_layout(height=340, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                                      font_color="#cfd3dc", title="Reliability (diagonal = perfect)")
+                    fig = px.line(
+                        rel_df,
+                        x="mean_predicted",
+                        y="observed_hit_rate",
+                        markers=True,
+                        range_x=[0, 1],
+                        range_y=[0, 1],
+                    )
+                    fig.add_shape(
+                        type="line", x0=0, y0=0, x1=1, y1=1, line=dict(dash="dash", color="#666")
+                    )
+                    fig.update_layout(
+                        height=340,
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font_color="#cfd3dc",
+                        title="Reliability (diagonal = perfect)",
+                    )
                     st.plotly_chart(fig, use_container_width=True)
             except Exception:
                 st.caption("Reliability data unavailable.")
@@ -1915,10 +2587,20 @@ def page_validation(*, embedded: bool = False) -> None:
     if outcomes.empty:
         st.caption("No resolved outcomes. Run scripts/resolve_outcomes.py.")
     else:
-        fig = px.bar(outcomes, x="outcome_label", y="n", color="outcome_label",
-                     color_discrete_map={"hit": "#29d391", "miss": "#ff5c5c", "ambiguous": "#6b7280"})
-        fig.update_layout(height=280, showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
-                          plot_bgcolor="rgba(0,0,0,0)", font_color="#cfd3dc")
+        fig = px.bar(
+            outcomes,
+            x="outcome_label",
+            y="n",
+            color="outcome_label",
+            color_discrete_map={"hit": "#29d391", "miss": "#ff5c5c", "ambiguous": "#6b7280"},
+        )
+        fig.update_layout(
+            height=280,
+            showlegend=False,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#cfd3dc",
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     bt = PROJECT_ROOT / "data" / "raw" / "backtest_trades.csv"
@@ -2052,8 +2734,10 @@ def page_strategy() -> None:
         "are sized down. This can only *reduce* exposure:"
     )
     haircut = pd.DataFrame(
-        [{"market cap <": ("∞" if c == float("inf") else f"${c:,.0f}"), "size ×": m}
-         for c, m in tiers]
+        [
+            {"market cap <": ("∞" if c == float("inf") else f"${c:,.0f}"), "size ×": m}
+            for c, m in tiers
+        ]
         + [{"market cap <": "unknown", "size ×": config.RISK_HAIRCUT_UNKNOWN}]
     )
     st.dataframe(haircut, use_container_width=True, hide_index=True)
@@ -2165,20 +2849,25 @@ def _top_nav() -> callable:
     with bar[0]:
         st.markdown(
             '<div class="pf-logo"><span class="mark">◆</span>EDGE TERMINAL</div>',
-            unsafe_allow_html=True)
+            unsafe_allow_html=True,
+        )
     with bar[1]:
         if hasattr(st, "segmented_control"):
-            sel = st.segmented_control("nav", names, default=names[0],
-                                       label_visibility="collapsed", key="topnav")
+            sel = st.segmented_control(
+                "nav", names, default=names[0], label_visibility="collapsed", key="topnav"
+            )
         else:
-            sel = st.radio("nav", names, horizontal=True,
-                           label_visibility="collapsed", key="topnav")
+            sel = st.radio(
+                "nav", names, horizontal=True, label_visibility="collapsed", key="topnav"
+            )
     with bar[2]:
         if st.button("↻ Refresh", use_container_width=True, type="primary"):
             st.cache_data.clear()
             st.rerun()
-    st.markdown(f'<hr style="margin:.4rem 0 1rem;border-color:{THEME["border_soft"]}">',
-                unsafe_allow_html=True)
+    st.markdown(
+        f'<hr style="margin:.4rem 0 1rem;border-color:{THEME["border_soft"]}">',
+        unsafe_allow_html=True,
+    )
     return PAGES.get(sel or names[0], PAGES[names[0]])
 
 

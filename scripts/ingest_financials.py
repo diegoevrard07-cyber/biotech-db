@@ -61,14 +61,12 @@ def _load_companies(conn, *, ticker: str | None = None, limit: int | None = None
 
 def _latest_filing_id(conn, company_id: int) -> int | None:
     row = conn.execute(
-        text(
-            """
+        text("""
             SELECT id FROM sec_filings
             WHERE company_id = :cid
             ORDER BY filing_date DESC NULLS LAST, fetched_at DESC
             LIMIT 1
-            """
-        ),
+            """),
         {"cid": company_id},
     ).scalar()
     return int(row) if row else None
@@ -141,8 +139,7 @@ def ingest_financials(
         with get_connection() as conn:
             filing_id = _latest_filing_id(conn, company_id)
             conn.execute(
-                text(
-                    """
+                text("""
                     INSERT INTO financials (
                         company_id, filing_id, period_end,
                         cash_and_equivalents_usd, short_term_investments_usd,
@@ -161,8 +158,7 @@ def ingest_financials(
                         quarterly_burn_usd = EXCLUDED.quarterly_burn_usd,
                         runway_months = EXCLUDED.runway_months,
                         computed_at = NOW()
-                    """
-                ),
+                    """),
                 {
                     "company_id": company_id,
                     "filing_id": filing_id,

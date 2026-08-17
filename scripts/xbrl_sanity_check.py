@@ -127,9 +127,7 @@ def render_report(rows: list[dict]) -> str:
         lines.append(f"### {row['ticker']} — {row['entity']}")
         lines.append("")
         for q in row["ocf_quarters"]:
-            lines.append(
-                f"- {q['period_end']}: ${q['value_m']}M ({q['source']})"
-            )
+            lines.append(f"- {q['period_end']}: ${q['value_m']}M ({q['source']})")
         lines.append("")
     return "\n".join(lines)
 
@@ -137,7 +135,9 @@ def render_report(rows: list[dict]) -> str:
 def main() -> None:
     """CLI entry: sanity-check the XBRL extractor against known tickers; write the report."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true", help="Print report only, do not write file")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print report only, do not write file"
+    )
     args = parser.parse_args()
 
     rows = []

@@ -28,7 +28,7 @@ SCRIPTS = ROOT / "scripts"
 
 # (script, args, critical)
 STAGES: list[tuple[str, list[str], bool]] = [
-    ("apply_schema.py", [], False),   # ensure schema/indexes (e.g. uq_catalysts_ctgov) first
+    ("apply_schema.py", [], False),  # ensure schema/indexes (e.g. uq_catalysts_ctgov) first
     ("ingest_layer1.py", [], False),
     ("classify_universe.py", [], False),
     ("compute_base_rates.py", [], False),
@@ -49,9 +49,7 @@ STAGES: list[tuple[str, list[str], bool]] = [
 
 def _run(name: str, args: list[str]) -> int:
     print(f"\n{'='*70}\n>>> {name} {' '.join(args)}\n{'='*70}", flush=True)
-    proc = subprocess.run(
-        [sys.executable, str(SCRIPTS / name), *args], cwd=str(ROOT)
-    )
+    proc = subprocess.run([sys.executable, str(SCRIPTS / name), *args], cwd=str(ROOT))
     return proc.returncode
 
 

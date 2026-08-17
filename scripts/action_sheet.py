@@ -112,19 +112,31 @@ def _best_per_ticker(raw) -> list[dict]:
     for r in raw:
         w = float(r["suggested_weight"])
         rec = {
-            "ticker": r["ticker"], "name": r["name"],
-            "company_id": r["company_id"], "catalyst_id": r["catalyst_id"],
-            "is_gbm": bool(r["is_gbm_focused"]), "sector": r["sector"],
-            "market_cap_usd": float(r["market_cap_usd"]) if r["market_cap_usd"] is not None else None,
-            "trade_type": r["trade_type"], "catalyst_type": r["catalyst_type"],
-            "expected_date": r["expected_date"], "weight": round(w, 4),
+            "ticker": r["ticker"],
+            "name": r["name"],
+            "company_id": r["company_id"],
+            "catalyst_id": r["catalyst_id"],
+            "is_gbm": bool(r["is_gbm_focused"]),
+            "sector": r["sector"],
+            "market_cap_usd": (
+                float(r["market_cap_usd"]) if r["market_cap_usd"] is not None else None
+            ),
+            "trade_type": r["trade_type"],
+            "catalyst_type": r["catalyst_type"],
+            "expected_date": r["expected_date"],
+            "weight": round(w, 4),
             "base_rate": float(r["base_rate_score"]) if r["base_rate_score"] is not None else None,
             "edge_gap": float(r["edge_gap"]) if r["edge_gap"] is not None else None,
             "confidence": float(r["confidence"]) if r["confidence"] is not None else None,
         }
         cur = best.get(r["ticker"])
-        if cur is None or abs(rec["weight"]) > abs(cur["weight"]) or (
-            abs(rec["weight"]) == abs(cur["weight"]) and rec["expected_date"] < cur["expected_date"]
+        if (
+            cur is None
+            or abs(rec["weight"]) > abs(cur["weight"])
+            or (
+                abs(rec["weight"]) == abs(cur["weight"])
+                and rec["expected_date"] < cur["expected_date"]
+            )
         ):
             best[r["ticker"]] = rec
     return list(best.values())
@@ -190,7 +202,7 @@ def compute_book(*, horizon_days: int = 365) -> dict:
     # Always drop shorts/fades — the fade edge is retired. LONG_ONLY also skips
     # the net throttle so freed capital redeploys into longs.
     picks = [p for p in picks if p["weight"] > 0]
-    apply_risk_haircut(picks)   # de-risk tiny-caps BEFORE applying portfolio caps
+    apply_risk_haircut(picks)  # de-risk tiny-caps BEFORE applying portfolio caps
     rows, summary = size_book(picks)
     return {"rows": rows, "today": today, "horizon_days": horizon_days, **summary}
 
@@ -209,9 +221,11 @@ def build(*, horizon_days: int = 365, csv_out: str | None = None) -> dict:
         d_until = (r["expected_date"] - today).days
         urgent = "!" if d_until <= config.URGENT_DAYS else " "
         base = f"{r['base_rate']:.2f}" if r["base_rate"] is not None else "  - "
-        print(f"{r['ticker']:<7}{r['trade_type']:<15}{r['weight']:>+8.3f}  "
-              f"{r['expected_date']} {d_until:>3}{urgent} {base:>5}  "
-              f"{TIMING.get(r['trade_type'], '')}")
+        print(
+            f"{r['ticker']:<7}{r['trade_type']:<15}{r['weight']:>+8.3f}  "
+            f"{r['expected_date']} {d_until:>3}{urgent} {base:>5}  "
+            f"{TIMING.get(r['trade_type'], '')}"
+        )
 
     print("\n--- Portfolio ---")
     print(f"Positions:    {len(rows)}")
@@ -220,29 +234,68 @@ def build(*, horizon_days: int = 365, csv_out: str | None = None) -> dict:
     print(f"Net:          {net:+.1%}  (cap +/-{config.MAX_NET:.0%})")
     print(f"GBM exposure: {gbm_pct:.1%}  (cap {config.MAX_GBM_WEIGHT:.0%})")
     if abs(net) > config.MAX_NET + 1e-4:
-        print(f"WARNING: net exposure {net:+.1%} exceeds +/-{config.MAX_NET:.0%} - trim the dominant side.")
+        print(
+            f"WARNING: net exposure {net:+.1%} exceeds +/-{config.MAX_NET:.0%} - trim the dominant side."
+        )
 
     out_path = csv_out or str(config.RAW_DIR / f"action_sheet_{today}.csv")
     if rows:
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", newline="", encoding="utf-8") as fh:
             writer = csv.writer(fh)
-            writer.writerow(["ticker", "name", "trade_type", "weight", "raw_weight",
-                             "risk_mult", "expected_date", "days_until", "base_rate",
-                             "edge_gap", "sector", "is_gbm", "catalyst_type", "timing"])
+            writer.writerow(
+                [
+                    "ticker",
+                    "name",
+                    "trade_type",
+                    "weight",
+                    "raw_weight",
+                    "risk_mult",
+                    "expected_date",
+                    "days_until",
+                    "base_rate",
+                    "edge_gap",
+                    "sector",
+                    "is_gbm",
+                    "catalyst_type",
+                    "timing",
+                ]
+            )
             for r in rows:
-                writer.writerow([
-                    r["ticker"], r["name"], r["trade_type"], r["weight"],
-                    r.get("raw_weight"), r.get("risk_mult"),
-                    r["expected_date"], (r["expected_date"] - today).days,
-                    r["base_rate"], r["edge_gap"], r["sector"], r["is_gbm"],
-                    r["catalyst_type"], TIMING.get(r["trade_type"], ""),
-                ])
+                writer.writerow(
+                    [
+                        r["ticker"],
+                        r["name"],
+                        r["trade_type"],
+                        r["weight"],
+                        r.get("raw_weight"),
+                        r.get("risk_mult"),
+                        r["expected_date"],
+                        (r["expected_date"] - today).days,
+                        r["base_rate"],
+                        r["edge_gap"],
+                        r["sector"],
+                        r["is_gbm"],
+                        r["catalyst_type"],
+                        TIMING.get(r["trade_type"], ""),
+                    ]
+                )
         print(f"\nWrote {len(rows)} positions to {out_path}")
 
-    log.info("action_sheet_complete", positions=len(rows), gross_long=round(gross_long, 4),
-             gross_short=round(gross_short, 4), net=round(net, 4), gbm=round(gbm_pct, 4))
-    return {"positions": len(rows), "gross_long": gross_long, "gross_short": gross_short, "net": net}
+    log.info(
+        "action_sheet_complete",
+        positions=len(rows),
+        gross_long=round(gross_long, 4),
+        gross_short=round(gross_short, 4),
+        net=round(net, 4),
+        gbm=round(gbm_pct, 4),
+    )
+    return {
+        "positions": len(rows),
+        "gross_long": gross_long,
+        "gross_short": gross_short,
+        "net": net,
+    }
 
 
 def main() -> None:

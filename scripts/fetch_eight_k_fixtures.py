@@ -29,7 +29,11 @@ log = setup_logger("fetch_eight_k_fixtures")
 FIXTURES_ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "eight_k"
 
 SEARCH_QUERIES: dict[str, list[str]] = {
-    "pdufa_assigned": ['"PDUFA date"', '"Prescription Drug User Fee Act" date', "PDUFA action date"],
+    "pdufa_assigned": [
+        '"PDUFA date"',
+        '"Prescription Drug User Fee Act" date',
+        "PDUFA action date",
+    ],
     "crl": ['"complete response letter"', '"received a CRL"'],
     "approval": [
         "FDA approved ANNOV",
@@ -51,12 +55,36 @@ SEARCH_QUERIES: dict[str, list[str]] = {
 }
 
 NEGATIVE_META = [
-    {"prefix": "competitor_pdufa", "forbidden": "pdufa_assigned", "notes": "Forward-looking PDUFA risk, not assignment"},
-    {"prefix": "partner_approval", "forbidden": "approval", "notes": "Partner drug approved; filer is not the asset owner"},
-    {"prefix": "historical_crl", "forbidden": "crl", "notes": "Past CRL referenced in narrative, not new receipt"},
-    {"prefix": "routine_underwriting", "forbidden": "offering", "notes": "Shelf/incorporation by reference, not active offering"},
-    {"prefix": "expanded_access", "forbidden": "approval", "notes": "Expanded access mention, not approval milestone"},
-    {"prefix": "lifted_clinical_hold", "forbidden": "crl", "notes": "Clinical hold lifted — opposite of CRL"},
+    {
+        "prefix": "competitor_pdufa",
+        "forbidden": "pdufa_assigned",
+        "notes": "Forward-looking PDUFA risk, not assignment",
+    },
+    {
+        "prefix": "partner_approval",
+        "forbidden": "approval",
+        "notes": "Partner drug approved; filer is not the asset owner",
+    },
+    {
+        "prefix": "historical_crl",
+        "forbidden": "crl",
+        "notes": "Past CRL referenced in narrative, not new receipt",
+    },
+    {
+        "prefix": "routine_underwriting",
+        "forbidden": "offering",
+        "notes": "Shelf/incorporation by reference, not active offering",
+    },
+    {
+        "prefix": "expanded_access",
+        "forbidden": "approval",
+        "notes": "Expanded access mention, not approval milestone",
+    },
+    {
+        "prefix": "lifted_clinical_hold",
+        "forbidden": "crl",
+        "notes": "Clinical hold lifted — opposite of CRL",
+    },
 ]
 
 
@@ -85,9 +113,11 @@ def search_filings(query: str, *, size: int = 20) -> list[dict]:
         "startdt": "2020-01-01",
         "enddt": "2026-12-31",
     }
-    resp = _sec_get("https://efts.sec.gov/LATEST/search-index?" + "&".join(
-        f"{k}={requests.utils.quote(str(v))}" for k, v in params.items()
-    ), as_json=True)
+    resp = _sec_get(
+        "https://efts.sec.gov/LATEST/search-index?"
+        + "&".join(f"{k}={requests.utils.quote(str(v))}" for k, v in params.items()),
+        as_json=True,
+    )
     hits = resp.json().get("hits", {}).get("hits", [])
     return [h.get("_source", {}) for h in hits]
 
@@ -160,7 +190,13 @@ CATEGORY_ANCHORS: dict[str, list[str]] = {
     "adcom_scheduled": ["advisory committee", "adcom"],
     "offering": ["public offering", "underwritten offering", "offering of"],
     "license_deal": ["license agreement", "collaboration agreement", "licensing agreement"],
-    "negative": ["pdufa", "complete response", "clinical hold", "expanded access", "incorporated by reference"],
+    "negative": [
+        "pdufa",
+        "complete response",
+        "clinical hold",
+        "expanded access",
+        "incorporated by reference",
+    ],
 }
 
 

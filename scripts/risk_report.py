@@ -54,15 +54,22 @@ def run() -> None:
     with get_connection() as conn:
         cur = conn.connection.cursor()
         try:
-            cur.execute("SELECT snapshot_date, equity, xbi_close FROM portfolio_performance "
-                        "WHERE equity IS NOT NULL ORDER BY snapshot_date")
+            cur.execute(
+                "SELECT snapshot_date, equity, xbi_close FROM portfolio_performance "
+                "WHERE equity IS NOT NULL ORDER BY snapshot_date"
+            )
             snaps = cur.fetchall()
-            cur.execute("SELECT realized_pnl_usd, cost_basis_usd FROM portfolio_holdings "
-                        "WHERE side='long' AND status='closed' AND notes LIKE 'PAPER%%' "
-                        "AND cost_basis_usd > 0")
+            cur.execute(
+                "SELECT realized_pnl_usd, cost_basis_usd FROM portfolio_holdings "
+                "WHERE side='long' AND status='closed' AND notes LIKE 'PAPER%%' "
+                "AND cost_basis_usd > 0"
+            )
             trades = cur.fetchall()
-            cur.execute("SELECT close FROM price_history WHERE ticker=%s AND close IS NOT NULL "
-                        "ORDER BY date", (config.BENCHMARK_TICKER,))
+            cur.execute(
+                "SELECT close FROM price_history WHERE ticker=%s AND close IS NOT NULL "
+                "ORDER BY date",
+                (config.BENCHMARK_TICKER,),
+            )
             xbi_hist = [float(r[0]) for r in cur.fetchall()]
         finally:
             cur.close()
@@ -111,11 +118,15 @@ def run() -> None:
         payoff = (aw / abs(al)) if al else float("inf")
         kelly = wr - (1 - wr) / payoff if payoff not in (0, float("inf")) else float("nan")
         print(f"    trades: {n}   expectancy: {m:+.2%}/trade   sd: {sd:.2%}")
-        print(f"    win rate: {wr:.0%}   avg win: {aw:+.2%}   avg loss: {al:+.2%}   payoff: {payoff:.2f}")
+        print(
+            f"    win rate: {wr:.0%}   avg win: {aw:+.2%}   avg loss: {al:+.2%}   payoff: {payoff:.2f}"
+        )
         print(f"    per-trade Sharpe (mean/sd): {m/sd:.2f}" if sd else "")
         print(f"    implied full-Kelly fraction: {kelly:.0%}")
-        print(f"    ⚠ young + upward-biased: profit-lock/rebalance book small wins & "
-              "cut winners; losers may still be open (survivorship).")
+        print(
+            f"    ⚠ young + upward-biased: profit-lock/rebalance book small wins & "
+            "cut winners; losers may still be open (survivorship)."
+        )
     else:
         print("    no closed trades.")
 
@@ -126,8 +137,10 @@ def run() -> None:
         m = sum(xr) / len(xr)
         vol = st.pstdev(xr) * ANN
         print(f"    history: {len(xbi_hist)} days")
-        print(f"    ann. return: {(1+m)**252-1:+.1%}   ann. vol: {vol:.1%}   "
-              f"Sharpe: {m/st.pstdev(xr)*ANN:.2f}   max DD: {_max_dd(xbi_hist):.1%}")
+        print(
+            f"    ann. return: {(1+m)**252-1:+.1%}   ann. vol: {vol:.1%}   "
+            f"Sharpe: {m/st.pstdev(xr)*ANN:.2f}   max DD: {_max_dd(xbi_hist):.1%}"
+        )
     else:
         print("    insufficient XBI history.")
 

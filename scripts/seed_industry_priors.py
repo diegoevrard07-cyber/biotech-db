@@ -77,8 +77,7 @@ def seed(dry_run: bool = False) -> int:
                 inserted += 1
                 continue
             conn.execute(
-                text(
-                    """
+                text("""
                     INSERT INTO base_rates (
                         slice_key, phase, indication_category, sponsor_class,
                         n_trials, n_successes, success_rate, ci_low, ci_high,
@@ -97,8 +96,7 @@ def seed(dry_run: bool = False) -> int:
                         confidence_tier = EXCLUDED.confidence_tier,
                         source = EXCLUDED.source,
                         computed_at = NOW()
-                    """
-                ),
+                    """),
                 prior,
             )
             inserted += 1

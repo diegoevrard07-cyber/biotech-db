@@ -45,8 +45,10 @@ def run(*, sleeve: float, days: int, reset: bool) -> None:
         raw = conn.connection
         cur = raw.cursor()
         try:
-            cur.execute("INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
-                        "ON CONFLICT (id) DO NOTHING")
+            cur.execute(
+                "INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
+                "ON CONFLICT (id) DO NOTHING"
+            )
 
             if reset:
                 cur.execute("DELETE FROM portfolio_holdings WHERE notes = 'PAPER'")
@@ -56,14 +58,20 @@ def run(*, sleeve: float, days: int, reset: bool) -> None:
             cur.execute("SELECT COUNT(*) FROM portfolio_holdings WHERE status='open'")
             open_n = cur.fetchone()[0]
             if open_n > 0 and not reset:
-                print(f"Account already has {open_n} open holdings. "
-                      f"Use --reset to wipe PAPER positions and reseed. Aborting.")
+                print(
+                    f"Account already has {open_n} open holdings. "
+                    f"Use --reset to wipe PAPER positions and reseed. Aborting."
+                )
                 return
 
-            cur.execute("UPDATE portfolio_account SET cash_usd=%s, starting_capital_usd=%s, "
-                        "updated_at=NOW() WHERE id=1", (sleeve, sleeve))
+            cur.execute(
+                "UPDATE portfolio_account SET cash_usd=%s, starting_capital_usd=%s, "
+                "updated_at=NOW() WHERE id=1",
+                (sleeve, sleeve),
+            )
 
-            cur.execute(f"""
+            cur.execute(
+                f"""
                 SELECT co.ticker, co.id AS company_id, c.id AS catalyst_id,
                        c.expected_date, es.trade_type, es.suggested_weight, co.market_cap_usd
                 FROM edge_scores es
@@ -73,7 +81,9 @@ def run(*, sleeve: float, days: int, reset: bool) -> None:
                   AND es.suggested_weight IS NOT NULL AND es.suggested_weight > 0
                   AND c.expected_date BETWEEN CURRENT_DATE AND CURRENT_DATE + {int(days)}
                 ORDER BY c.expected_date ASC
-            """, (list(LONG_TYPES),))
+            """,
+                (list(LONG_TYPES),),
+            )
             picks = cur.fetchall()
             cols = [d[0] for d in cur.description]
 
@@ -97,37 +107,60 @@ def run(*, sleeve: float, days: int, reset: bool) -> None:
                     continue
                 price = prices.get(t)
                 if not price:
-                    print(f"{t:<7}{r['trade_type']:<14}{'— skip: no price (delisted/acquired?)':>40}")
+                    print(
+                        f"{t:<7}{r['trade_type']:<14}{'— skip: no price (delisted/acquired?)':>40}"
+                    )
                     seen.add(t)
                     continue
                 seen.add(t)
-                mult = risk_haircut(float(r["market_cap_usd"]) if r["market_cap_usd"] is not None else None)
+                mult = risk_haircut(
+                    float(r["market_cap_usd"]) if r["market_cap_usd"] is not None else None
+                )
                 dollars = sleeve * float(r["suggested_weight"]) * mult
                 shares = round(dollars / price, 2)
                 if shares <= 0:
                     continue
                 cost = round(shares * price, 2)
                 ped, rule = pf.planned_exit(r["trade_type"], r["expected_date"])
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO portfolio_holdings
                         (ticker, company_id, catalyst_id, side, trade_type, entry_date,
                          shares, entry_price, cost_basis_usd, planned_exit_rule,
                          planned_exit_date, status, notes)
                     VALUES (%s,%s,%s,'long',%s,%s,%s,%s,%s,%s,%s,'open','PAPER')
-                """, (t, r["company_id"], r["catalyst_id"], r["trade_type"], today,
-                      shares, price, cost, rule, ped))
+                """,
+                    (
+                        t,
+                        r["company_id"],
+                        r["catalyst_id"],
+                        r["trade_type"],
+                        today,
+                        shares,
+                        price,
+                        cost,
+                        rule,
+                        ped,
+                    ),
+                )
                 cash -= cost
                 added += 1
                 exit_str = f"{ped} ({r['trade_type']})" if ped else "manual"
-                print(f"{t:<7}{r['trade_type']:<14}{shares:>9.2f}{price:>9.2f}{cost:>9,.0f}  {exit_str}")
+                print(
+                    f"{t:<7}{r['trade_type']:<14}{shares:>9.2f}{price:>9.2f}{cost:>9,.0f}  {exit_str}"
+                )
 
-            cur.execute("UPDATE portfolio_account SET cash_usd=%s, updated_at=NOW() WHERE id=1", (cash,))
+            cur.execute(
+                "UPDATE portfolio_account SET cash_usd=%s, updated_at=NOW() WHERE id=1", (cash,)
+            )
             raw.commit()
         finally:
             cur.close()
 
-    print(f"\nSeeded {added} PAPER long(s). Cash remaining: ${cash:,.0f} of ${sleeve:,.0f} "
-          f"(deployed ${sleeve - cash:,.0f}).")
+    print(
+        f"\nSeeded {added} PAPER long(s). Cash remaining: ${cash:,.0f} of ${sleeve:,.0f} "
+        f"(deployed ${sleeve - cash:,.0f})."
+    )
     print("Open the dashboard -> Portfolio to manage them. They are tagged notes='PAPER'.")
     log.info("seed_paper_done", added=added, cash=round(cash, 2), sleeve=sleeve)
 

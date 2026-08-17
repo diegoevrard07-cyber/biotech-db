@@ -70,9 +70,7 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
     rows_out: list[dict] = []
 
     with get_connection() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT o.catalyst_id, o.company_id, o.raw_return, c.expected_date,
                        c.base_rate, co.ticker
                 FROM catalyst_outcomes o
@@ -80,9 +78,7 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
                 JOIN companies co ON co.id = o.company_id
                 WHERE o.raw_return IS NOT NULL AND c.expected_date IS NOT NULL
                 ORDER BY c.expected_date
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
         for r in rows:
             ed = r["expected_date"]
@@ -99,8 +95,11 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
             run_up = _ret(ru_start, ru_end)
 
             trade_type = decide_trade(
-                proximity=proximity, base=base, fin_tilt=0.0,
-                run_up_30d=run_up, edge_gap=None,
+                proximity=proximity,
+                base=base,
+                fin_tilt=0.0,
+                run_up_30d=run_up,
+                edge_gap=None,
             )
             if trade_type not in (BUY_THE_RUMOR, HOLD_THROUGH):
                 continue  # avoid (incl. former fades) — long-only backtest
@@ -118,8 +117,11 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
 
             directional = raw - slippage
             w = suggested_weight(
-                trade_type, base=base, proximity=proximity,
-                kelly_fraction=config.KELLY_FRACTION, max_weight=config.MAX_SINGLE_NAME_WEIGHT,
+                trade_type,
+                base=base,
+                proximity=proximity,
+                kelly_fraction=config.KELLY_FRACTION,
+                max_weight=config.MAX_SINGLE_NAME_WEIGHT,
             )
             weighted = abs(w) * directional
 
@@ -128,9 +130,12 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
             by_type[trade_type] = by_type.get(trade_type, 0) + 1
             rows_out.append(
                 {
-                    "ticker": r["ticker"], "expected_date": ed.isoformat(),
-                    "trade_type": trade_type, "directional_return": round(directional, 4),
-                    "weight": w, "weighted_return": round(weighted, 5),
+                    "ticker": r["ticker"],
+                    "expected_date": ed.isoformat(),
+                    "trade_type": trade_type,
+                    "directional_return": round(directional, 4),
+                    "weight": w,
+                    "weighted_return": round(weighted, 5),
                 }
             )
 
@@ -142,11 +147,14 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
     for k, v in metrics.items():
         print(f"  {k}: {v}")
     if metrics.get("n_trades", 0) == 0:
-        print("NOTE: no tradeable resolved catalysts yet. Run ingest_prices.py + "
-              "resolve_outcomes.py first; the backtest needs price + outcome history.")
+        print(
+            "NOTE: no tradeable resolved catalysts yet. Run ingest_prices.py + "
+            "resolve_outcomes.py first; the backtest needs price + outcome history."
+        )
 
     if csv_path and rows_out:
         import csv
+
         out = Path(csv_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         with out.open("w", newline="", encoding="utf-8") as fh:

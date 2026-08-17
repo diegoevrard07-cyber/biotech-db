@@ -69,8 +69,7 @@ def _close_on_or_after(conn, company_id: int | None, ticker: str | None, d) -> f
     return float(row) if row is not None else None
 
 
-_UPSERT = text(
-    """
+_UPSERT = text("""
     INSERT INTO catalyst_outcomes (
         catalyst_id, company_id, resolved_date, outcome_label, pre_event_price,
         post_event_price, raw_return, benchmark_return, abnormal_return,
@@ -89,8 +88,7 @@ _UPSERT = text(
         abnormal_return = EXCLUDED.abnormal_return,
         event_window_days = EXCLUDED.event_window_days,
         notes = EXCLUDED.notes
-    """
-)
+    """)
 
 
 def resolve(*, dry_run: bool = False, limit: int | None = None) -> dict:
@@ -160,8 +158,11 @@ def resolve(*, dry_run: bool = False, limit: int | None = None) -> dict:
     if dry_run:
         print("(dry run - no rows written)")
 
-    log.info("resolve_complete", **{k: v for k, v in summary.items() if k != "labels"},
-             labels=summary["labels"])
+    log.info(
+        "resolve_complete",
+        **{k: v for k, v in summary.items() if k != "labels"},
+        labels=summary["labels"],
+    )
     return summary
 
 

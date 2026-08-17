@@ -66,8 +66,7 @@ def _upsert_trial(conn, company_id: int, trial: dict) -> int:
         "raw_json": json.dumps(trial.get("raw_json") or {}),
     }
     row = conn.execute(
-        text(
-            """
+        text("""
             INSERT INTO trials (
                 nct_id, company_id, title, phase, status, indication, intervention,
                 primary_endpoint, enrollment, start_date, primary_completion_date,
@@ -93,8 +92,7 @@ def _upsert_trial(conn, company_id: int, trial: dict) -> int:
                 raw_json = EXCLUDED.raw_json,
                 fetched_at = NOW()
             RETURNING id
-            """
-        ),
+            """),
         params,
     ).scalar()
     return int(row)
@@ -110,8 +108,7 @@ def _insert_catalysts(conn, company_id: int, catalysts: list[dict]) -> int:
     count = 0
     for cat in catalysts:
         conn.execute(
-            text(
-                """
+            text("""
                 INSERT INTO catalysts (
                     company_id, trial_id, catalyst_type, expected_date, date_confidence,
                     description, source, source_url, raw_data, requires_manual_verification
@@ -128,8 +125,7 @@ def _insert_catalysts(conn, company_id: int, catalysts: list[dict]) -> int:
                     source_url = EXCLUDED.source_url,
                     raw_data = EXCLUDED.raw_data,
                     requires_manual_verification = EXCLUDED.requires_manual_verification
-                """
-            ),
+                """),
             {
                 "company_id": cat["company_id"],
                 "trial_id": cat.get("trial_id"),
@@ -201,7 +197,9 @@ def ingest(
 
         if match_strategy.startswith("alias:"):
             summary["alias_fixes"].append(f"{tick}:{match_strategy}")
-            log.info("alias_match_success", ticker=tick, strategy=match_strategy, trials=len(trials))
+            log.info(
+                "alias_match_success", ticker=tick, strategy=match_strategy, trials=len(trials)
+            )
 
         if not trials:
             summary["zero_trial_companies"].append(tick)
@@ -259,7 +257,9 @@ def ingest(
 
     print_funnel(funnel)
 
-    log.info("ingest_complete", funnel=funnel, **{k: v for k, v in summary.items() if k != "errors"})
+    log.info(
+        "ingest_complete", funnel=funnel, **{k: v for k, v in summary.items() if k != "errors"}
+    )
     summary["funnel"] = funnel
     return summary
 

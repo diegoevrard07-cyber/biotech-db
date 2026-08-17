@@ -60,9 +60,7 @@ def _slice_keys(phase, indication, sponsor):
 def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
     """Temporal holdout: score test trials with train-period slice rates; print the verdict."""
     with get_connection() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT phase, indication_category, sponsor_class,
                        primary_completion_date AS pcd,
                        primary_outcome_met AS met
@@ -71,13 +69,10 @@ def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
                   AND primary_completion_date IS NOT NULL
                   AND phase IS NOT NULL
                 ORDER BY primary_completion_date
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
     data = [
-        (r["phase"], r["indication_category"], r["sponsor_class"], r["pcd"],
-         1 if r["met"] else 0)
+        (r["phase"], r["indication_category"], r["sponsor_class"], r["pcd"], 1 if r["met"] else 0)
         for r in rows
     ]
     if len(data) < 200:
@@ -94,6 +89,7 @@ def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
 
     # Build slice success rates on TRAIN at every backoff granularity.
     from collections import defaultdict
+
     agg: dict[tuple, list[int]] = defaultdict(lambda: [0, 0])  # key -> [successes, n]
     global_succ = sum(d[4] for d in train)
     global_n = len(train)
@@ -127,7 +123,9 @@ def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
         skill = round(1 - model_brier / naive_brier, 4)  # Brier skill score
 
     print("\n=== Base-rate temporal validation ===")
-    print(f"Labeled trials:     {len(data)}  (train {len(train)} < {cutoff_date} <= test {len(test)})")
+    print(
+        f"Labeled trials:     {len(data)}  (train {len(train)} < {cutoff_date} <= test {len(test)})"
+    )
     print(f"Train global rate:  {global_rate:.3f}   Test actual rate: {test_rate:.3f}")
     print(f"Model Brier:        {model_brier}")
     print(f"Naive Brier:        {naive_brier}   (always predict global mean)")
@@ -135,8 +133,10 @@ def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
     print(f"AUC:                {auc}   (0.5 = no discrimination, >0.6 useful)")
     print("Reliability (predicted -> observed):")
     for b in table:
-        print(f"  {b['bucket']}  n={b['n']:<5} pred={b['mean_predicted']:.3f} "
-              f"obs={b['observed_hit_rate']:.3f}")
+        print(
+            f"  {b['bucket']}  n={b['n']:<5} pred={b['mean_predicted']:.3f} "
+            f"obs={b['observed_hit_rate']:.3f}"
+        )
 
     verdict = "INCONCLUSIVE"
     if auc is not None and skill is not None:
@@ -151,28 +151,40 @@ def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
     if store:
         with get_connection() as conn:
             conn.execute(
-                text(
-                    """
+                text("""
                     INSERT INTO calibration_runs (
                         n_pairs, brier_score, model_hit_rate, base_rate_hit_rate,
                         reliability_json, notes
                     ) VALUES (:n, :brier, :mhr, :bhr, CAST(:rel AS jsonb), :notes)
-                    """
-                ),
+                    """),
                 {
-                    "n": len(test), "brier": model_brier,
-                    "mhr": auc, "bhr": round(global_rate, 4),
+                    "n": len(test),
+                    "brier": model_brier,
+                    "mhr": auc,
+                    "bhr": round(global_rate, 4),
                     "rel": json.dumps(table),
                     "notes": f"base_rate_temporal_holdout cutoff={cutoff_date} "
-                             f"skill={skill} auc={auc} verdict={verdict}",
+                    f"skill={skill} auc={auc} verdict={verdict}",
                 },
             )
         print("Stored snapshot to calibration_runs.")
 
-    log.info("validate_complete", n=len(data), model_brier=model_brier,
-             naive_brier=naive_brier, skill=skill, auc=auc, verdict=verdict)
-    return {"model_brier": model_brier, "naive_brier": naive_brier,
-            "skill": skill, "auc": auc, "verdict": verdict}
+    log.info(
+        "validate_complete",
+        n=len(data),
+        model_brier=model_brier,
+        naive_brier=naive_brier,
+        skill=skill,
+        auc=auc,
+        verdict=verdict,
+    )
+    return {
+        "model_brier": model_brier,
+        "naive_brier": naive_brier,
+        "skill": skill,
+        "auc": auc,
+        "verdict": verdict,
+    }
 
 
 def main() -> None:

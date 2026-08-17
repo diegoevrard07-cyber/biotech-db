@@ -73,8 +73,15 @@ def run(*, resolved_only: bool = True) -> None:
     wins = sum(1 for t in decided if float(t["realized_pnl_usd"]) > 0)
     mean_base = sum(float(t["base_rate"]) for t in decided) / n if n else 0.0
     hit_rate = wins / n if n else 0.0
-    brier = sum((float(t["base_rate"]) - (1.0 if float(t["realized_pnl_usd"]) > 0 else 0.0)) ** 2
-                for t in decided) / n if n else 0.0
+    brier = (
+        sum(
+            (float(t["base_rate"]) - (1.0 if float(t["realized_pnl_usd"]) > 0 else 0.0)) ** 2
+            for t in decided
+        )
+        / n
+        if n
+        else 0.0
+    )
 
     print(f"  decided trades (non-flat): {n}   flat/zero: {len(trades) - n}")
     print(f"  observed win rate:        {hit_rate:.0%}")
@@ -92,15 +99,18 @@ def run(*, resolved_only: bool = True) -> None:
         print(f"    {lo:.1f}-{hi:.1f}{'':<4}{len(grp):>4}{pred:>8.0%}{won:>8.0%}")
 
     if n < 20:
-        print(f"\n  ⚠ Sample is tiny (n={n}). Treat as directional only — not a validated edge. "
-              "Calibration needs dozens of resolved catalysts.")
+        print(
+            f"\n  ⚠ Sample is tiny (n={n}). Treat as directional only — not a validated edge. "
+            "Calibration needs dozens of resolved catalysts."
+        )
 
 
 def main() -> None:
     """CLI entry: edge-vs-luck calibration report on closed paper trades."""
     ap = argparse.ArgumentParser(description="Compare closed trades vs predicted base rates")
-    ap.add_argument("--all", action="store_true",
-                    help="include trades closed before their catalyst fired")
+    ap.add_argument(
+        "--all", action="store_true", help="include trades closed before their catalyst fired"
+    )
     args = ap.parse_args()
     config.preflight()
     run(resolved_only=not args.all)

@@ -33,8 +33,7 @@ def _write_slice(conn, phase, indication, sponsor, n, successes) -> bool:
     )
     tier = confidence_tier(n)
     conn.execute(
-        text(
-            """
+        text("""
             INSERT INTO base_rates (
                 slice_key, phase, indication_category, sponsor_class,
                 n_trials, n_successes, success_rate, ci_low, ci_high, confidence_tier, source, computed_at
@@ -52,8 +51,7 @@ def _write_slice(conn, phase, indication, sponsor, n, successes) -> bool:
                 source = EXCLUDED.source,
                 computed_at = NOW()
             WHERE base_rates.source IS NULL OR base_rates.source = 'computed'
-            """
-        ),
+            """),
         {
             "slice_key": slice_key,
             "phase": phase,
@@ -75,25 +73,17 @@ def compute(dry_run: bool = False) -> dict:
     written = 0
     with get_connection() as conn:
         if not dry_run:
-            conn.execute(
-                text(
-                    "DELETE FROM base_rates WHERE source IS NULL OR source = 'computed'"
-                )
-            )
+            conn.execute(text("DELETE FROM base_rates WHERE source IS NULL OR source = 'computed'"))
 
         # Trials with known outcomes only
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT phase, indication_category, sponsor_class,
                        COUNT(*) AS n,
                        SUM(CASE WHEN primary_outcome_met THEN 1 ELSE 0 END) AS successes
                 FROM historical_trials
                 WHERE primary_outcome_met IS NOT NULL AND phase IS NOT NULL
                 GROUP BY phase, indication_category, sponsor_class
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
         slices_to_write: list[tuple] = []
 
@@ -110,7 +100,10 @@ def compute(dry_run: bool = False) -> dict:
         ind_agg: dict[str, list[int]] = {}
 
         for (phase, ind, sponsor), (n, succ) in agg.items():
-            phase_agg[phase] = [phase_agg.get(phase, [0, 0])[0] + n, phase_agg.get(phase, [0, 0])[1] + succ]
+            phase_agg[phase] = [
+                phase_agg.get(phase, [0, 0])[0] + n,
+                phase_agg.get(phase, [0, 0])[1] + succ,
+            ]
             phase_ind_agg[(phase, ind)] = [
                 phase_ind_agg.get((phase, ind), [0, 0])[0] + n,
                 phase_ind_agg.get((phase, ind), [0, 0])[1] + succ,
@@ -133,22 +126,20 @@ def compute(dry_run: bool = False) -> dict:
             slices_to_write.append((None, ind, None, ind_agg[ind]))
 
         # PDUFA proxy from FDA novel approvals by indication
-        fda_rows = conn.execute(
-            text(
-                """
+        fda_rows = conn.execute(text("""
                 SELECT indication_category, COUNT(*) AS n,
                        SUM(CASE WHEN is_novel THEN 1 ELSE 0 END) AS successes
                 FROM fda_approvals
                 GROUP BY indication_category
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
         fda_total_n = 0
         fda_total_succ = 0
         for r in fda_rows:
             fda_total_n += r["n"]
             fda_total_succ += r["successes"]
-            slices_to_write.append(("PDUFA", r["indication_category"], None, [r["n"], r["successes"]]))
+            slices_to_write.append(
+                ("PDUFA", r["indication_category"], None, [r["n"], r["successes"]])
+            )
         if fda_total_n:
             slices_to_write.append(("PDUFA", None, None, [fda_total_n, fda_total_succ]))
 
