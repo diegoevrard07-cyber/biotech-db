@@ -57,7 +57,7 @@ QUERIES: list[tuple[str, str]] = [
         "SELECT run_at, n_pairs, brier_score, model_hit_rate, base_rate_hit_rate FROM calibration_runs ORDER BY run_at DESC LIMIT 1",
     ),
     ("event_returns", "SELECT COUNT(*) FROM event_returns"),
-    ("event_returns_events", "SELECT COUNT(DISTINCT (company_id, event_date)) FROM event_returns"),
+    ("event_returns_events", "SELECT COUNT(DISTINCT (company_id, filing_date)) FROM event_returns"),
     ("price_history_rows", "SELECT COUNT(*) FROM price_history"),
     ("price_history_tickers", "SELECT COUNT(DISTINCT ticker) FROM price_history"),
     ("price_history_latest", "SELECT MAX(date) FROM price_history"),
@@ -96,22 +96,26 @@ QUERIES: list[tuple[str, str]] = [
 
 
 def run() -> dict:
-    """Execute every inventory query and return {name: value}. Read-only."""
+    """Execute every inventory query and return {name: value}. Read-only.
+
+    Each query runs in its own transaction so one bad query can't abort the rest.
+    """
     out: dict = {}
-    with get_connection() as conn:
-        raw = conn.connection.cursor()
-        for name, sql in QUERIES:
-            try:
+    for name, sql in QUERIES:
+        try:
+            with get_connection() as conn:
+                raw = conn.connection.cursor()
                 raw.execute(sql)
                 rows = raw.fetchall()
-                if len(rows) == 1 and len(rows[0]) == 1:
-                    out[name] = rows[0][0]
-                elif len(rows) == 1:
-                    out[name] = list(rows[0])
-                else:
-                    out[name] = [list(r) for r in rows]
-            except Exception as exc:  # noqa: BLE001 — report missing tables, don't die
-                out[name] = f"ERROR: {exc}"
+                raw.close()
+            if len(rows) == 1 and len(rows[0]) == 1:
+                out[name] = rows[0][0]
+            elif len(rows) == 1:
+                out[name] = list(rows[0])
+            else:
+                out[name] = [list(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001 — report missing tables, don't die
+            out[name] = f"ERROR: {exc}"
     return out
 
 

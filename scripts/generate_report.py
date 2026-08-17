@@ -20,6 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from action_sheet import compute_book
+
 import config
 from db import get_connection
 
@@ -43,23 +45,30 @@ def collect() -> dict:
     with get_connection() as conn:
         cur = conn.connection.cursor()
 
-        # Top of the capped action book (best current ideas, long-only engine).
-        out["signals"] = _q(
-            cur,
-            """
-            SELECT co.ticker, c.catalyst_type, c.expected_date,
-                   es.trade_type, es.base_rate_score, es.edge_gap,
-                   es.suggested_weight, es.composite_score
-            FROM edge_scores es
-            JOIN companies co ON co.id = es.company_id
-            LEFT JOIN catalysts c ON c.id = es.catalyst_id
-            WHERE es.trade_type IN ('buy_the_rumor', 'hold_through')
-              AND es.suggested_weight > 0
-              AND (c.expected_date IS NULL OR c.expected_date >= CURRENT_DATE)
-            ORDER BY es.suggested_weight DESC
-            LIMIT 12
-            """,
-        )
+        # Top of the capped action book — the same computation the autopilot
+        # syncs to (best signal per ticker, caps applied, long-only).
+        try:
+            book = compute_book(horizon_days=config.AUTOPILOT_HORIZON_DAYS)
+            out["signals"] = [
+                (
+                    r["ticker"],
+                    r["catalyst_type"],
+                    r["expected_date"],
+                    r["trade_type"],
+                    r["base_rate"],
+                    r["edge_gap"],
+                    r["weight"],
+                )
+                for r in book["rows"][:12]
+            ]
+            out["book_summary"] = {
+                "positions": book["positions"],
+                "gross_long": book["gross_long"],
+                "gbm_pct": book["gbm_pct"],
+            }
+        except Exception:
+            out["signals"] = []
+            out["book_summary"] = None
 
         # Model trust: latest calibration run against resolved outcomes.
         out["calibration"] = _q(
@@ -143,6 +152,11 @@ def usd(v) -> str:
     if abs(v) >= 1e3:
         return f"${v / 1e3:.1f}k"
     return f"${v:.0f}"
+
+
+def num(v) -> str:
+    """Integer with thousands separators (em dash when missing)."""
+    return "—" if v is None else f"{int(v):,}"
 
 
 def esc(v) -> str:
@@ -300,13 +314,20 @@ def build_html(d: dict) -> str:
     ]
 
     # -- Top signals -------------------------------------------------------
-    parts.append("<h2>Top signals (risk-capped book)</h2>")
+    book_line = ""
+    if d.get("book_summary"):
+        bs = d["book_summary"]
+        book_line = (
+            f" — {bs['positions']} positions, gross {pct(bs['gross_long'], 0)}, "
+            f"GBM {pct(bs['gbm_pct'], 0)}"
+        )
+    parts.append(f"<h2>Top signals (risk-capped book{book_line})</h2>")
     if d["signals"]:
         parts.append(
             "<table><tr><th>Ticker</th><th>Catalyst</th><th>Date</th><th>Type</th>"
             "<th>Base rate</th><th>Edge gap</th><th>Weight</th></tr>"
         )
-        for ticker, ctype, edate, ttype, base, gap, weight, _comp in d["signals"]:
+        for ticker, ctype, edate, ttype, base, gap, weight in d["signals"]:
             gap_cls = "pos" if (gap or 0) >= 0 else "neg"
             parts.append(
                 f"<tr class='{gap_cls}'><td>{esc(ticker)}</td><td>{esc(ctype)}</td>"
@@ -387,14 +408,14 @@ def build_html(d: dict) -> str:
     parts.append(
         "<h2>Data coverage & freshness</h2>"
         "<div class='cols'><div>"
-        f"<div class='kpi'>Universe companies <b>{d.get('companies')}</b></div>"
-        f"<div class='kpi'>Upcoming catalysts <b>{d.get('catalysts_upcoming')}</b></div>"
-        f"<div class='kpi'>Historical trials mined <b>{d.get('historical_trials')}</b></div>"
-        f"<div class='kpi'>…with success labels <b>{d.get('trials_labeled')}</b></div>"
+        f"<div class='kpi'>Universe companies <b>{num(d.get('companies'))}</b></div>"
+        f"<div class='kpi'>Upcoming catalysts <b>{num(d.get('catalysts_upcoming'))}</b></div>"
+        f"<div class='kpi'>Historical trials mined <b>{num(d.get('historical_trials'))}</b></div>"
+        f"<div class='kpi'>…with success labels <b>{num(d.get('trials_labeled'))}</b></div>"
         "</div><div>"
-        f"<div class='kpi'>Price rows (tickers) <b>{d.get('price_rows')} ({d.get('price_tickers')})</b></div>"
+        f"<div class='kpi'>Price rows (tickers) <b>{num(d.get('price_rows'))} ({num(d.get('price_tickers'))})</b></div>"
         f"<div class='kpi'>Prices current through <b>{esc(latest_px)}</b></div>"
-        f"<div class='kpi'>Scored catalysts <b>{d.get('edge_scores')}</b></div>"
+        f"<div class='kpi'>Scored catalysts <b>{num(d.get('edge_scores'))}</b></div>"
         f"<div class='kpi'>Scores computed <b>{esc(scores_at)}</b></div>"
         "</div></div>"
     )
