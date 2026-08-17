@@ -34,6 +34,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from action_sheet import compute_book
+from ingest_prices import _rows_from_history
+
 import config
 from db import get_connection
 from layers.marketdata.yf_client import fetch_history_batch
@@ -41,8 +44,6 @@ from layers.portfolio import paper_sync as ps
 from layers.portfolio import performance_store as perf_store
 from layers.portfolio import risk
 from layers.portfolio import tracker as pf
-from ingest_prices import _rows_from_history
-from action_sheet import compute_book
 from logger import setup_logger
 
 log = setup_logger("paper_autopilot")
@@ -98,8 +99,8 @@ def _refresh_prices(cur, tickers: list[str]) -> int:
             continue
         rows.extend(_rows_from_history(df, company_id=cmap.get(t), ticker=t))
     if rows:
-        from psycopg2.extras import execute_values
         from ingest_prices import _INSERT_SQL, _VALUES_TEMPLATE
+        from psycopg2.extras import execute_values
         execute_values(cur, _INSERT_SQL, rows, template=_VALUES_TEMPLATE, page_size=1000)
     return len(rows)
 

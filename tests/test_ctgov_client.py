@@ -9,7 +9,6 @@ import pytest
 
 from layers.layer1 import ctgov_client
 
-
 SAMPLE_STUDY = {
     "protocolSection": {
         "identificationModule": {

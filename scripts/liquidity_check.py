@@ -25,11 +25,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
+from action_sheet import risk_haircut  # reuse the same de-risking
 from sqlalchemy import text
 
 import config
 from db import get_connection
-from action_sheet import risk_haircut  # reuse the same de-risking
 from logger import setup_logger
 
 log = setup_logger("liquidity_check")

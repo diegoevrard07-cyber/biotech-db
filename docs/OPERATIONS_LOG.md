@@ -52,12 +52,10 @@ stale `edge_scores` fade rows → avoid. Proof: **zero open shorts/fades**.
 **Branch/PR:** `cursor/risk-hardening-7e76`
 
 **Incident:** 8 shorts (the old fade book: ABOS QURE RGNX SLS ADCT KPTI ORIC OMER)
-were re-opened at 08:26 UTC by an autopilot run OUTSIDE GitHub Actions — timestamp
-matches the Mac launchd catch-up firing on wake (10:26 Brussels) from a checkout/env
-without long-only active. GH Actions' own run (00:16 UTC) was clean. Covered all 8
-immediately (≈$0 realized). **Owner action: remove the Mac scheduler**
-(`./scripts/setup_launchd_macos.sh --remove`) so GitHub Actions is the only execution
-venue.
+were re-opened at 08:26 UTC by an autopilot run OUTSIDE GitHub Actions — a stale
+local checkout/env without long-only active fired on machine wake. GH Actions' own
+run (00:16 UTC) was clean. Covered all 8 immediately (≈$0 realized). Lesson: GitHub
+Actions must be the only execution venue.
 
 **Market context:** XBI −5.4% from its 7/10 high; portfolio −2.5% from peak
 ($10,943→$10,670) — half the index downside. Same-window: portfolio +6.7% vs XBI +6.5%.
@@ -329,8 +327,8 @@ These shipped to `main` before this log existed; recorded here for completeness.
 - **XBI benchmark.** Dedicated "Benchmark · XBI" strip and chart overlay in the Cockpit;
   `portfolio_performance` table for daily equity/XBI snapshots; autopilot writes to
   Supabase + local CSV.
-- **macOS launchd scheduler.** `scripts/setup_launchd_macos.sh` with wake catch-up
-  (Brussels: refresh 23:00, autopilot 23:30) and a KeepAlive Streamlit service on port
-  8520. (Superseded by GitHub Actions for users who don't want laptop dependency.)
+- **Local schedulers (superseded).** An earlier launchd/Task-Scheduler setup ran the
+  refresh + autopilot from a laptop. Superseded by GitHub Actions — a single cloud
+  execution venue avoids stale-checkout incidents.
 - **Streamlit usability.** Manual "Refresh data" button + 30s cache TTL on portfolio
   data.

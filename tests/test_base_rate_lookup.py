@@ -1,8 +1,8 @@
 """Tests for base rate lookup fallback chain."""
 
-import pytest
-
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from layers.layer3.base_rate_lookup import (
     BaseRateResult,

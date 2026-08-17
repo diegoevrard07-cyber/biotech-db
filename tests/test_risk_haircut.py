@@ -12,8 +12,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-import config
 import action_sheet as a
+
+import config
 
 
 def test_tiers_monotonic_nondecreasing_with_size():

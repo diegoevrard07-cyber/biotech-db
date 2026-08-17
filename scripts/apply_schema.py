@@ -1,4 +1,8 @@
-"""Apply schema.sql to Supabase Postgres (idempotent)."""
+"""Apply the database schema (schema.sql at repo root) idempotently.
+
+Pipeline role: stage 0 of every refresh — creates/updates all tables and indexes
+before any ingestion runs, so downstream stages can assume the schema exists.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,7 @@ import config
 from db import get_connection, get_engine
 from logger import setup_logger
 
-SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schema.sql"
 
 EXPECTED_TABLES = [
     "companies",

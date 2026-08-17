@@ -24,7 +24,7 @@ SCRIPTS = ROOT / "scripts"
 
 # (script, args, critical)
 STAGES: list[tuple[str, list[str], bool]] = [
-    ("../apply_schema.py", [], False),   # ensure schema/indexes (e.g. uq_catalysts_ctgov) first
+    ("apply_schema.py", [], False),   # ensure schema/indexes (e.g. uq_catalysts_ctgov) first
     ("ingest_layer1.py", [], False),
     ("classify_universe.py", [], False),
     ("compute_base_rates.py", [], False),

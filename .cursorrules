@@ -4,9 +4,9 @@
 This is a clinical trial and market data pipeline focused exclusively on glioblastoma (GBM) drug development. The goal is to identify mispricings between market sentiment and clinical/regulatory reality in small-cap biotech stocks with GBM programs.
 
 ## Tech Stack (do not deviate)
-- Python 3.14
-- PostgreSQL 16, local on port 5432, user `postgres`, database `biotech`
-- Libraries: requests, certifi, psycopg2-binary, python-dotenv, yfinance, beautifulsoup4, pdfplumber, pandas, sqlalchemy, pydantic, tenacity, structlog, openai, rapidfuzz, pytest, pytest-mock
+- Python 3.12+ (3.14 verified; CI runs 3.12)
+- PostgreSQL 16 via Supabase cloud pooler (DATABASE_URL); a local Postgres works too
+- Libraries: see requirements.txt (pinned). Do not add heavy deps (sklearn/statsmodels) without asking — small models are implemented in pure numpy.
 - Config via .env file (never hardcode secrets)
 
 ## Code Standards
@@ -19,11 +19,11 @@ This is a clinical trial and market data pipeline focused exclusively on gliobla
 - All scripts independently runnable (no hidden ordering dependencies beyond explicit init)
 
 ## Database Schema (single source of truth)
-Tables: companies, trials, catalysts, price_history, press_releases, documents
-See README.md for full column definitions. Never add columns without updating README.
+`schema.sql` at the repo root is the authoritative definition (22 tables).
+Never add columns without updating `schema.sql`.
 
 ## Scope Discipline
-- This database covers GBM only. Filter aggressively at ingestion, never store off-topic data.
+- Universe: small-cap oncology/CNS, with GBM as the flagged flagship subset. Filter aggressively at ingestion, never store off-topic data.
 - Do not add features outside the master plan without confirmation.
 - Do not over-engineer. Prefer simple scripts over frameworks.
 

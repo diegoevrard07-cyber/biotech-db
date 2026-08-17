@@ -21,11 +21,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
+from paper_autopilot import cover_shorts
+from strip_shorts import run as strip_shorts_run
+
 import config
 from db import get_connection
 from logger import setup_logger
-from paper_autopilot import cover_shorts
-from strip_shorts import run as strip_shorts_run
 
 log = setup_logger("fix_long_only_book")
 

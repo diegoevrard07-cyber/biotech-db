@@ -1,1 +1,1 @@
-
+"""Composite scoring and decision layer: turns per-catalyst features into a grade, an edge estimate, a trade type, and a Kelly-fractional position size. Also holds calibration, backtest metrics, and outcome labeling."""

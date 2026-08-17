@@ -27,10 +27,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from action_sheet import risk_haircut
+
 import config
 from db import get_connection
 from layers.portfolio import tracker as pf
-from action_sheet import risk_haircut
 from logger import setup_logger
 
 log = setup_logger("seed_paper_trades")
