@@ -245,6 +245,7 @@ def _calendar_svg(rows: list[tuple], *, width: int = 460, height: int = 54) -> s
         f'y2="{height - 16}" stroke="{INK}" stroke-width="0.8"/>'
     )
     labeled = 0
+    labeled_tickers: set[str] = set()
     for d, ticker, ctype in rows:
         days = (d - today).days
         x = pad_l + days / span * (width - pad_l - pad_r)
@@ -254,12 +255,14 @@ def _calendar_svg(rows: list[tuple], *, width: int = 460, height: int = 54) -> s
             f'y2="{height - (30 if tall else 24)}" '
             f'stroke="{ACCENT if tall else MUTED}" stroke-width="1.2"/>'
         )
-        if labeled < 14 and (days % 4 == 0 or tall):
+        # Label each ticker at most once so multi-catalyst names don't repeat.
+        if labeled < 14 and (days % 4 == 0 or tall) and ticker not in labeled_tickers:
             parts.append(
                 f'<text x="{x:.1f}" y="{height - 36 if tall else height - 32}" '
                 f'font-size="7.5" fill="{INK}" text-anchor="middle">{esc(ticker)}</text>'
             )
             labeled += 1
+            labeled_tickers.add(ticker)
     for mark in (0, 30, 60, 90):
         x = pad_l + mark / span * (width - pad_l - pad_r)
         lbl = "today" if mark == 0 else f"+{mark}d"

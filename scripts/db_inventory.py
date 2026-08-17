@@ -71,7 +71,7 @@ QUERIES: list[tuple[str, str]] = [
     ),
     ("base_rates", "SELECT COUNT(*) FROM base_rates"),
     ("sec_filings", "SELECT COUNT(*) FROM sec_filings"),
-    ("sec_filings_8k", "SELECT COUNT(*) FROM sec_filings WHERE form_type = '8-K'"),
+    ("sec_filings_8k", "SELECT COUNT(*) FROM sec_filings WHERE filing_type = '8-K'"),
     ("portfolio_open", "SELECT COUNT(*) FROM portfolio_holdings WHERE status = 'open'"),
     (
         "portfolio_open_by_type",
