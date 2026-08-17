@@ -110,11 +110,7 @@ def reconcile_catalyst(
     min_rank = confidence_rank.get(min_confidence, 3)
 
     matched = [e for e in candidate_events if event_matches_catalyst(catalyst, e)]
-    high_conf = [
-        e
-        for e in matched
-        if confidence_rank.get(e.confidence, 0) >= min_rank
-    ]
+    high_conf = [e for e in matched if confidence_rank.get(e.confidence, 0) >= min_rank]
     if not high_conf:
         return None, None
 

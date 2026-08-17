@@ -18,6 +18,7 @@ log = setup_logger("verify_layer3")
 
 
 def verify_layer3() -> bool:
+    """Check Layer 3 data quality (historical_trials/base_rates coverage); True when all pass."""
     failures: list[str] = []
     engine = get_engine()
 
@@ -210,6 +211,7 @@ def verify_layer3() -> bool:
 
 
 def main() -> None:
+    """CLI entry: verify Layer 3 base-rate output; exit 1 on failures."""
     parser = argparse.ArgumentParser()
     parser.parse_args()
     ok = verify_layer3()

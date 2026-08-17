@@ -50,6 +50,7 @@ def _headers() -> dict[str, str]:
 
 
 def fetch_companyfacts(cik: str) -> dict:
+    """Download the SEC XBRL companyfacts JSON for one CIK (rate-limited)."""
     cik_padded = str(int(cik)).zfill(10)
     url = config.SEC_XBRL_FACTS_URL.format(cik=cik_padded)
     time.sleep(0.15)
@@ -68,6 +69,7 @@ def _latest_quarterly(facts: dict, concepts: list[str]):
 
 
 def analyze_ticker(ticker: str, cik: str) -> dict:
+    """Extract latest cash and quarterly burn for one ticker from companyfacts."""
     facts = fetch_companyfacts(cik)
     cash_concept, cash_q = _latest_quarterly(facts, CASH_CONCEPTS)
     ocf = extract_quarterly_concept(facts, OCF_CONCEPT)
@@ -94,6 +96,7 @@ def analyze_ticker(ticker: str, cik: str) -> dict:
 
 
 def render_report(rows: list[dict]) -> str:
+    """Render the per-ticker cash/burn comparison as a markdown report."""
     lines = [
         "# XBRL Sanity Check",
         "",
@@ -132,6 +135,7 @@ def render_report(rows: list[dict]) -> str:
 
 
 def main() -> None:
+    """CLI entry: sanity-check the XBRL extractor against known tickers; write the report."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Print report only, do not write file")
     args = parser.parse_args()

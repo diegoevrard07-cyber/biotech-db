@@ -20,6 +20,7 @@ ALLOWED_TYPES = config.ALLOWED_CATALYST_TYPES
 
 
 def verify_layer1() -> bool:
+    """Check Layer 1 data quality (companies/trials/catalysts); True when all pass."""
     failures: list[str] = []
     engine = get_engine()
 
@@ -167,6 +168,7 @@ def verify_layer1() -> bool:
 
 
 def main() -> None:
+    """CLI entry: verify Layer 1 ingestion output; exit 1 on failures."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

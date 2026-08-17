@@ -105,6 +105,7 @@ def _baseline_lookup(df: pd.DataFrame, train_mask: np.ndarray) -> np.ndarray:
 
 
 def train(*, store: bool = True, l2: float = 2.0) -> dict:
+    """Train the logistic success model on a temporal holdout; compare vs base-rate lookup."""
     df = _load().reset_index(drop=True)
     n = len(df)
     if n < 500:
@@ -210,6 +211,7 @@ def _print(res: dict, coefs: list[dict]) -> None:
 
 
 def main() -> None:
+    """CLI entry: train/evaluate the clinical success model on historical_trials."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-store", action="store_true")
     ap.add_argument("--l2", type=float, default=2.0)

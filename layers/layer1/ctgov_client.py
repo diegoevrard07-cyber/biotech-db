@@ -116,7 +116,8 @@ def parse_study_record(study: dict) -> dict:
     allocation = design_info.get("allocation", "")
     is_randomized = allocation.upper() == "RANDOMIZED" if allocation else None
     has_control = any(
-        arm.get("type", "").upper() in ("PLACEBO_COMPARATOR", "ACTIVE_COMPARATOR", "SHAM_COMPARATOR")
+        arm.get("type", "").upper()
+        in ("PLACEBO_COMPARATOR", "ACTIVE_COMPARATOR", "SHAM_COMPARATOR")
         for arm in arms.get("armGroups", [])
     )
 
@@ -124,7 +125,9 @@ def parse_study_record(study: dict) -> dict:
     collaborators = [c.get("name", "") for c in sponsor_mod.get("collaborators", [])]
 
     locations = []
-    for loc in study.get("protocolSection", {}).get("contactsLocationsModule", {}).get("locations", []):
+    for loc in (
+        study.get("protocolSection", {}).get("contactsLocationsModule", {}).get("locations", [])
+    ):
         locations.append(
             {
                 "facility": loc.get("facility"),
@@ -311,7 +314,9 @@ def get_study(nct_id: str) -> dict:
         try:
             payload = json.loads(nct_path.read_text(encoding="utf-8"))
             cached_at = datetime.fromisoformat(payload.get("cached_at", ""))
-            if datetime.now(timezone.utc) - cached_at <= timedelta(days=config.CTGOV_CACHE_TTL_DAYS):
+            if datetime.now(timezone.utc) - cached_at <= timedelta(
+                days=config.CTGOV_CACHE_TTL_DAYS
+            ):
                 return parse_study_record(payload.get("data", {}))
         except (json.JSONDecodeError, ValueError, OSError):
             pass

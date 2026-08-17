@@ -75,8 +75,11 @@ def fetch_history(ticker: str, *, lookback_days: int | None = None) -> pd.DataFr
             # a new thread per call would re-negotiate and cost ~50s). history()
             # has its own network timeout param.
             df = yf.Ticker(ticker).history(
-                start=start, auto_adjust=False, actions=False,
-                raise_errors=False, timeout=config.YF_CALL_TIMEOUT,
+                start=start,
+                auto_adjust=False,
+                actions=False,
+                raise_errors=False,
+                timeout=config.YF_CALL_TIMEOUT,
             )
             if df is not None and not df.empty:
                 return df
@@ -87,7 +90,7 @@ def fetch_history(ticker: str, *, lookback_days: int | None = None) -> pd.DataFr
         except Exception as exc:  # noqa: BLE001 - yfinance raises many types
             last_err = exc
             log.warning("yf_history_error", ticker=ticker, attempt=attempt, error=str(exc))
-            time.sleep(min(2 ** attempt, 8))
+            time.sleep(min(2**attempt, 8))
     if last_err:
         log.error("yf_history_failed", ticker=ticker, error=str(last_err))
     return pd.DataFrame()
@@ -111,8 +114,13 @@ def fetch_history_batch(tickers: list[str], *, start: str) -> dict[str, pd.DataF
         data = _with_timeout(
             f"batch:{len(tickers)}",
             lambda: yf.download(
-                tickers, start=start, auto_adjust=False, actions=False,
-                threads=True, group_by="ticker", progress=False,
+                tickers,
+                start=start,
+                auto_adjust=False,
+                actions=False,
+                threads=True,
+                group_by="ticker",
+                progress=False,
                 timeout=config.YF_CALL_TIMEOUT,
             ),
             timeout=max(90.0, config.YF_CALL_TIMEOUT * 4),
@@ -150,7 +158,7 @@ def fetch_info(ticker: str) -> dict[str, Any]:
             log.warning("yf_empty_info", ticker=ticker, attempt=attempt)
         except Exception as exc:  # noqa: BLE001
             log.warning("yf_info_error", ticker=ticker, attempt=attempt, error=str(exc))
-            time.sleep(min(2 ** attempt, 10))
+            time.sleep(min(2**attempt, 10))
     return {}
 
 

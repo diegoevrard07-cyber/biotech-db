@@ -18,16 +18,38 @@ import config
 
 def _rows():
     return [
-        {"ticker": "AAA", "name": "A", "company_id": 1, "catalyst_id": 1,
-         "is_gbm": False, "sector": "onc", "market_cap_usd": 2e9,
-         "trade_type": "hold_through", "catalyst_type": "phase_readout",
-         "expected_date": None, "weight": 0.40, "base_rate": 0.6,
-         "edge_gap": 0.1, "confidence": 0.8},
-        {"ticker": "BBB", "name": "B", "company_id": 2, "catalyst_id": 2,
-         "is_gbm": False, "sector": "cns", "market_cap_usd": 2e9,
-         "trade_type": "hold_through", "catalyst_type": "phase_readout",
-         "expected_date": None, "weight": 0.40, "base_rate": 0.6,
-         "edge_gap": 0.1, "confidence": 0.8},
+        {
+            "ticker": "AAA",
+            "name": "A",
+            "company_id": 1,
+            "catalyst_id": 1,
+            "is_gbm": False,
+            "sector": "onc",
+            "market_cap_usd": 2e9,
+            "trade_type": "hold_through",
+            "catalyst_type": "phase_readout",
+            "expected_date": None,
+            "weight": 0.40,
+            "base_rate": 0.6,
+            "edge_gap": 0.1,
+            "confidence": 0.8,
+        },
+        {
+            "ticker": "BBB",
+            "name": "B",
+            "company_id": 2,
+            "catalyst_id": 2,
+            "is_gbm": False,
+            "sector": "cns",
+            "market_cap_usd": 2e9,
+            "trade_type": "hold_through",
+            "catalyst_type": "phase_readout",
+            "expected_date": None,
+            "weight": 0.40,
+            "base_rate": 0.6,
+            "edge_gap": 0.1,
+            "confidence": 0.8,
+        },
     ]
 
 

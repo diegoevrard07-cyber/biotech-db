@@ -40,6 +40,7 @@ LONG_TYPES = ("buy_the_rumor", "hold_through")
 
 
 def run(*, sleeve: float, days: int, reset: bool) -> None:
+    """Open PAPER long positions for near-term book names sized off the sleeve."""
     with get_connection() as conn:
         raw = conn.connection
         cur = raw.cursor()
@@ -132,6 +133,7 @@ def run(*, sleeve: float, days: int, reset: bool) -> None:
 
 
 def main() -> None:
+    """CLI entry: seed the paper account with the near-term long book."""
     ap = argparse.ArgumentParser(description="Seed PAPER positions from the near-term long book")
     ap.add_argument("--sleeve", type=float, default=10_000.0)
     ap.add_argument("--days", type=int, default=60)

@@ -48,8 +48,8 @@ def test_equity_invariant_long():
     # Start 10k cash, buy 100@10 -> cash 9000, holding 100@12 -> equity 10200 = 10k + 200 pnl.
     cash = 10000 + t.cash_delta_on_open("long", 100, 10.0)
     summ = t.account_summary(
-        [{"ticker": "ABC", "side": "long", "shares": 100, "entry_price": 10.0}],
-        cash, {"ABC": 12.0})
+        [{"ticker": "ABC", "side": "long", "shares": 100, "entry_price": 10.0}], cash, {"ABC": 12.0}
+    )
     assert summ["equity"] == 10200.0
     assert summ["unrealized_pnl_usd"] == 200.0
     assert summ["gross_long_usd"] == 1200.0
@@ -60,8 +60,8 @@ def test_equity_invariant_short():
     # Start 10k, short 100@10 -> cash 11000, cover value 100@8 -> equity 10200 = 10k + 200 pnl.
     cash = 10000 + t.cash_delta_on_open("short", 100, 10.0)
     summ = t.account_summary(
-        [{"ticker": "XYZ", "side": "short", "shares": 100, "entry_price": 10.0}],
-        cash, {"XYZ": 8.0})
+        [{"ticker": "XYZ", "side": "short", "shares": 100, "entry_price": 10.0}], cash, {"XYZ": 8.0}
+    )
     assert summ["equity"] == 10200.0
     assert summ["unrealized_pnl_usd"] == 200.0
     assert summ["gross_short_usd"] == 800.0
@@ -88,12 +88,27 @@ def test_format_exit_rule_strips_trailing_hint():
 def test_exit_alerts_levels():
     today = date(2026, 6, 21)
     holdings = [
-        {"ticker": "A", "side": "long", "trade_type": "buy_the_rumor",
-         "planned_exit_date": date(2026, 6, 20), "planned_exit_rule": "SELL now"},   # overdue
-        {"ticker": "B", "side": "short", "trade_type": "fade",
-         "planned_exit_date": date(2026, 6, 25), "planned_exit_rule": "COVER"},       # soon
-        {"ticker": "C", "side": "long", "trade_type": "hold_through",
-         "planned_exit_date": date(2026, 9, 1), "planned_exit_rule": "later"},        # not yet
+        {
+            "ticker": "A",
+            "side": "long",
+            "trade_type": "buy_the_rumor",
+            "planned_exit_date": date(2026, 6, 20),
+            "planned_exit_rule": "SELL now",
+        },  # overdue
+        {
+            "ticker": "B",
+            "side": "short",
+            "trade_type": "fade",
+            "planned_exit_date": date(2026, 6, 25),
+            "planned_exit_rule": "COVER",
+        },  # soon
+        {
+            "ticker": "C",
+            "side": "long",
+            "trade_type": "hold_through",
+            "planned_exit_date": date(2026, 9, 1),
+            "planned_exit_rule": "later",
+        },  # not yet
     ]
     alerts = t.exit_alerts(holdings, today, soon_days=7)
     assert [a["ticker"] for a in alerts] == ["A", "B"]

@@ -29,6 +29,7 @@ PERF_COLUMNS = [
 
 
 def main() -> None:
+    """CLI entry: import the local paper_performance CSV into portfolio_performance."""
     ap = argparse.ArgumentParser(description="Sync local performance CSV to Supabase")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()

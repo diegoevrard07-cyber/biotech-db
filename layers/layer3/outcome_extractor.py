@@ -157,7 +157,10 @@ def _extract_from_ci(outcome: dict) -> OutcomeResult | None:
                 met = _ci_verdict(param, lo, hi)
                 if met is not None:
                     return OutcomeResult(
-                        met, "high", "effect_ci", {"lower": lo, "upper": hi, "param": param, "source": "analysis"}
+                        met,
+                        "high",
+                        "effect_ci",
+                        {"lower": lo, "upper": hi, "param": param, "source": "analysis"},
                     )
 
     param = default_param
@@ -177,7 +180,10 @@ def _extract_from_ci(outcome: dict) -> OutcomeResult | None:
                 met = _ci_verdict(param, lo, hi)
                 if met is not None:
                     return OutcomeResult(
-                        met, "high", "effect_ci", {"lower": lo, "upper": hi, "param": param, "source": "measurement"}
+                        met,
+                        "high",
+                        "effect_ci",
+                        {"lower": lo, "upper": hi, "param": param, "source": "measurement"},
                     )
     return None
 
@@ -194,7 +200,9 @@ def _extract_from_narrative(text: str) -> OutcomeResult | None:
 
 def extract_outcome(study: dict) -> OutcomeResult:
     """Determine if primary endpoint was met for a CT.gov study with results."""
-    nct_id = study.get("protocolSection", {}).get("identificationModule", {}).get("nctId", "unknown")
+    nct_id = (
+        study.get("protocolSection", {}).get("identificationModule", {}).get("nctId", "unknown")
+    )
     results = study.get("resultsSection") or {}
     primaries = _primary_outcomes(results)
 

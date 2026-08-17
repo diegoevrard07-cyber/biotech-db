@@ -48,6 +48,7 @@ def _jsonable(v):
 
 
 def run(*, dry_run: bool = False) -> None:
+    """Delete short holdings (with backup), reverse their cash impact, restate snapshots."""
     with get_connection() as conn:
         raw = conn.connection
         cur = raw.cursor()
@@ -158,6 +159,7 @@ def run(*, dry_run: bool = False) -> None:
 
 
 def main() -> None:
+    """CLI entry: strip all short trades from the paper book (long-only migration)."""
     ap = argparse.ArgumentParser(description="Strip all short trades from the paper book")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()

@@ -34,9 +34,7 @@ class ExtractedEvent:
     item_number: Optional[str]
 
 
-_MONTHS = (
-    "january|february|march|april|may|june|july|august|september|october|november|december"
-)
+_MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
 _DATE_PATTERNS = [
     # Fixture: LPCN_000110465920028911 — "PDUFA Date of August 28, 2020"
     re.compile(
@@ -154,7 +152,10 @@ def _detect_item(text: str, items: list[str] | None) -> str | None:
 
 _DELAY_PATTERNS = (
     re.compile(r"PDUFA\s+(?:action\s+)?date\s+has\s+been\s+extended", re.I),
-    re.compile(r"updated\s+the\s+Prescription\s+Drug\s+User\s+Fee\s+Act\s+\(\s*PDUFA\s*\)\s+action\s+date", re.I),
+    re.compile(
+        r"updated\s+the\s+Prescription\s+Drug\s+User\s+Fee\s+Act\s+\(\s*PDUFA\s*\)\s+action\s+date",
+        re.I,
+    ),
     re.compile(rf"(?:PDUFA\s+)?goal\s+date[^.{{0,80}}]*extended\s+to\s+({_MONTHS})", re.I | re.S),
 )
 
@@ -317,7 +318,9 @@ def _scan_approval(text: str, items: list[str] | None) -> list[ExtractedEvent]:
         m = pat.search(text)
         if not m:
             continue
-        if re.search(r"incorporated\s+by\s+reference\s+herein\s*$", text[m.end() : m.end() + 80], re.I):
+        if re.search(
+            r"incorporated\s+by\s+reference\s+herein\s*$", text[m.end() : m.end() + 80], re.I
+        ):
             # ITRM negative trap — approval is real but test expects no *offering*; approval ok
             pass
         drug = None
@@ -396,7 +399,9 @@ def _scan_offering(text: str, items: list[str] | None) -> list[ExtractedEvent]:
     ):
         return []
     patterns = [
-        re.compile(r"(?:announced|pricing\s+of)\s+(?:a\s+)?(?:public|underwritten)\s+offering", re.I),
+        re.compile(
+            r"(?:announced|pricing\s+of)\s+(?:a\s+)?(?:public|underwritten)\s+offering", re.I
+        ),
         re.compile(r"registered\s+direct\s+offering", re.I),
         re.compile(r"offering\s+of\s+(?:up\s+to\s+)?[\$\d]", re.I),
         # Fixture: DROR_* — private placement debentures

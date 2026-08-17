@@ -17,7 +17,7 @@ def equity_curve(weighted_returns: list[float], *, start: float = 1.0) -> list[f
     eq = start
     curve = [start]
     for r in weighted_returns:
-        eq *= (1.0 + r)
+        eq *= 1.0 + r
         curve.append(eq)
     return curve
 

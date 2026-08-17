@@ -162,6 +162,7 @@ def verify(phase: str = "0", expect_rows: dict[str, int] | None = None) -> bool:
 
 
 def main() -> None:
+    """CLI entry: run the read-only DB health check; exit 1 on anomalies."""
     parser = argparse.ArgumentParser(description="Database health check")
     parser.add_argument("--phase", default="0", help="Phase label for reporting")
     parser.add_argument("--dry-run", action="store_true", help="No-op flag for consistency")

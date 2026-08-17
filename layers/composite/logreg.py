@@ -94,10 +94,12 @@ def reliability(y: np.ndarray, p: np.ndarray, *, n_buckets: int = 10) -> list[di
         mask = (p >= lo) & (p < hi) if i < n_buckets - 1 else (p >= lo) & (p <= hi)
         if mask.sum() == 0:
             continue
-        out.append({
-            "bucket": f"{lo:.2f}-{hi:.2f}",
-            "n": int(mask.sum()),
-            "pred": round(float(p[mask].mean()), 3),
-            "obs": round(float(y[mask].mean()), 3),
-        })
+        out.append(
+            {
+                "bucket": f"{lo:.2f}-{hi:.2f}",
+                "n": int(mask.sum()),
+                "pred": round(float(p[mask].mean()), 3),
+                "obs": round(float(y[mask].mean()), 3),
+            }
+        )
     return out

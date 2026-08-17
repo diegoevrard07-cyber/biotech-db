@@ -236,6 +236,7 @@ def _stat_card(label: str, value: str, *, delta: str | None = None,
 
 
 def render_kpi_row(cards: list[str]) -> None:
+    """Render a row of KPI stat cards as an HTML grid."""
     st.markdown(f'<div class="pf-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
@@ -285,6 +286,7 @@ def _timeframe_cutoff(label: str) -> int | None:
 
 def _style_trade_col(df: pd.DataFrame, col: str = "trade") -> pd.io.formats.style.Styler:
     def color_trade(val):
+        """CSS style coloring a trade-type cell by its TRADE_COLORS entry."""
         return f"color: {TRADE_COLORS.get(val, '#cfd3dc')}; font-weight:700"
 
     return df.style.map(color_trade, subset=[col])
@@ -344,6 +346,7 @@ def _book_sized_table(book: dict, equity: float, prices: dict[str, float]) -> pd
 
 
 def get_conn():
+    """Return a fresh psycopg2 connection from DATABASE_URL (stops the app if unset)."""
     if not DATABASE_URL:
         st.error("DATABASE_URL not set in .env")
         st.stop()
@@ -352,6 +355,7 @@ def get_conn():
 
 @st.cache_data(ttl=300)
 def q(sql: str, params: tuple | None = None) -> pd.DataFrame:
+    """Run a read query and return a DataFrame. Cached for 5 minutes."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -365,6 +369,7 @@ def q(sql: str, params: tuple | None = None) -> pd.DataFrame:
 
 
 def fmt_usd(v) -> str:
+    """Format a dollar value as $B/$M/$K shorthand (em dash when missing)."""
     if v is None or pd.isna(v):
         return "—"
     v = float(v)
@@ -380,6 +385,7 @@ def _f(v):
 
 
 def exec_write(sql: str, params: tuple | None = None) -> None:
+    """Execute a single write statement against the DB and commit."""
     conn = get_conn()
     try:
         with conn.cursor() as cur:
@@ -407,12 +413,14 @@ def latest_prices() -> dict[str, float]:
 
 
 def ensure_account() -> None:
+    """Insert the singleton portfolio_account row (id=1) if missing."""
     exec_write("INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
                "ON CONFLICT (id) DO NOTHING")
 
 
 @st.cache_data(ttl=30)
 def get_account() -> dict:
+    """Return {cash, starting_capital} for the singleton paper account."""
     df = q("SELECT cash_usd, starting_capital_usd FROM portfolio_account WHERE id=1")
     if df.empty:
         return {"cash": 0.0, "starting_capital": None}
@@ -421,6 +429,7 @@ def get_account() -> dict:
 
 
 def set_account(cash: float, starting_capital: float | None) -> None:
+    """Update cash (and optionally starting capital) on the singleton account."""
     ensure_account()
     exec_write(
         "UPDATE portfolio_account SET cash_usd=%s, starting_capital_usd="
@@ -430,6 +439,7 @@ def set_account(cash: float, starting_capital: float | None) -> None:
 
 @st.cache_data(ttl=30)
 def load_holdings(status: str | None = "open") -> pd.DataFrame:
+    """Load portfolio holdings (default: open only), newest entry first."""
     sql = """
         SELECT h.id, h.ticker, h.company_id, h.catalyst_id, h.side, h.trade_type,
                h.entry_date, h.shares, h.entry_price, h.cost_basis_usd,
@@ -447,6 +457,7 @@ def load_holdings(status: str | None = "open") -> pd.DataFrame:
 
 def add_holding(*, ticker, company_id, catalyst_id, side, trade_type, entry_date,
                 shares, entry_price, planned_exit_rule, planned_exit_date, notes) -> None:
+    """Insert an open holding and apply its cash impact to the account."""
     cost = float(shares) * float(entry_price)
     cash_delta = pf.cash_delta_on_open(side, shares, entry_price)
     conn = get_conn()
@@ -469,6 +480,7 @@ def add_holding(*, ticker, company_id, catalyst_id, side, trade_type, entry_date
 
 def close_holding(hid: int, side: str, shares: float, entry_price: float,
                   exit_price: float, exit_date) -> None:
+    """Close a holding at exit_price, booking realized P&L and the cash delta."""
     realized = pf.realized_pnl(side, shares, entry_price, exit_price)
     cash_delta = pf.cash_delta_on_close(side, shares, exit_price)
     conn = get_conn()
@@ -487,6 +499,7 @@ def close_holding(hid: int, side: str, shares: float, entry_price: float,
 
 @st.cache_data(ttl=300)
 def data_freshness() -> dict:
+    """Latest refresh timestamp per key pipeline table (prices, positioning, scores)."""
     out = {}
     for tbl, col in [("price_history", "fetched_at"), ("positioning", "computed_at"),
                      ("edge_scores", "computed_at")]:
@@ -496,6 +509,7 @@ def data_freshness() -> dict:
 
 
 def freshness_caption() -> None:
+    """Render the data-freshness caption with traffic-light age flags."""
     fr = data_freshness()
     today = pd.Timestamp(date.today(), tz="UTC")
     bits = []
@@ -512,6 +526,8 @@ def freshness_caption() -> None:
 
 @st.cache_data(ttl=300)
 def load_blotter() -> pd.DataFrame:
+    """Load the signal blotter: edge_scores joined to companies, catalysts, positioning,
+    and financials."""
     df = q(
         """
         SELECT co.ticker, co.name AS company, co.id AS company_id, co.is_gbm_focused,
@@ -817,6 +833,7 @@ def enrich_plot_benchmark(
 
 @st.cache_data(ttl=10)
 def realized_pnl_total() -> float:
+    """Total realized P&L across all closed holdings."""
     df = q("SELECT COALESCE(SUM(realized_pnl_usd), 0) AS v FROM portfolio_holdings "
            "WHERE status = 'closed'")
     return float(df.iloc[0]["v"]) if not df.empty else 0.0
@@ -860,6 +877,7 @@ def _holding_dicts(df: pd.DataFrame) -> list[dict]:
 
 
 def render_action_center(open_df: pd.DataFrame) -> None:
+    """Render pressing exit alerts (overdue or due within 7 days) for open positions."""
     st.subheader("Action center")
     if open_df.empty:
         st.caption("No open positions.")
@@ -906,6 +924,7 @@ def _purge_open_shorts_once() -> None:
 
 
 def page_portfolio() -> None:
+    """Render the Portfolio page: account setup, open positions, action center, history."""
     st.title("Portfolio")
     ensure_account()
     _purge_open_shorts_once()
@@ -1134,6 +1153,7 @@ def _rgba(hex_color: str, alpha: float) -> str:
 
 
 def page_home() -> None:
+    """Render the Home cockpit: equity curve vs XBI, KPIs, allocation, and risk posture."""
     ensure_account()
     acct = get_account()
     prices = latest_prices()
@@ -1352,6 +1372,7 @@ def page_home() -> None:
 
 # ===========================================================================
 def page_glossary(*, embedded: bool = False) -> None:
+    """Render the Glossary page: plain-language definitions of the pipeline's terms."""
     if not embedded:
         st.title("Glossary")
     terms = [
@@ -1597,6 +1618,7 @@ def render_trade_book_panel(book: dict, equity: float, prices: dict[str, float],
 # ===========================================================================
 @st.cache_data(ttl=300)
 def load_action_book(horizon_days: int) -> dict:
+    """Return the risk-capped action book for the horizon (cached compute_book call)."""
     return compute_book(horizon_days=horizon_days)
 
 
@@ -1806,6 +1828,7 @@ def page_research() -> None:
 
 # ===========================================================================
 def page_validation(*, embedded: bool = False) -> None:
+    """Render the Validation page: event-study evidence, calibration, and backtest results."""
     if not embedded:
         st.title("Validation")
 
@@ -2160,6 +2183,7 @@ def _top_nav() -> callable:
 
 
 def main() -> None:
+    """Streamlit entry: inject the theme, render the top nav, dispatch the page."""
     _inject_css()
     page_fn = _top_nav()
     page_fn()

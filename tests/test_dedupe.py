@@ -3,7 +3,9 @@
 from layers.layer1.dedupe import dedupe_catalysts
 
 
-def _cat(company_id=1, trial_id=10, ctype="phase_readout", expected="2025-09-01", conf="low", extra=None):
+def _cat(
+    company_id=1, trial_id=10, ctype="phase_readout", expected="2025-09-01", conf="low", extra=None
+):
     c = {
         "company_id": company_id,
         "trial_id": trial_id,

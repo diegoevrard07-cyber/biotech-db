@@ -50,7 +50,9 @@ def _year_filter(start_year: int, end_year: int) -> str:
 )
 def _get(params: dict) -> dict:
     _rate_limit()
-    resp = requests.get(config.CLINICALTRIALS_API_BASE, params={**params, "format": "json"}, timeout=120)
+    resp = requests.get(
+        config.CLINICALTRIALS_API_BASE, params={**params, "format": "json"}, timeout=120
+    )
     if resp.status_code == 429:
         raise CTGovHistoricalError("Rate limited")
     if resp.status_code >= 400:

@@ -58,6 +58,7 @@ def _slice_keys(phase, indication, sponsor):
 
 
 def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
+    """Temporal holdout: score test trials with train-period slice rates; print the verdict."""
     with get_connection() as conn:
         rows = conn.execute(
             text(
@@ -103,6 +104,7 @@ def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
             agg[key][1] += 1
 
     def predict(phase, ind, spon) -> float:
+        """Finest-to-coarsest slice lookup with train global-mean fallback."""
         for _label, key in _slice_keys(phase, ind, spon):
             s, n = agg[key]
             if n >= MIN_SLICE_N:
@@ -174,6 +176,7 @@ def validate(*, cutoff_quantile: float = 0.7, store: bool = True) -> dict:
 
 
 def main() -> None:
+    """CLI entry: out-of-sample validation of the base-rate lookup (Layer 3)."""
     parser = argparse.ArgumentParser(description="Out-of-sample base-rate validation")
     parser.add_argument("--cutoff-quantile", type=float, default=0.7)
     parser.add_argument("--no-store", action="store_true")

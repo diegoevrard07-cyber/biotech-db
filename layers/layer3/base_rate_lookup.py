@@ -49,18 +49,20 @@ def _row_to_result(row: dict, fallback_used: bool, rate_source: str) -> BaseRate
 def _lookup_slice_key(slice_key: str, min_confidence: str) -> BaseRateResult | None:
     engine = get_engine()
     with engine.connect() as conn:
-        row = conn.execute(
-            text(
-                """
+        row = (
+            conn.execute(
+                text("""
                 SELECT slice_key, n_trials, n_successes, success_rate, ci_low, ci_high,
                        confidence_tier, COALESCE(source, 'computed') AS source
                 FROM base_rates
                 WHERE slice_key = :slice_key
                 LIMIT 1
-                """
-            ),
-            {"slice_key": slice_key},
-        ).mappings().first()
+                """),
+                {"slice_key": slice_key},
+            )
+            .mappings()
+            .first()
+        )
         if row and _meets_tier(row["confidence_tier"], min_confidence):
             return _row_to_result(row, fallback_used=False, rate_source=row["source"])
     return None
@@ -82,7 +84,11 @@ def get_base_rate(
     candidates: list[dict] = []
     if indication_category and sponsor_class:
         candidates.append(
-            {"phase": phase, "indication_category": indication_category, "sponsor_class": sponsor_class}
+            {
+                "phase": phase,
+                "indication_category": indication_category,
+                "sponsor_class": sponsor_class,
+            }
         )
     if indication_category:
         candidates.append({"phase": phase, "indication_category": indication_category})
@@ -128,9 +134,9 @@ def get_base_rate_by_indication(
         return None
     engine = get_engine()
     with engine.connect() as conn:
-        row = conn.execute(
-            text(
-                """
+        row = (
+            conn.execute(
+                text("""
                 SELECT slice_key, n_trials, n_successes, success_rate, ci_low, ci_high,
                        confidence_tier, COALESCE(source, 'computed') AS source
                 FROM base_rates
@@ -139,10 +145,12 @@ def get_base_rate_by_indication(
                   AND sponsor_class IS NULL
                   AND (source IS NULL OR source = 'computed')
                 LIMIT 1
-                """
-            ),
-            {"indication_category": indication_category},
-        ).mappings().first()
+                """),
+                {"indication_category": indication_category},
+            )
+            .mappings()
+            .first()
+        )
         if row and _meets_tier(row["confidence_tier"], min_confidence):
             return _row_to_result(row, fallback_used=True, rate_source=row["source"])
     return None
@@ -163,7 +171,9 @@ def get_base_rate_for_catalyst(
     ctype = (catalyst_type or "").lower()
 
     if ctype in PDUFA_TYPES:
-        key = "pdufa|snda_efficacy_supplement" if submission_type == "snda" else "pdufa|novel_nda_bla"
+        key = (
+            "pdufa|snda_efficacy_supplement" if submission_type == "snda" else "pdufa|novel_nda_bla"
+        )
         return _lookup_slice_key(key, min_confidence)
 
     if ctype in ADCOM_TYPES:

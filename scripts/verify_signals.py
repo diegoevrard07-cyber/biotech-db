@@ -27,6 +27,7 @@ def _scalar(conn, sql: str) -> int:
 
 
 def verify() -> dict:
+    """Print coverage/freshness of the signal tables; exit 1 if no edge scores exist."""
     out: dict = {}
     with get_connection() as conn:
         universe = _scalar(
@@ -55,6 +56,7 @@ def verify() -> dict:
         )
 
         def pct(n: int) -> str:
+            """Format n as a percentage of the in-universe ticker count."""
             return f"{(100*n/universe):.0f}%" if universe else "n/a"
 
         print("\n=== Signal Health ===")
@@ -100,6 +102,7 @@ def verify() -> dict:
 
 
 def main() -> None:
+    """CLI entry: data-health checks for the Rung 2 signal tables (Phase 10)."""
     try:
         config.preflight()
         verify()

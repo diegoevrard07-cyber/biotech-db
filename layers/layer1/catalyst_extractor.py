@@ -185,6 +185,11 @@ def extract_catalysts(
             raise ValueError(f"Invalid catalyst_type: {c['catalyst_type']}")
 
     full_stats = new_funnel_stats()
-    for k in ("raw_extracted", "dropped_date_past", "dropped_invalid_phase", "dropped_no_expected_date"):
+    for k in (
+        "raw_extracted",
+        "dropped_date_past",
+        "dropped_invalid_phase",
+        "dropped_no_expected_date",
+    ):
         full_stats[k] = stats[k]
     return catalysts, full_stats

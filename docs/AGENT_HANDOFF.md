@@ -145,9 +145,7 @@ TRADING-READINESS TOOLS (added 2026-06-21):
 - `scripts/seed_paper_trades.py` — seeds PAPER longs (buy_the_rumor/hold_through only;
   fades excluded) from the near-term book into `portfolio_holdings` (notes='PAPER'), sized
   at de-risked weight vs a paper sleeve, exit dates from `tracker.planned_exit`. Idempotent;
-  `--reset` wipes PAPER + resets cash. CURRENT PAPER STATE: sleeve $10k, 7 open longs
-  (ADCT/IMVT/MIST/OCUL/BHVN/CLDX/BNTX), ~$2.7k deployed, cash $7.3k. SAGE skipped (no price).
-  This is the owner practicing the workflow before real money — NOT real positions.
+  `--reset` wipes PAPER + resets cash. All seeded positions are paper trades.
 
 PAPER AUTOPILOT (unattended daily run, added 2026-06-21):
 - `scripts/paper_autopilot.py` — one daily cycle: refresh prices for held/candidate
@@ -257,8 +255,8 @@ edge_gap itself isn't backtestable yet.
      ×0.7, small ×0.85, ≥$1B ×1.0) BEFORE portfolio caps. Encodes the magnitude finding
      (small mcap = violent) as DE-RISKING only — it can never enlarge a position. Config:
      `RISK_HAIRCUT_*` (toggle via `RISK_HAIRCUT_ENABLED=0`). Tested (`test_risk_haircut.py`).
-     Effect on current book: gross long 86.9%→82.6%, short 30%→27.7% (per-name bigger:
-     tiny-caps 5%→3.5%). Owner context: satellite sleeve + discipline-tool use.
+     Effect on the book at introduction: gross long 86.9%→82.6%, short 30%→27.7%
+     (per-name bigger: tiny-caps 5%→3.5%).
    - Remaining levers to improve: parse 8-K ITEM CODES (not stored; needs EDGAR re-fetch)
      to drop routine filings; add options skew / short-interest-change once historical
      snapshots accrue; non-linear model only AFTER better features (linear isn't the limit).

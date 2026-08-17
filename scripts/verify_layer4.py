@@ -17,6 +17,7 @@ log = setup_logger("verify_layer4")
 
 
 def verify_layer4() -> bool:
+    """Check Layer 4 data quality (CIKs, filings, events, scores); True when all pass."""
     failures: list[str] = []
     engine = get_engine()
 
@@ -95,6 +96,7 @@ def verify_layer4() -> bool:
 
 
 def main() -> None:
+    """CLI entry: verify Layer 4 SEC pipeline output; exit 1 on failures."""
     parser = argparse.ArgumentParser()
     parser.parse_args()
     ok = verify_layer4()

@@ -7,9 +7,13 @@ runs on whatever data is present. The script exits non-zero if any stage marked
 critical fails, or if any stage errored (so a scheduler can alert).
 
 Order:
-  load_companies -> ingest_layer1 -> classify_universe -> compute/apply base rates
+  apply_schema -> ingest_layer1 -> classify_universe -> compute/apply base rates
   -> run_layer4 (SEC) -> ingest_prices -> ingest_positioning -> ingest_insider
-  -> resolve_outcomes -> run_composite -> calibrate -> verifies
+  -> resolve_outcomes -> build_event_returns -> run_composite -> validate -> calibrate
+  -> action_sheet -> verify_signals
+
+`load_companies.py` is intentionally NOT a stage: it seeds the curated universe once
+per database, not on every refresh.
 """
 
 from __future__ import annotations

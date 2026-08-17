@@ -76,8 +76,9 @@ def test_date_is_reliable():
 
 def test_unreliable_date_blocks_buy_the_rumor():
     # Same setup that would be buy_the_rumor, but with an unreliable date.
-    tt = decide_trade(proximity=1.0, base=0.45, fin_tilt=0.0, run_up_30d=0.1,
-                      edge_gap=None, date_reliable=False)
+    tt = decide_trade(
+        proximity=1.0, base=0.45, fin_tilt=0.0, run_up_30d=0.1, edge_gap=None, date_reliable=False
+    )
     assert tt != BUY_THE_RUMOR
 
 
@@ -99,23 +100,46 @@ def test_suggested_weight_bounds():
         for tt in (BUY_THE_RUMOR, FADE, HOLD_THROUGH, AVOID):
             w = suggested_weight(tt, base=base, proximity=1.0, kelly_fraction=0.25, max_weight=maxw)
             assert -maxw <= w <= maxw
-    assert suggested_weight(AVOID, base=0.9, proximity=1.0, kelly_fraction=0.25, max_weight=maxw) == 0.0
-    assert suggested_weight(FADE, base=0.1, proximity=0.5, kelly_fraction=0.25, max_weight=maxw) == 0.0
-    assert suggested_weight(HOLD_THROUGH, base=0.9, proximity=0.5, kelly_fraction=0.25, max_weight=maxw) > 0
+    assert (
+        suggested_weight(AVOID, base=0.9, proximity=1.0, kelly_fraction=0.25, max_weight=maxw)
+        == 0.0
+    )
+    assert (
+        suggested_weight(FADE, base=0.1, proximity=0.5, kelly_fraction=0.25, max_weight=maxw) == 0.0
+    )
+    assert (
+        suggested_weight(
+            HOLD_THROUGH, base=0.9, proximity=0.5, kelly_fraction=0.25, max_weight=maxw
+        )
+        > 0
+    )
 
 
 def test_compute_edge_score_emits_decision_fields():
     res = compute_edge_score(
         ScoreInputs(
-            catalyst_id=1, company_id=1,
+            catalyst_id=1,
+            company_id=1,
             expected_date=date.today() + timedelta(days=20),
-            base_rate=0.6, runway_months=24, quarterly_burn=3_000_000,
-            implied_move=0.4, run_up_30d=0.1, net_insider_buy_usd=50_000,
+            base_rate=0.6,
+            runway_months=24,
+            quarterly_burn=3_000_000,
+            implied_move=0.4,
+            run_up_30d=0.1,
+            net_insider_buy_usd=50_000,
         ),
-        kelly_fraction=0.25, max_weight=0.05,
+        kelly_fraction=0.25,
+        max_weight=0.05,
     )
-    for key in ("trade_type", "expected_move", "implied_move", "edge_gap",
-                "financing_tilt", "insider_tilt", "suggested_weight"):
+    for key in (
+        "trade_type",
+        "expected_move",
+        "implied_move",
+        "edge_gap",
+        "financing_tilt",
+        "insider_tilt",
+        "suggested_weight",
+    ):
         assert key in res
     assert -0.05 <= res["suggested_weight"] <= 0.05
     assert res["edge_gap"] == round(res["expected_move"] - 0.4, 4)

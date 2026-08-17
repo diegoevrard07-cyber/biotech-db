@@ -41,8 +41,8 @@ def test_multiplier_always_in_unit_interval():
 
 def test_apply_haircut_only_shrinks_and_records():
     rows = [
-        {"ticker": "TINY", "weight": 0.20, "market_cap_usd": 50_000_000},   # nano
-        {"ticker": "BIG", "weight": -0.10, "market_cap_usd": 5_000_000_000}, # large, short
+        {"ticker": "TINY", "weight": 0.20, "market_cap_usd": 50_000_000},  # nano
+        {"ticker": "BIG", "weight": -0.10, "market_cap_usd": 5_000_000_000},  # large, short
         {"ticker": "UNK", "weight": 0.08, "market_cap_usd": None},
     ]
     a.apply_risk_haircut(rows)
