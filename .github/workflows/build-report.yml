@@ -1,0 +1,54 @@
+name: Data Inventory & Sample Report
+
+# Runs the read-only DB inventory (prints to the log) and generates the static
+# research report from live data, uploading HTML + PDF as artifacts. Exists so
+# presentation work can be grounded in real numbers without local DB access.
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build-report.yml"
+      - "scripts/db_inventory.py"
+      - "scripts/generate_report.py"
+  workflow_dispatch:
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: UTC
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Live data inventory (read-only, printed to log)
+        run: python scripts/db_inventory.py
+
+      - name: Generate sample report (HTML)
+        run: python scripts/generate_report.py --out docs/report_sample.html
+
+      - name: Print report to PDF (headless Chrome)
+        run: |
+          google-chrome --headless --disable-gpu --no-sandbox \
+            --print-to-pdf=docs/report_sample.pdf \
+            --no-pdf-header-footer docs/report_sample.html
+
+      - name: Upload report artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-report-${{ github.run_id }}
+          path: |
+            docs/report_sample.html
+            docs/report_sample.pdf
+          retention-days: 30
