@@ -17,6 +17,35 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-08-17 — Data-first dashboard redesign + printable research memo
+
+**Branch:** `cursor/data-first-dashboard-0203` (stacked on the public-release cleanup)
+
+Presentation-only overhaul; no scoring, decision, or ingestion logic changed.
+
+- **`scripts/terminal.py` rewritten** around a Tufte data-ink rule: 5 pages → 3
+  (**Now** = capped action book + trust rail + exits + 90-day calendar + ticker
+  drill-down; **Track record** = equity vs XBI + risk strip + holdings + closed
+  trades; **Evidence** = live event study + calibration history + coverage).
+  Removed: Strategy prose page (lives in README/docs), Glossary, KPI card grids,
+  allocation donuts, badges/chips, gradient cards, emoji freshness lights.
+  Style: hairline separators, tabular numerals, red/green strictly for direction.
+- **`scripts/generate_report.py`**: self-contained print-ready HTML one-pager
+  (top signals from `compute_book`, validation, equity vs XBI SVG, calendar strip,
+  coverage) + headless-Chrome PDF. Sample committed to `docs/report_sample.*`,
+  generated in Actions run 31993216974 against the live DB.
+- **`scripts/db_inventory.py`**: read-only live-data inventory (what exists, not
+  what the schema could hold). Drove the redesign: 481 scores (222 long / 259 avoid),
+  15 resolved outcomes (calibration n=2 — shown honestly), 6,831 event returns,
+  26 equity snapshots.
+- **README**: opens with pitch + real-numbers table (2026-08-17 inventory), links
+  the sample memo; operations stay in docs/.
+
+**Verify:** 180 passed / 7 skipped; AppTest render of all 3 pages with synthetic
+data → no exceptions; report PDF = 1 page, all real values.
+
+---
+
 ## 2026-08-17 — Public-release cleanup (GitHub-ready)
 
 **Branch/PR:** `cursor/github-ready-0203`
