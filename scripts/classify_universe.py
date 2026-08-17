@@ -41,6 +41,7 @@ def _split_conditions(indication: str | None) -> list[str]:
 
 
 def classify(*, dry_run: bool = False) -> dict:
+    """Tag every company with indication_category, is_gbm_focused, and in_universe."""
     summary = {
         "companies": 0,
         "gbm_focused": 0,
@@ -51,15 +52,11 @@ def classify(*, dry_run: bool = False) -> dict:
     }
 
     with get_connection() as conn:
-        companies = conn.execute(
-            text(
-                """
+        companies = conn.execute(text("""
                 SELECT id, ticker, name, market_cap_usd
                 FROM companies
                 ORDER BY ticker
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
         for co in companies:
             summary["companies"] += 1
@@ -101,16 +98,14 @@ def classify(*, dry_run: bool = False) -> dict:
                 continue
 
             conn.execute(
-                text(
-                    """
+                text("""
                     UPDATE companies
                     SET indication_category = :cat,
                         is_gbm_focused = :gbm,
                         in_universe = :inu,
                         updated_at = NOW()
                     WHERE id = :cid
-                    """
-                ),
+                    """),
                 {"cat": dominant, "gbm": gbm, "inu": in_universe, "cid": cid},
             )
 
@@ -137,6 +132,7 @@ def classify(*, dry_run: bool = False) -> dict:
 
 
 def main() -> None:
+    """CLI entry: classify the company universe from its trials (Phase 1)."""
     parser = argparse.ArgumentParser(description="Classify the broadened universe")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

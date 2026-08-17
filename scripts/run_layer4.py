@@ -21,6 +21,8 @@ def _run(script: str, *extra: str, dry_run: bool = False) -> None:
 
 
 def main() -> None:
+    """CLI entry: run the Layer 4 SEC pipeline end to end (CIKs -> filings -> financials
+    -> reconciliation -> composite)."""
     parser = argparse.ArgumentParser(description="Run full Layer 4 pipeline")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--since", help="YYYY-MM-DD for 8-K window")

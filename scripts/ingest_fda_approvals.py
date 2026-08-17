@@ -61,7 +61,9 @@ def _parse_approval(record: dict, start_year: int, end_year: int) -> list[dict]:
         is_novel = sub_type == "ORIG" and sub.get("submission_number") in ("1", 1, "01")
 
         for product in products:
-            drug_name = product.get("brand_name") or product.get("active_ingredients", [{}])[0].get("name", "")
+            drug_name = product.get("brand_name") or product.get("active_ingredients", [{}])[0].get(
+                "name", ""
+            )
             for ia in product.get("active_ingredients") or [{}]:
                 pass
             indication_text = ""
@@ -75,7 +77,9 @@ def _parse_approval(record: dict, start_year: int, end_year: int) -> list[dict]:
                     "drug_name": drug_name,
                     "approval_date": approval_date,
                     "indication": indication_text,
-                    "indication_category": categorize_indication([indication_text] if indication_text else []),
+                    "indication_category": categorize_indication(
+                        [indication_text] if indication_text else []
+                    ),
                     "submission_type": sub_type,
                     "is_novel": is_novel,
                     "raw_data": json.dumps(record),
@@ -84,7 +88,10 @@ def _parse_approval(record: dict, start_year: int, end_year: int) -> list[dict]:
     return rows
 
 
-def ingest(start_year: int = 2010, end_year: int = 2024, limit: int | None = None, dry_run: bool = False) -> dict:
+def ingest(
+    start_year: int = 2010, end_year: int = 2024, limit: int | None = None, dry_run: bool = False
+) -> dict:
+    """Page through openFDA drugsfda and upsert approvals into fda_approvals."""
     upserted = 0
     skip = 0
     batch_size = 100
@@ -100,8 +107,7 @@ def ingest(start_year: int = 2010, end_year: int = 2024, limit: int | None = Non
         with get_connection() as conn:
             for row in rows:
                 conn.execute(
-                    text(
-                        """
+                    text("""
                         INSERT INTO fda_approvals (
                             application_number, sponsor_name, drug_name, approval_date,
                             indication, indication_category, submission_type, is_novel, raw_data
@@ -119,12 +125,12 @@ def ingest(start_year: int = 2010, end_year: int = 2024, limit: int | None = Non
                             submission_type = EXCLUDED.submission_type,
                             is_novel = EXCLUDED.is_novel,
                             raw_data = EXCLUDED.raw_data
-                        """
-                    ),
+                        """),
                     row,
                 )
 
     def flush() -> None:
+        """Write the pending batch and add it to the upserted count."""
         nonlocal upserted
         if not pending:
             return
@@ -168,6 +174,7 @@ def ingest(start_year: int = 2010, end_year: int = 2024, limit: int | None = Non
 
 
 def main() -> None:
+    """CLI entry: ingest FDA approval history from openFDA (Layer 3 base-rate input)."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-year", type=int, default=2010)
     parser.add_argument("--end-year", type=int, default=2024)

@@ -66,8 +66,7 @@ def _upsert_filing(
     raw_json: dict,
 ) -> int:
     row = conn.execute(
-        text(
-            """
+        text("""
             INSERT INTO sec_filings (
                 company_id, accession_number, filing_type, filing_date, url, raw_json
             ) VALUES (
@@ -79,8 +78,7 @@ def _upsert_filing(
                 raw_json = EXCLUDED.raw_json,
                 fetched_at = NOW()
             RETURNING id
-            """
-        ),
+            """),
         {
             "company_id": company_id,
             "accession": accession,
@@ -108,8 +106,7 @@ def _upsert_material_event(
         "indication": event.indication,
     }
     conn.execute(
-        text(
-            """
+        text("""
             INSERT INTO material_events (
                 company_id, ticker, accession_number, filing_date,
                 event_type, event_date, confidence, drug_name, extracted_data
@@ -122,8 +119,7 @@ def _upsert_material_event(
                 drug_name = EXCLUDED.drug_name,
                 extracted_data = EXCLUDED.extracted_data,
                 filing_date = EXCLUDED.filing_date
-            """
-        ),
+            """),
         {
             "company_id": company_id,
             "ticker": ticker,
@@ -147,6 +143,7 @@ def fetch_filings(
     max_filings_per_company: int = 20,
     reparse: bool = False,
 ) -> dict:
+    """Fetch recent 8-Ks per company, parse material events, upsert filings + events."""
     since = since or DEFAULT_SINCE
     stats = {
         "companies": 0,
@@ -185,9 +182,7 @@ def fetch_filings(
                     continue
 
                 filed = (
-                    date.fromisoformat(filing["filing_date"])
-                    if filing.get("filing_date")
-                    else None
+                    date.fromisoformat(filing["filing_date"]) if filing.get("filing_date") else None
                 )
 
                 resolved = resolve_primary_doc(cik, accession)
@@ -208,7 +203,9 @@ def fetch_filings(
                     html = download_filing_html(cik, accession, filename)
                 except Exception as exc:
                     stats["errors"] += 1
-                    log.warning("download_failed", ticker=ticker_u, accession=accession, error=str(exc))
+                    log.warning(
+                        "download_failed", ticker=ticker_u, accession=accession, error=str(exc)
+                    )
                     continue
 
                 events = parse_8k(html)
@@ -255,6 +252,7 @@ def fetch_filings(
 
 
 def main() -> None:
+    """CLI entry: Layer 4 ingestion — pull 8-K filings from EDGAR into sec_filings/material_events."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--since", help="YYYY-MM-DD")

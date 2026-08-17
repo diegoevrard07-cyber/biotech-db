@@ -77,8 +77,14 @@ def _parse_transactions(table, *, is_derivative: bool) -> list[dict]:
         code = _text(coding, "transactionCode") if coding is not None else None
         amounts = txn.find("transactionAmounts")
         shares = _float(_value_text(amounts, "transactionShares")) if amounts is not None else None
-        price = _float(_value_text(amounts, "transactionPricePerShare")) if amounts is not None else None
-        ad = _value_text(amounts, "transactionAcquiredDisposedCode") if amounts is not None else None
+        price = (
+            _float(_value_text(amounts, "transactionPricePerShare"))
+            if amounts is not None
+            else None
+        )
+        ad = (
+            _value_text(amounts, "transactionAcquiredDisposedCode") if amounts is not None else None
+        )
         txn_date = _value_text(txn, "transactionDate")
         security = _text(txn, "securityTitle/value") or _value_text(txn, "securityTitle")
         value_usd = round(shares * price, 2) if (shares is not None and price is not None) else None

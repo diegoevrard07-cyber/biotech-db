@@ -56,6 +56,7 @@ def _throttle() -> None:
     reraise=True,
 )
 def sec_get(url: str, *, as_json: bool = True) -> requests.Response:
+    """GET an EDGAR URL with throttling, User-Agent header, and retry on failure."""
     _throttle()
     resp = requests.get(
         url,
@@ -70,6 +71,7 @@ def sec_get(url: str, *, as_json: bool = True) -> requests.Response:
 
 
 def format_cik(cik: str | int) -> str:
+    """Normalize a CIK to the 10-digit zero-padded form EDGAR URLs require."""
     return str(int(cik)).zfill(10)
 
 
@@ -89,6 +91,7 @@ def fetch_company_ticker_map() -> dict[str, str]:
 
 
 def fetch_submissions(cik: str) -> dict:
+    """Fetch a company's submissions JSON (filing history); {} when CIK is unknown."""
     url = config.SEC_SUBMISSIONS_URL.format(cik=format_cik(cik))
     resp = sec_get(url)
     if resp.status_code == 404:
@@ -97,6 +100,7 @@ def fetch_submissions(cik: str) -> dict:
 
 
 def fetch_companyfacts(cik: str) -> dict:
+    """Fetch a company's XBRL companyfacts JSON (financials); {} when CIK is unknown."""
     url = config.SEC_XBRL_FACTS_URL.format(cik=format_cik(cik))
     resp = sec_get(url)
     if resp.status_code == 404:
@@ -151,6 +155,7 @@ def resolve_primary_doc(cik: str, adsh: str) -> tuple[str, str] | None:
 
 
 def download_filing_html(cik: str, adsh: str, filename: str) -> str:
+    """Download a filing's primary document HTML for material-event parsing."""
     cik_int = str(int(cik))
     acc_nodash = adsh.replace("-", "")
     url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/{filename}"
@@ -160,6 +165,7 @@ def download_filing_html(cik: str, adsh: str, filename: str) -> str:
 
 
 def primary_doc_url(cik: str, adsh: str, filename: str) -> str:
+    """Build the canonical EDGAR URL for a filing's primary document."""
     cik_int = str(int(cik))
     acc_nodash = adsh.replace("-", "")
     return f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/{filename}"
@@ -202,12 +208,14 @@ def iter_recent_filings(
 
 
 def cache_path(name: str) -> Path:
+    """Return a path under the SEC cache directory, creating it if needed."""
     path = config.CACHE_DIR / "sec" / name
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def load_json_cache(path: Path, *, max_age_hours: int | None = None) -> dict | None:
+    """Load a cached JSON file; None when missing or older than max_age_hours."""
     if not path.exists():
         return None
     if max_age_hours is not None:
@@ -218,4 +226,5 @@ def load_json_cache(path: Path, *, max_age_hours: int | None = None) -> dict | N
 
 
 def save_json_cache(path: Path, data: dict) -> None:
+    """Write a dict to a JSON cache file (e.g. submissions or companyfacts)."""
     path.write_text(json.dumps(data), encoding="utf-8")

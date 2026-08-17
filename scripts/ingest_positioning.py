@@ -47,7 +47,12 @@ def _num(value) -> float | None:
 
 
 def _spot_from_info(info: dict) -> float | None:
-    for key in ("currentPrice", "regularMarketPrice", "regularMarketPreviousClose", "previousClose"):
+    for key in (
+        "currentPrice",
+        "regularMarketPrice",
+        "regularMarketPreviousClose",
+        "previousClose",
+    ):
         v = _num(info.get(key))
         if v and v > 0:
             return v
@@ -56,14 +61,12 @@ def _spot_from_info(info: dict) -> float | None:
 
 def _run_up_30d(conn, company_id: int) -> float | None:
     rows = conn.execute(
-        text(
-            """
+        text("""
             SELECT date, close FROM price_history
             WHERE company_id = :cid AND close IS NOT NULL
               AND date >= CURRENT_DATE - INTERVAL '45 days'
             ORDER BY date
-            """
-        ),
+            """),
         {"cid": company_id},
     ).fetchall()
     if len(rows) < 2:
@@ -77,19 +80,16 @@ def _run_up_30d(conn, company_id: int) -> float | None:
 
 def _next_catalyst_date(conn, company_id: int) -> str | None:
     r = conn.execute(
-        text(
-            """
+        text("""
             SELECT MIN(expected_date) FROM catalysts
             WHERE company_id = :cid AND expected_date >= CURRENT_DATE
-            """
-        ),
+            """),
         {"cid": company_id},
     ).scalar()
     return r.isoformat() if r else None
 
 
-_UPSERT = text(
-    """
+_UPSERT = text("""
     INSERT INTO positioning (
         company_id, ticker, date, short_interest, short_pct_float, days_to_cover,
         implied_move_pct, atm_iv, option_expiry, run_up_30d, source, computed_at
@@ -106,15 +106,19 @@ _UPSERT = text(
         option_expiry = EXCLUDED.option_expiry,
         run_up_30d = EXCLUDED.run_up_30d,
         computed_at = NOW()
-    """
-)
+    """)
 
 
 def ingest(*, dry_run: bool = False, limit: int | None = None, ticker: str | None = None) -> dict:
+    """Snapshot short interest, implied move, and 30d run-up per ticker into positioning."""
     today = date.today().isoformat()
     summary = {
-        "tickers": 0, "with_short": 0, "with_implied_move": 0,
-        "with_runup": 0, "market_caps_set": 0, "errors": [],
+        "tickers": 0,
+        "with_short": 0,
+        "with_implied_move": 0,
+        "with_runup": 0,
+        "market_caps_set": 0,
+        "errors": [],
     }
 
     with get_connection() as conn:
@@ -184,7 +188,9 @@ def ingest(*, dry_run: bool = False, limit: int | None = None, ticker: str | Non
                     conn.execute(
                         _UPSERT,
                         {
-                            "company_id": cid, "ticker": tk, "date": today,
+                            "company_id": cid,
+                            "ticker": tk,
+                            "date": today,
                             "short_interest": short_interest,
                             "short_pct_float": short_pct_float,
                             "days_to_cover": days_to_cover,
@@ -218,6 +224,7 @@ def ingest(*, dry_run: bool = False, limit: int | None = None, ticker: str | Non
 
 
 def main() -> None:
+    """CLI entry: ingest positioning/sentiment data from yfinance into positioning."""
     parser = argparse.ArgumentParser(description="Ingest positioning / sentiment (yfinance)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)

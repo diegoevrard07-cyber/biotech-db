@@ -25,18 +25,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
+from action_sheet import risk_haircut  # reuse the same de-risking
 from sqlalchemy import text
 
 import config
 from db import get_connection
-from action_sheet import risk_haircut  # reuse the same de-risking
 from logger import setup_logger
 
 log = setup_logger("liquidity_check")
 
-ILLIQUID_ADV = 500_000      # < $500k/day avg -> hard to trade
-TOO_BIG_PCT = 0.10          # position > 10% of ADV -> fill risk
-WIDE_RANGE = 0.08           # avg daily range > 8% -> wide spread/vol
+ILLIQUID_ADV = 500_000  # < $500k/day avg -> hard to trade
+TOO_BIG_PCT = 0.10  # position > 10% of ADV -> fill risk
+WIDE_RANGE = 0.08  # avg daily range > 8% -> wide spread/vol
 
 
 def _near_term(conn, days: int):
@@ -54,10 +54,13 @@ def _near_term(conn, days: int):
 
 
 def _liquidity(conn, ticker: str) -> dict | None:
-    rows = conn.execute(text(
-        "SELECT close, high, low, volume FROM price_history "
-        "WHERE ticker = :t AND close IS NOT NULL ORDER BY date DESC LIMIT 20"
-    ), {"t": ticker}).all()
+    rows = conn.execute(
+        text(
+            "SELECT close, high, low, volume FROM price_history "
+            "WHERE ticker = :t AND close IS NOT NULL ORDER BY date DESC LIMIT 20"
+        ),
+        {"t": ticker},
+    ).all()
     if len(rows) < 5:
         return None
     closes = np.array([float(r[0]) for r in rows])
@@ -66,14 +69,21 @@ def _liquidity(conn, ticker: str) -> dict | None:
     vols = np.array([float(r[3]) if r[3] is not None else 0.0 for r in rows])
     adv = float(np.mean(closes * vols))
     rng = float(np.mean((highs - lows) / np.where(closes > 0, closes, np.nan)))
-    return {"last": float(closes[0]), "adv": adv, "range_pct": rng,
-            "med_vol": float(np.median(vols))}
+    return {
+        "last": float(closes[0]),
+        "adv": adv,
+        "range_pct": rng,
+        "med_vol": float(np.median(vols)),
+    }
 
 
 def run(days: int = 60, sleeve: float | None = None) -> None:
+    """Print per-name ADV / fill-risk flags for near-term book candidates at the sleeve size."""
     with get_connection() as conn:
         if sleeve is None:
-            sc = conn.execute(text("SELECT starting_capital_usd FROM portfolio_account WHERE id=1")).scalar()
+            sc = conn.execute(
+                text("SELECT starting_capital_usd FROM portfolio_account WHERE id=1")
+            ).scalar()
             sleeve = float(sc) if sc else 10_000.0
         names = _near_term(conn, days)
         seen = set()
@@ -85,10 +95,18 @@ def run(days: int = 60, sleeve: float | None = None) -> None:
             seen.add(t)
             liq = _liquidity(conn, t)
             if not liq:
-                out.append({"ticker": t, "date": r["expected_date"], "trade": r["trade_type"],
-                            "skip": "no price"})
+                out.append(
+                    {
+                        "ticker": t,
+                        "date": r["expected_date"],
+                        "trade": r["trade_type"],
+                        "skip": "no price",
+                    }
+                )
                 continue
-            mult = risk_haircut(float(r["market_cap_usd"]) if r["market_cap_usd"] is not None else None)
+            mult = risk_haircut(
+                float(r["market_cap_usd"]) if r["market_cap_usd"] is not None else None
+            )
             wt = abs(float(r["suggested_weight"])) * mult
             pos = sleeve * wt
             pct_adv = pos / liq["adv"] if liq["adv"] > 0 else float("inf")
@@ -99,13 +117,25 @@ def run(days: int = 60, sleeve: float | None = None) -> None:
                 flags.append("TOO-BIG")
             if liq["range_pct"] > WIDE_RANGE:
                 flags.append("WIDE")
-            out.append({"ticker": t, "date": r["expected_date"], "trade": r["trade_type"],
-                        "last": liq["last"], "adv": liq["adv"], "range_pct": liq["range_pct"],
-                        "pos": pos, "pct_adv": pct_adv, "flags": flags})
+            out.append(
+                {
+                    "ticker": t,
+                    "date": r["expected_date"],
+                    "trade": r["trade_type"],
+                    "last": liq["last"],
+                    "adv": liq["adv"],
+                    "range_pct": liq["range_pct"],
+                    "pos": pos,
+                    "pct_adv": pct_adv,
+                    "flags": flags,
+                }
+            )
 
     print(f"\n=== PRE-TRADE LIQUIDITY CHECK  (next {days}d, sleeve ${sleeve:,.0f}) ===")
-    print(f"{'TICKER':<7}{'DATE':<12}{'TRADE':<14}{'LAST':>8}{'ADV$':>11}{'RANGE%':>8}"
-          f"{'POS$':>9}{'%ADV':>7}  FLAGS")
+    print(
+        f"{'TICKER':<7}{'DATE':<12}{'TRADE':<14}{'LAST':>8}{'ADV$':>11}{'RANGE%':>8}"
+        f"{'POS$':>9}{'%ADV':>7}  FLAGS"
+    )
     clean = 0
     for r in out:
         if r.get("skip"):
@@ -114,18 +144,25 @@ def run(days: int = 60, sleeve: float | None = None) -> None:
         flags = ",".join(r["flags"]) if r["flags"] else "ok"
         if not r["flags"]:
             clean += 1
-        print(f"{r['ticker']:<7}{str(r['date']):<12}{r['trade']:<14}{r['last']:>8.2f}"
-              f"{r['adv']:>11,.0f}{r['range_pct']:>8.1%}{r['pos']:>9,.0f}"
-              f"{r['pct_adv']:>7.1%}  {flags}")
-    print(f"\n{clean}/{len([o for o in out if not o.get('skip')])} names trade clean at this sleeve. "
-          f"Use LIMIT orders; split TOO-BIG names over multiple days or size down.")
+        print(
+            f"{r['ticker']:<7}{str(r['date']):<12}{r['trade']:<14}{r['last']:>8.2f}"
+            f"{r['adv']:>11,.0f}{r['range_pct']:>8.1%}{r['pos']:>9,.0f}"
+            f"{r['pct_adv']:>7.1%}  {flags}"
+        )
+    print(
+        f"\n{clean}/{len([o for o in out if not o.get('skip')])} names trade clean at this sleeve. "
+        f"Use LIMIT orders; split TOO-BIG names over multiple days or size down."
+    )
     log.info("liquidity_check_done", names=len(out), clean=clean, sleeve=sleeve)
 
 
 def main() -> None:
+    """CLI entry: pre-trade liquidity check on upcoming catalyst names."""
     ap = argparse.ArgumentParser(description="Pre-trade liquidity / fill-risk check")
     ap.add_argument("--days", type=int, default=60)
-    ap.add_argument("--sleeve", type=float, default=None, help="sleeve $ (defaults to account starting capital)")
+    ap.add_argument(
+        "--sleeve", type=float, default=None, help="sleeve $ (defaults to account starting capital)"
+    )
     args = ap.parse_args()
     try:
         config.preflight()

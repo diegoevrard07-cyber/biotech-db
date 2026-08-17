@@ -18,13 +18,20 @@ log = setup_logger("resolve_ciks")
 
 
 def resolve_ciks(*, dry_run: bool = False) -> dict[str, int]:
+    """Fill companies.cik from the SEC ticker->CIK map (Layer 4 prerequisite)."""
     ticker_map = fetch_company_ticker_map()
     stats = {"resolved": 0, "missing": 0, "unchanged": 0}
 
     with get_connection() as conn:
-        rows = conn.execute(
-            text("SELECT id, ticker, cik FROM companies WHERE ticker IS NOT NULL ORDER BY ticker")
-        ).mappings().all()
+        rows = (
+            conn.execute(
+                text(
+                    "SELECT id, ticker, cik FROM companies WHERE ticker IS NOT NULL ORDER BY ticker"
+                )
+            )
+            .mappings()
+            .all()
+        )
 
         for row in rows:
             ticker = str(row["ticker"]).upper()
@@ -58,6 +65,7 @@ def resolve_ciks(*, dry_run: bool = False) -> dict[str, int]:
 
 
 def main() -> None:
+    """CLI entry: resolve and store SEC CIKs for all seeded companies."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

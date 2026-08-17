@@ -38,14 +38,10 @@ def test_priors_have_industry_source(seeded_priors):
 
 def test_priors_rates_in_unit_interval(seeded_priors):
     with get_connection() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT success_rate, ci_low, ci_high FROM base_rates
                 WHERE source = 'industry_prior'
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
     for rate, lo, hi in rows:
         assert 0 <= float(rate) <= 1
         assert 0 <= float(lo) <= 1
@@ -64,12 +60,8 @@ def test_priors_idempotent(seeded_priors):
 
 def test_priors_no_collision_with_computed(seeded_priors):
     with get_connection() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT slice_key FROM base_rates
                 WHERE source = 'industry_prior' AND slice_key LIKE 'phase=%'
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
     assert rows == []

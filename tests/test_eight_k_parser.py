@@ -36,9 +36,9 @@ def test_parser_against_fixture(html_path, expected):
     if not expected["should_match"]:
         forbidden = expected.get("event_type")
         if forbidden:
-            assert not any(e.event_type == forbidden for e in events), (
-                f"False positive: {html_path.name} produced {forbidden}"
-            )
+            assert not any(
+                e.event_type == forbidden for e in events
+            ), f"False positive: {html_path.name} produced {forbidden}"
         return
 
     matching = [e for e in events if e.event_type == expected["event_type"]]
@@ -46,9 +46,9 @@ def test_parser_against_fixture(html_path, expected):
 
     e = matching[0]
     if expected.get("event_date"):
-        assert str(e.event_date) == expected["event_date"], (
-            f"Date mismatch in {html_path.name}: got {e.event_date}, expected {expected['event_date']}"
-        )
-    assert e.confidence == expected["confidence"], (
-        f"Confidence mismatch in {html_path.name}: got {e.confidence}"
-    )
+        assert (
+            str(e.event_date) == expected["event_date"]
+        ), f"Date mismatch in {html_path.name}: got {e.event_date}, expected {expected['event_date']}"
+    assert (
+        e.confidence == expected["confidence"]
+    ), f"Confidence mismatch in {html_path.name}: got {e.confidence}"

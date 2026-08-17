@@ -9,7 +9,7 @@ before the event using only data computable at that time:
 Then the realized return is simulated per trade type:
   - buy_the_rumor : enter ~30d pre-event, EXIT ~1d pre-event (sell the news)
   - hold_through  : raw return across the event window (catalyst_outcomes)
-  - fade          : short the event window (-raw_return)
+  - fade          : RETIRED (former fade setups now avoid; not backtested)
   - avoid         : skipped
 
 Honest caveats (printed): financing/positioning are NOT historical, so they are
@@ -34,7 +34,6 @@ from db import get_connection
 from layers.composite.backtest_metrics import summarize
 from layers.composite.scorer import (
     BUY_THE_RUMOR,
-    FADE,
     HOLD_THROUGH,
     decide_trade,
     score_base_rate,
@@ -64,15 +63,14 @@ def _ret(a, b):
 
 
 def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | None = None) -> dict:
+    """Replay resolved catalysts with as-of decision rules; return summary metrics."""
     trade_returns: list[float] = []
     weighted_returns: list[float] = []
     by_type: dict[str, int] = {}
     rows_out: list[dict] = []
 
     with get_connection() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT o.catalyst_id, o.company_id, o.raw_return, c.expected_date,
                        c.base_rate, co.ticker
                 FROM catalyst_outcomes o
@@ -80,9 +78,7 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
                 JOIN companies co ON co.id = o.company_id
                 WHERE o.raw_return IS NOT NULL AND c.expected_date IS NOT NULL
                 ORDER BY c.expected_date
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
         for r in rows:
             ed = r["expected_date"]
@@ -99,43 +95,47 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
             run_up = _ret(ru_start, ru_end)
 
             trade_type = decide_trade(
-                proximity=proximity, base=base, fin_tilt=0.0,
-                run_up_30d=run_up, edge_gap=None,
+                proximity=proximity,
+                base=base,
+                fin_tilt=0.0,
+                run_up_30d=run_up,
+                edge_gap=None,
             )
-            if trade_type not in (BUY_THE_RUMOR, HOLD_THROUGH, FADE):
-                continue
+            if trade_type not in (BUY_THE_RUMOR, HOLD_THROUGH):
+                continue  # avoid (incl. former fades) — long-only backtest
 
-            # Realized return per trade type.
+            # Realized return per trade type (longs only).
             if trade_type == BUY_THE_RUMOR:
                 entry = _close_before(conn, cid, ed - timedelta(days=lead_days))
                 exit_ = _close_before(conn, cid, ed - timedelta(days=1))
                 raw = _ret(entry, exit_)
-                direction = 1.0
-            elif trade_type == HOLD_THROUGH:
+            else:  # HOLD_THROUGH
                 raw = float(r["raw_return"])
-                direction = 1.0
-            else:  # FADE
-                raw = float(r["raw_return"])
-                direction = -1.0
 
             if raw is None:
                 continue
 
-            directional = direction * raw - slippage
+            directional = raw - slippage
             w = suggested_weight(
-                trade_type, base=base, proximity=proximity,
-                kelly_fraction=config.KELLY_FRACTION, max_weight=config.MAX_SINGLE_NAME_WEIGHT,
+                trade_type,
+                base=base,
+                proximity=proximity,
+                kelly_fraction=config.KELLY_FRACTION,
+                max_weight=config.MAX_SINGLE_NAME_WEIGHT,
             )
-            weighted = abs(w) * directional  # weight already carries sign via trade logic
+            weighted = abs(w) * directional
 
             trade_returns.append(directional)
             weighted_returns.append(weighted)
             by_type[trade_type] = by_type.get(trade_type, 0) + 1
             rows_out.append(
                 {
-                    "ticker": r["ticker"], "expected_date": ed.isoformat(),
-                    "trade_type": trade_type, "directional_return": round(directional, 4),
-                    "weight": w, "weighted_return": round(weighted, 5),
+                    "ticker": r["ticker"],
+                    "expected_date": ed.isoformat(),
+                    "trade_type": trade_type,
+                    "directional_return": round(directional, 4),
+                    "weight": w,
+                    "weighted_return": round(weighted, 5),
                 }
             )
 
@@ -147,11 +147,14 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
     for k, v in metrics.items():
         print(f"  {k}: {v}")
     if metrics.get("n_trades", 0) == 0:
-        print("NOTE: no tradeable resolved catalysts yet. Run ingest_prices.py + "
-              "resolve_outcomes.py first; the backtest needs price + outcome history.")
+        print(
+            "NOTE: no tradeable resolved catalysts yet. Run ingest_prices.py + "
+            "resolve_outcomes.py first; the backtest needs price + outcome history."
+        )
 
     if csv_path and rows_out:
         import csv
+
         out = Path(csv_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         with out.open("w", newline="", encoding="utf-8") as fh:
@@ -165,6 +168,7 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
 
 
 def main() -> None:
+    """CLI entry: run the walk-forward backtest over resolved catalyst outcomes."""
     parser = argparse.ArgumentParser(description="Walk-forward event backtest")
     parser.add_argument("--lead-days", type=int, default=30)
     parser.add_argument("--slippage", type=float, default=0.005)

@@ -46,6 +46,7 @@ def _parse_date(value) -> date | None:
 
 
 def load_catalysts(conn, *, ticker: str | None = None) -> list[CatalystRow]:
+    """Load SEC-relevant catalysts (pdufa/adcom/approval/crl) as CatalystRow records."""
     sql = """
         SELECT c.id, co.ticker, c.catalyst_type, c.expected_date,
                COALESCE(c.raw_data->>'drug_name', c.description) AS drug_name,
@@ -78,6 +79,7 @@ def load_catalysts(conn, *, ticker: str | None = None) -> list[CatalystRow]:
 
 
 def load_material_events(conn, *, since: date | None = None) -> list[MaterialEvent]:
+    """Load material_events (optionally filed since a date) as MaterialEvent records."""
     sql = """
         SELECT ticker, event_type, event_date, confidence, accession_number,
                filing_date, drug_name, extracted_data
@@ -105,9 +107,16 @@ def load_material_events(conn, *, since: date | None = None) -> list[MaterialEve
 
 
 def load_filing_dates(conn) -> dict[str, date]:
-    rows = conn.execute(
-        text("SELECT accession_number, filing_date FROM sec_filings WHERE filing_date IS NOT NULL")
-    ).mappings().all()
+    """Map accession_number -> filing_date from sec_filings (recency guard input)."""
+    rows = (
+        conn.execute(
+            text(
+                "SELECT accession_number, filing_date FROM sec_filings WHERE filing_date IS NOT NULL"
+            )
+        )
+        .mappings()
+        .all()
+    )
     out: dict[str, date] = {}
     for r in rows:
         if r["accession_number"] and r["filing_date"]:
@@ -116,9 +125,9 @@ def load_filing_dates(conn) -> dict[str, date]:
 
 
 def apply_update(conn, catalyst_id: int, updates: dict, history_entry: dict) -> None:
+    """Write one reconciled date change, preserving the original and appending history."""
     conn.execute(
-        text(
-            """
+        text("""
             UPDATE catalysts
             SET expected_date = COALESCE(:expected_date, expected_date),
                 sec_confirmed = :sec_confirmed,
@@ -126,8 +135,7 @@ def apply_update(conn, catalyst_id: int, updates: dict, history_entry: dict) -> 
                 expected_date_original = COALESCE(:expected_date_original, expected_date_original),
                 expected_date_history = COALESCE(expected_date_history, '[]'::jsonb) || CAST(:history AS jsonb)
             WHERE id = :id
-            """
-        ),
+            """),
         {
             "id": catalyst_id,
             "expected_date": updates.get("expected_date"),
@@ -150,17 +158,13 @@ def create_catalysts_from_events(
     confidence_rank = {"high": 3, "medium": 2, "low": 1}
     min_rank = confidence_rank.get(min_confidence, 3)
 
-    existing = conn.execute(
-        text(
-            """
+    existing = conn.execute(text("""
             SELECT co.ticker, c.catalyst_type, c.expected_date,
                    COALESCE(c.raw_data->>'drug_name', c.description) AS drug_name
             FROM catalysts c
             JOIN companies co ON co.id = c.company_id
             WHERE c.catalyst_type IN ('pdufa', 'advisory_committee')
-            """
-        )
-    ).mappings().all()
+            """)).mappings().all()
 
     created = 0
     for ev in events:
@@ -198,13 +202,14 @@ def create_catalysts_from_events(
             description += f" — {ev.drug_name}"
 
         if dry_run:
-            print(f"would create catalyst: {ev.ticker} {cat_type} {ev.event_date} ({ev.accession_number})")
+            print(
+                f"would create catalyst: {ev.ticker} {cat_type} {ev.event_date} ({ev.accession_number})"
+            )
             created += 1
             continue
 
         conn.execute(
-            text(
-                """
+            text("""
                 INSERT INTO catalysts (
                     company_id, catalyst_type, expected_date, date_confidence,
                     description, source, source_url, sec_confirmed, sec_source_accession,
@@ -214,8 +219,7 @@ def create_catalysts_from_events(
                     :description, 'sec_8k', :source_url, TRUE, :accession,
                     CAST(:raw_data AS jsonb), FALSE
                 )
-                """
-            ),
+                """),
             {
                 "company_id": company,
                 "catalyst_type": cat_type,
@@ -224,9 +228,7 @@ def create_catalysts_from_events(
                 "description": description,
                 "source_url": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ev.ticker}",
                 "accession": ev.accession_number,
-                "raw_data": json.dumps(
-                    {"drug_name": ev.drug_name, "event_type": ev.event_type}
-                ),
+                "raw_data": json.dumps({"drug_name": ev.drug_name, "event_type": ev.event_type}),
             },
         )
         existing.append(
@@ -251,8 +253,11 @@ def run(
     limit: int | None = None,
     create_missing: bool = False,
 ) -> dict:
+    """Match SEC events to catalysts and overwrite dates per the reconciliation rules."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    log_path = Path(__file__).resolve().parents[1] / "data" / "logs" / f"pdufa_reconciliation_{ts}.jsonl"
+    log_path = (
+        Path(__file__).resolve().parents[1] / "data" / "logs" / f"pdufa_reconciliation_{ts}.jsonl"
+    )
 
     stats = {"updated": 0, "unchanged": 0, "proposed": 0}
     proposals: list[dict] = []
@@ -295,9 +300,11 @@ def run(
                     "ticker": cat.ticker,
                     "catalyst_type": cat.catalyst_type,
                     "old_date": cat.expected_date.isoformat() if cat.expected_date else None,
-                    "new_date": updates["expected_date"].isoformat()
-                    if updates.get("expected_date")
-                    else None,
+                    "new_date": (
+                        updates["expected_date"].isoformat()
+                        if updates.get("expected_date")
+                        else None
+                    ),
                     "accession": updates.get("sec_source_accession"),
                     "reasoning": history,
                 }
@@ -326,6 +333,7 @@ def run(
 
 
 def main() -> None:
+    """CLI entry: reconcile catalyst dates against SEC-confirmed material events."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dry-run",

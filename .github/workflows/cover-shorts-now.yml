@@ -1,0 +1,86 @@
+name: Cover Shorts Now
+
+# One-shot / emergency: cover every open PAPER short, strip short history from
+# the paper book, and retire stale fade scores. Runs on push to this workflow
+# file (and manually). Does NOT wait for the weekday gate.
+
+on:
+  push:
+    paths:
+      - ".github/workflows/cover-shorts-now.yml"
+      - "scripts/fix_long_only_book.py"
+      - "scripts/paper_autopilot.py"
+      - "scripts/strip_shorts.py"
+  workflow_dispatch:
+
+concurrency:
+  group: cover-shorts-now
+  cancel-in-progress: false
+
+jobs:
+  cover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: UTC
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      LONG_ONLY: "1"
+      MAX_GROSS_SHORT: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fix long-only book (cover + strip + retire fades)
+        run: python scripts/fix_long_only_book.py
+
+      - name: Prove no open shorts remain
+        run: |
+          python - <<'PY'
+          import config
+          from db import get_connection
+          config.preflight()
+          with get_connection() as conn:
+              cur = conn.connection.cursor()
+              cur.execute("""
+                  SELECT ticker, side, trade_type, status, shares, entry_price
+                  FROM portfolio_holdings
+                  WHERE status='open' AND (side='short' OR trade_type='fade')
+                  ORDER BY ticker
+              """)
+              rows = cur.fetchall()
+              cur.execute("""
+                  SELECT side, trade_type, count(*)
+                  FROM portfolio_holdings WHERE status='open'
+                  GROUP BY 1,2 ORDER BY 1,2
+              """)
+              open_book = cur.fetchall()
+              cur.execute("SELECT COUNT(*) FROM edge_scores WHERE trade_type='fade'")
+              fades = cur.fetchone()[0]
+              cur.close()
+          print("Open book by side/trade_type:", open_book)
+          print("Stale fade scores remaining:", fades)
+          if rows:
+              print("STILL OPEN SHORTS/FADES:")
+              for r in rows:
+                  print(" ", r)
+              raise SystemExit("FAIL: open shorts/fades still present")
+          print("OK: zero open shorts/fades")
+          PY
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cover-shorts-log-${{ github.run_id }}
+          path: data/logs/
+          if-no-files-found: ignore
+          retention-days: 14

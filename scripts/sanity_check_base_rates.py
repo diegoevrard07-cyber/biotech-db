@@ -45,6 +45,7 @@ def _classify(rate: float, lo: float, hi: float) -> str:
 
 
 def main() -> None:
+    """CLI entry: compare computed base_rates slices against industry benchmark ranges."""
     engine = get_engine()
     print("\n=== Base Rate Sanity Check ===\n")
     print(f"{'Slice':<45} {'Actual':>8} {'Expected':>12} {'Flag':>6}")
@@ -60,14 +61,12 @@ def main() -> None:
                 clauses = ["phase = :phase", "indication_category = :ind", "sponsor_class IS NULL"]
                 params["ind"] = ind
             row = conn.execute(
-                text(
-                    f"""
+                text(f"""
                     SELECT success_rate, n_trials FROM base_rates
                     WHERE {' AND '.join(clauses)}
                       AND (source IS NULL OR source = 'computed')
                     LIMIT 1
-                    """
-                ),
+                    """),
                 params,
             ).first()
             if not row:

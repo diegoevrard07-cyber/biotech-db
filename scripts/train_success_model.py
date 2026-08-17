@@ -95,16 +95,27 @@ def _build_features(df: pd.DataFrame, train_mask: np.ndarray) -> tuple[pd.DataFr
 def _baseline_lookup(df: pd.DataFrame, train_mask: np.ndarray) -> np.ndarray:
     """Base-rate LOOKUP: train group means by phase x indication x sponsor_class."""
     tr = df[train_mask]
-    g = (df["phase"].astype(str) + "|" + df["indication_category"].astype(str)
-         + "|" + df["sponsor_class"].astype(str))
-    tr_g = (tr["phase"].astype(str) + "|" + tr["indication_category"].astype(str)
-            + "|" + tr["sponsor_class"].astype(str))
+    g = (
+        df["phase"].astype(str)
+        + "|"
+        + df["indication_category"].astype(str)
+        + "|"
+        + df["sponsor_class"].astype(str)
+    )
+    tr_g = (
+        tr["phase"].astype(str)
+        + "|"
+        + tr["indication_category"].astype(str)
+        + "|"
+        + tr["sponsor_class"].astype(str)
+    )
     means = tr.assign(_g=tr_g.values).groupby("_g")["y"].mean()
     glob = tr["y"].mean()
     return g.map(means).fillna(glob).to_numpy(dtype=float)
 
 
 def train(*, store: bool = True, l2: float = 2.0) -> dict:
+    """Train the logistic success model on a temporal holdout; compare vs base-rate lookup."""
     df = _load().reset_index(drop=True)
     n = len(df)
     if n < 500:
@@ -151,16 +162,17 @@ def train(*, store: bool = True, l2: float = 2.0) -> dict:
         },
         "naive_brier": round(logreg.brier(yte, naive_p), 6),
     }
-    res["model"]["brier_skill"] = round(
-        1 - res["model"]["brier"] / res["naive_brier"], 4)
+    res["model"]["brier_skill"] = round(1 - res["model"]["brier"] / res["naive_brier"], 4)
     res["lookup_baseline"]["brier_skill"] = round(
-        1 - res["lookup_baseline"]["brier"] / res["naive_brier"], 4)
+        1 - res["lookup_baseline"]["brier"] / res["naive_brier"], 4
+    )
     res["reliability"] = logreg.reliability(yte, p_test)
 
     # Coefficient inspection (standardized scale -> comparable importances).
     coefs = sorted(
         [{"feature": c, "weight": round(float(w[i + 1]), 4)} for i, c in enumerate(cols)],
-        key=lambda d: abs(d["weight"]), reverse=True,
+        key=lambda d: abs(d["weight"]),
+        reverse=True,
     )
     res["top_features"] = coefs[:15]
 
@@ -180,26 +192,42 @@ def train(*, store: bool = True, l2: float = 2.0) -> dict:
         MODEL_PATH.write_text(json.dumps(artifact, indent=2))
         print(f"\nSaved model -> {MODEL_PATH}")
 
-    log.info("train_complete", **{k: res[k] for k in ("n_train", "n_test")},
-             model_auc=res["model"]["auc"], lookup_auc=res["lookup_baseline"]["auc"])
+    log.info(
+        "train_complete",
+        **{k: res[k] for k in ("n_train", "n_test")},
+        model_auc=res["model"]["auc"],
+        lookup_auc=res["lookup_baseline"]["auc"],
+    )
     return res
 
 
 def _print(res: dict, coefs: list[dict]) -> None:
     print("\n=== Clinical Success Model — temporal holdout ===")
-    print(f"Trials: {res['n_total']}  (train {res['n_train']} <= {res['cutoff_date']} "
-          f"< test {res['n_test']})")
+    print(
+        f"Trials: {res['n_total']}  (train {res['n_train']} <= {res['cutoff_date']} "
+        f"< test {res['n_test']})"
+    )
     print(f"Test actual success rate: {res['test_actual_rate']}")
     print(f"{'':22}{'Brier':>10}{'BrierSkill':>12}{'AUC':>8}")
     print(f"{'Naive (global mean)':22}{res['naive_brier']:>10.4f}{0.0:>12.4f}{0.5:>8.3f}")
-    print(f"{'Base-rate LOOKUP':22}{res['lookup_baseline']['brier']:>10.4f}"
-          f"{res['lookup_baseline']['brier_skill']:>12.4f}{res['lookup_baseline']['auc']:>8.3f}")
-    print(f"{'Logistic REGRESSION':22}{res['model']['brier']:>10.4f}"
-          f"{res['model']['brier_skill']:>12.4f}{res['model']['auc']:>8.3f}")
+    print(
+        f"{'Base-rate LOOKUP':22}{res['lookup_baseline']['brier']:>10.4f}"
+        f"{res['lookup_baseline']['brier_skill']:>12.4f}{res['lookup_baseline']['auc']:>8.3f}"
+    )
+    print(
+        f"{'Logistic REGRESSION':22}{res['model']['brier']:>10.4f}"
+        f"{res['model']['brier_skill']:>12.4f}{res['model']['auc']:>8.3f}"
+    )
     lift = res["model"]["auc"] - res["lookup_baseline"]["auc"]
-    verdict = ("REGRESSION BEATS lookup" if lift > 0.005
-               else "no meaningful lift over lookup" if lift > -0.005
-               else "lookup is better — keep base rates")
+    verdict = (
+        "REGRESSION BEATS lookup"
+        if lift > 0.005
+        else (
+            "no meaningful lift over lookup"
+            if lift > -0.005
+            else "lookup is better — keep base rates"
+        )
+    )
     print(f"AUC lift vs lookup: {lift:+.4f}  -> {verdict}")
     print("\nReliability (predicted -> observed):")
     for b in res["reliability"]:
@@ -210,6 +238,7 @@ def _print(res: dict, coefs: list[dict]) -> None:
 
 
 def main() -> None:
+    """CLI entry: train/evaluate the clinical success model on historical_trials."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-store", action="store_true")
     ap.add_argument("--l2", type=float, default=2.0)

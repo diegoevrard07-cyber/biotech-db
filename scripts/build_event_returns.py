@@ -46,8 +46,8 @@ from logger import setup_logger
 
 log = setup_logger("build_event_returns")
 
-HOLD_WINDOWS = [1, 3, 5]   # trading days held after the event day
-RUNUP_LOOKBACK = 30        # trading days before the event for the run-up
+HOLD_WINDOWS = [1, 3, 5]  # trading days held after the event day
+RUNUP_LOOKBACK = 30  # trading days before the event for the run-up
 
 _INSERT_SQL = """
     INSERT INTO event_returns (
@@ -106,28 +106,35 @@ def _load_event_types(conn) -> dict[str, str]:
     """Map accession_number -> event_type from material_events (labeled subset)."""
     out: dict[str, str] = {}
     for acc, etype in conn.execute(
-        text("SELECT accession_number, event_type FROM material_events "
-             "WHERE accession_number IS NOT NULL AND event_type IS NOT NULL")
+        text(
+            "SELECT accession_number, event_type FROM material_events "
+            "WHERE accession_number IS NOT NULL AND event_type IS NOT NULL"
+        )
     ).all():
         out[acc] = etype
     return out
 
 
 def build(*, dry_run: bool = False) -> dict:
+    """Compute per-filing abnormal returns over hold windows and upsert event_returns."""
     summary = {"filings": 0, "computed": 0, "no_price": 0, "rows": 0}
     with get_connection() as conn:
         prices, bench = _load_prices(conn)
         bench_dates, bench_closes = bench
         event_types = _load_event_types(conn)
 
-        filings = conn.execute(
-            text(
-                "SELECT f.company_id, c.ticker, f.accession_number, f.filing_date, f.filing_type "
-                "FROM sec_filings f JOIN companies c ON c.id = f.company_id "
-                "WHERE f.filing_date IS NOT NULL AND c.ticker IS NOT NULL "
-                "ORDER BY f.filing_date ASC"
+        filings = (
+            conn.execute(
+                text(
+                    "SELECT f.company_id, c.ticker, f.accession_number, f.filing_date, f.filing_type "
+                    "FROM sec_filings f JOIN companies c ON c.id = f.company_id "
+                    "WHERE f.filing_date IS NOT NULL AND c.ticker IS NOT NULL "
+                    "ORDER BY f.filing_date ASC"
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
         out_rows: list[dict] = []
         for f in filings:
@@ -140,8 +147,8 @@ def build(*, dry_run: bool = False) -> dict:
             dates, closes = pdata
             fd = f["filing_date"]
 
-            pre_idx = bisect.bisect_left(dates, fd) - 1      # last close strictly before filing
-            event_idx = bisect.bisect_left(dates, fd)        # first trading day on/after filing
+            pre_idx = bisect.bisect_left(dates, fd) - 1  # last close strictly before filing
+            event_idx = bisect.bisect_left(dates, fd)  # first trading day on/after filing
             if pre_idx < 0 or event_idx >= len(dates):
                 summary["no_price"] += 1
                 continue
@@ -161,23 +168,26 @@ def build(*, dry_run: bool = False) -> dict:
                 post_date = dates[exit_idx]
                 b_post = _on_or_before(bench_dates, bench_closes, post_date)
 
-                out = compute_outcome(pre_close, post_close, b_pre, b_post,
-                                      threshold=config.OUTCOME_MOVE_THRESHOLD)
-                out_rows.append({
-                    "company_id": cid,
-                    "ticker": f["ticker"],
-                    "accession_number": f["accession_number"],
-                    "filing_date": fd.isoformat(),
-                    "filing_type": f["filing_type"],
-                    "event_type": event_types.get(f["accession_number"]),
-                    "hold_days": hold,
-                    "pre_price": pre_close,
-                    "post_price": post_close,
-                    "raw_return": out["raw_return"],
-                    "benchmark_return": out["benchmark_return"],
-                    "abnormal_return": out["abnormal_return"],
-                    "run_up_30d": run_up,
-                })
+                out = compute_outcome(
+                    pre_close, post_close, b_pre, b_post, threshold=config.OUTCOME_MOVE_THRESHOLD
+                )
+                out_rows.append(
+                    {
+                        "company_id": cid,
+                        "ticker": f["ticker"],
+                        "accession_number": f["accession_number"],
+                        "filing_date": fd.isoformat(),
+                        "filing_type": f["filing_type"],
+                        "event_type": event_types.get(f["accession_number"]),
+                        "hold_days": hold,
+                        "pre_price": pre_close,
+                        "post_price": post_close,
+                        "raw_return": out["raw_return"],
+                        "benchmark_return": out["benchmark_return"],
+                        "abnormal_return": out["abnormal_return"],
+                        "run_up_30d": run_up,
+                    }
+                )
                 computed_any = True
             if computed_any:
                 summary["computed"] += 1
@@ -187,8 +197,9 @@ def build(*, dry_run: bool = False) -> dict:
             raw = conn.connection
             cur = raw.cursor()
             try:
-                execute_values(cur, _INSERT_SQL, out_rows,
-                               template=_VALUES_TEMPLATE, page_size=1000)
+                execute_values(
+                    cur, _INSERT_SQL, out_rows, template=_VALUES_TEMPLATE, page_size=1000
+                )
                 raw.commit()
             finally:
                 cur.close()
@@ -211,6 +222,7 @@ def _pct(xs: list[float], q: float) -> float:
 
 
 def analyze(hold: int = 3) -> None:
+    """Print distribution stats, the fade-the-run-up quintile test, and per-event-type sanity."""
     with get_connection() as conn:
         rows = conn.execute(
             text(
@@ -257,9 +269,8 @@ def analyze(hold: int = 3) -> None:
         cov = sum((x - mx) * (y - my) for x, y in paired)
         vx = sum((x - mx) ** 2 for x in xs)
         vy = sum((y - my) ** 2 for y in ys)
-        corr = cov / (vx ** 0.5 * vy ** 0.5) if vx > 0 and vy > 0 else float("nan")
-        print(f"\n  corr(run-up, forward abnormal) = {corr:+.3f}  "
-              f"(negative => fade works)")
+        corr = cov / (vx**0.5 * vy**0.5) if vx > 0 and vy > 0 else float("nan")
+        print(f"\n  corr(run-up, forward abnormal) = {corr:+.3f}  " f"(negative => fade works)")
 
     # --- Sanity / signal by labeled event type ---
     by_type: dict[str, list[float]] = {}
@@ -269,11 +280,14 @@ def analyze(hold: int = 3) -> None:
     if by_type:
         print("\n  Abnormal return by labeled event type (sanity check):")
         for et, vals in sorted(by_type.items(), key=lambda kv: statistics.mean(kv[1])):
-            print(f"  {et:<16} mean {statistics.mean(vals):+7.2%}   median "
-                  f"{statistics.median(vals):+7.2%}   n={len(vals)}")
+            print(
+                f"  {et:<16} mean {statistics.mean(vals):+7.2%}   median "
+                f"{statistics.median(vals):+7.2%}   n={len(vals)}"
+            )
 
 
 def main() -> None:
+    """CLI entry: build the event_returns validation table, then print the analysis."""
     parser = argparse.ArgumentParser(description="Build + analyze event-return validation set")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--analyze-only", action="store_true")

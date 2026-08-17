@@ -1,4 +1,8 @@
-"""Apply schema.sql to Supabase Postgres (idempotent)."""
+"""Apply the database schema (schema.sql at repo root) idempotently.
+
+Pipeline role: stage 0 of every refresh — creates/updates all tables and indexes
+before any ingestion runs, so downstream stages can assume the schema exists.
+"""
 
 from __future__ import annotations
 
@@ -6,13 +10,15 @@ import argparse
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # project root (config, db)
+
 from sqlalchemy import text
 
 import config
 from db import get_connection, get_engine
 from logger import setup_logger
 
-SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schema.sql"
 
 EXPECTED_TABLES = [
     "companies",
@@ -76,15 +82,11 @@ def apply_schema(dry_run: bool = False) -> list[str]:
     # Verify tables exist
     engine = get_engine()
     with engine.connect() as conn:
-        result = conn.execute(
-            text(
-                """
+        result = conn.execute(text("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
                 ORDER BY table_name
-                """
-            )
-        )
+                """))
         existing = {row[0] for row in result}
 
     missing = [t for t in EXPECTED_TABLES if t not in existing]
@@ -101,6 +103,7 @@ def apply_schema(dry_run: bool = False) -> list[str]:
 
 
 def main() -> None:
+    """CLI entry: apply schema.sql to Postgres (stage 0 before any ingestion)."""
     parser = argparse.ArgumentParser(description="Apply database schema (idempotent)")
     parser.add_argument("--dry-run", action="store_true", help="Print actions without DB writes")
     args = parser.parse_args()

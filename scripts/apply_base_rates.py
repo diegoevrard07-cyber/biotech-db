@@ -24,6 +24,7 @@ UNMAPPED_LOG = config.LOGS_DIR / "unmapped_catalysts.jsonl"
 
 
 def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
+    """Stamp each upcoming catalyst with its Layer 3 base-rate slice; log unmapped ones."""
     mapped = 0
     unmapped = 0
     unmappable_no_phase = 0
@@ -34,9 +35,7 @@ def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
             UNMAPPED_LOG.write_text("", encoding="utf-8")
 
     with get_connection() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT c.id AS catalyst_id, c.catalyst_type, c.expected_date,
                        t.phase, t.indication, t.nct_id,
                        co.name AS company_name, co.primary_indication
@@ -44,9 +43,7 @@ def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
                 LEFT JOIN trials t ON c.trial_id = t.id
                 LEFT JOIN companies co ON c.company_id = co.id
                 WHERE c.expected_date >= CURRENT_DATE
-                """
-            )
-        ).mappings().all()
+                """)).mappings().all()
 
         for row in rows:
             catalyst_type = row.get("catalyst_type") or ""
@@ -71,8 +68,7 @@ def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
                 unmappable_no_phase += 1
                 if not dry_run:
                     conn.execute(
-                        text(
-                            """
+                        text("""
                             UPDATE catalysts SET
                                 base_rate = NULL,
                                 base_rate_n = NULL,
@@ -81,8 +77,7 @@ def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
                                 base_rate_slice_key = 'unmappable_no_phase',
                                 base_rate_source = NULL
                             WHERE id = :catalyst_id
-                            """
-                        ),
+                            """),
                         {"catalyst_id": row["catalyst_id"]},
                     )
                     with UNMAPPED_LOG.open("a", encoding="utf-8") as f:
@@ -125,8 +120,7 @@ def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
             mapped += 1
             if not dry_run:
                 conn.execute(
-                    text(
-                        """
+                    text("""
                         UPDATE catalysts SET
                             base_rate = :base_rate,
                             base_rate_n = :base_rate_n,
@@ -135,8 +129,7 @@ def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
                             base_rate_slice_key = :slice_key,
                             base_rate_source = :base_rate_source
                         WHERE id = :catalyst_id
-                        """
-                    ),
+                        """),
                     {
                         "catalyst_id": row["catalyst_id"],
                         "base_rate": result.success_rate,
@@ -159,6 +152,7 @@ def apply(min_confidence: str = "medium", dry_run: bool = False) -> dict:
 
 
 def main() -> None:
+    """CLI entry: apply base rates to upcoming catalysts (Layer 3 scoring stage)."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--min-confidence", default="medium")
     parser.add_argument("--dry-run", action="store_true")

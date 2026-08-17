@@ -53,8 +53,7 @@ def _find_form4_xml(cik: str, adsh: str) -> str | None:
     return xmls[0] if xmls else None
 
 
-_UPSERT = text(
-    """
+_UPSERT = text("""
     INSERT INTO insider_transactions (
         company_id, cik, accession_number, filing_date, transaction_date,
         insider_name, insider_role, transaction_code, shares, price_per_share,
@@ -70,8 +69,7 @@ _UPSERT = text(
         value_usd = EXCLUDED.value_usd,
         is_purchase = EXCLUDED.is_purchase,
         insider_role = EXCLUDED.insider_role
-    """
-)
+    """)
 
 
 def ingest(
@@ -81,6 +79,7 @@ def ingest(
     ticker: str | None = None,
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
 ) -> dict:
+    """Fetch recent Form 4 filings per company and upsert insider transactions."""
     since = date.today() - timedelta(days=lookback_days)
     summary = {"companies": 0, "filings": 0, "transactions": 0, "purchases": 0, "errors": []}
 
@@ -109,9 +108,7 @@ def ingest(
                 subs = sec_client.fetch_submissions(cik)
                 if not subs:
                     continue
-                filings = sec_client.iter_recent_filings(
-                    subs, forms=frozenset({"4"}), since=since
-                )
+                filings = sec_client.iter_recent_filings(subs, forms=frozenset({"4"}), since=since)
                 for f in filings:
                     adsh = f["accession_number"]
                     xml_name = _find_form4_xml(cik, adsh)
@@ -174,6 +171,7 @@ def ingest(
 
 
 def main() -> None:
+    """CLI entry: ingest SEC Form 4 insider transactions into insider_transactions."""
     parser = argparse.ArgumentParser(description="Ingest SEC Form 4 insider transactions")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)
@@ -183,7 +181,9 @@ def main() -> None:
     try:
         config.preflight(require_sec=True)
         ingest(
-            dry_run=args.dry_run, limit=args.limit, ticker=args.ticker,
+            dry_run=args.dry_run,
+            limit=args.limit,
+            ticker=args.ticker,
             lookback_days=args.lookback_days,
         )
     except Exception as exc:  # noqa: BLE001

@@ -8,20 +8,24 @@ from layers.marketdata.options import compute_implied_move, pick_expiry
 
 
 def _chain():
-    calls = pd.DataFrame({
-        "strike": [8.0, 10.0, 12.0],
-        "bid": [2.0, 1.0, 0.4],
-        "ask": [2.2, 1.2, 0.6],
-        "lastPrice": [2.1, 1.1, 0.5],
-        "impliedVolatility": [0.9, 1.0, 1.1],
-    })
-    puts = pd.DataFrame({
-        "strike": [8.0, 10.0, 12.0],
-        "bid": [0.4, 1.0, 2.0],
-        "ask": [0.6, 1.2, 2.2],
-        "lastPrice": [0.5, 1.1, 2.1],
-        "impliedVolatility": [1.1, 1.0, 0.9],
-    })
+    calls = pd.DataFrame(
+        {
+            "strike": [8.0, 10.0, 12.0],
+            "bid": [2.0, 1.0, 0.4],
+            "ask": [2.2, 1.2, 0.6],
+            "lastPrice": [2.1, 1.1, 0.5],
+            "impliedVolatility": [0.9, 1.0, 1.1],
+        }
+    )
+    puts = pd.DataFrame(
+        {
+            "strike": [8.0, 10.0, 12.0],
+            "bid": [0.4, 1.0, 2.0],
+            "ask": [0.6, 1.2, 2.2],
+            "lastPrice": [0.5, 1.1, 2.1],
+            "impliedVolatility": [1.1, 1.0, 0.9],
+        }
+    )
     return calls, puts
 
 

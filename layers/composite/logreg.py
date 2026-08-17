@@ -60,6 +60,7 @@ def predict_proba(w: np.ndarray, X: np.ndarray) -> np.ndarray:
 
 
 def brier(y: np.ndarray, p: np.ndarray) -> float:
+    """Mean squared error of predicted probabilities vs realized binary outcomes."""
     return float(np.mean((p - y) ** 2))
 
 
@@ -85,6 +86,7 @@ def auc(y: np.ndarray, p: np.ndarray) -> float:
 
 
 def reliability(y: np.ndarray, p: np.ndarray, *, n_buckets: int = 10) -> list[dict]:
+    """Calibration table: mean predicted probability vs observed hit rate per bucket."""
     out = []
     edges = np.linspace(0.0, 1.0, n_buckets + 1)
     for i in range(n_buckets):
@@ -92,10 +94,12 @@ def reliability(y: np.ndarray, p: np.ndarray, *, n_buckets: int = 10) -> list[di
         mask = (p >= lo) & (p < hi) if i < n_buckets - 1 else (p >= lo) & (p <= hi)
         if mask.sum() == 0:
             continue
-        out.append({
-            "bucket": f"{lo:.2f}-{hi:.2f}",
-            "n": int(mask.sum()),
-            "pred": round(float(p[mask].mean()), 3),
-            "obs": round(float(y[mask].mean()), 3),
-        })
+        out.append(
+            {
+                "bucket": f"{lo:.2f}-{hi:.2f}",
+                "n": int(mask.sum()),
+                "pred": round(float(p[mask].mean()), 3),
+                "obs": round(float(y[mask].mean()), 3),
+            }
+        )
     return out

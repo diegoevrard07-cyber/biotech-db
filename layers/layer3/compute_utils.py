@@ -31,6 +31,7 @@ def _z_for_alpha(alpha: float) -> float:
 
 
 def confidence_tier(n: int) -> str:
+    """Map a slice's sample size to a low/medium/high confidence tier for its rate."""
     if n >= 30:
         return "high"
     if n >= 10:
@@ -39,6 +40,7 @@ def confidence_tier(n: int) -> str:
 
 
 def build_slice_key(**kwargs) -> str:
+    """Canonical 'k=v|k=v' slice key from non-empty filter dimensions, sorted by key."""
     parts = []
     for key in sorted(kwargs.keys()):
         val = kwargs[key]

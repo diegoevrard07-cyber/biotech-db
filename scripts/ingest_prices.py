@@ -116,7 +116,7 @@ CHUNK_SIZE = 30
 
 def _global_start(conn, *, lookback_days: int, since_last: bool) -> str:
     """Batch start date. Incremental mode starts just after the latest stored bar."""
-    full_start = (date.today() - timedelta(days=lookback_days))
+    full_start = date.today() - timedelta(days=lookback_days)
     if not since_last:
         return full_start.isoformat()
     last = conn.execute(text("SELECT MAX(date) FROM price_history")).scalar()
@@ -136,6 +136,7 @@ def ingest(
     lookback_days: int | None = None,
     since_last: bool = False,
 ) -> dict:
+    """Batch-download daily bars (universe + XBI benchmark) and upsert price_history."""
     lookback_days = lookback_days or config.PRICE_LOOKBACK_DAYS
     summary = {"tickers": 0, "rows": 0, "empty": [], "errors": []}
 
@@ -165,7 +166,7 @@ def ingest(
         cmap[co["ticker"]] = co["id"]
         order.append(co["ticker"])
 
-    chunks = [order[i:i + CHUNK_SIZE] for i in range(0, len(order), CHUNK_SIZE)]
+    chunks = [order[i : i + CHUNK_SIZE] for i in range(0, len(order), CHUNK_SIZE)]
 
     conn = get_engine().connect()
     try:
@@ -191,8 +192,11 @@ def ingest(
                 summary["rows"] += len(rows)
             if not dry_run:
                 _bulk_upsert(conn, batch)
-            print(f"  chunk {ci}/{len(chunks)} ({len(chunk)} tickers): {chunk_rows} rows, "
-                  f"{len(data)} with data", flush=True)
+            print(
+                f"  chunk {ci}/{len(chunks)} ({len(chunk)} tickers): {chunk_rows} rows, "
+                f"{len(data)} with data",
+                flush=True,
+            )
     finally:
         conn.close()
 
@@ -206,26 +210,38 @@ def ingest(
     if dry_run:
         print("(dry run - no rows written)")
 
-    log.info("price_ingest_complete", tickers=summary["tickers"], rows=summary["rows"],
-             empty=len(summary["empty"]), errors=len(summary["errors"]))
+    log.info(
+        "price_ingest_complete",
+        tickers=summary["tickers"],
+        rows=summary["rows"],
+        empty=len(summary["empty"]),
+        errors=len(summary["errors"]),
+    )
     return summary
 
 
 def main() -> None:
+    """CLI entry: ingest daily price history from yfinance into price_history."""
     parser = argparse.ArgumentParser(description="Ingest daily price history (yfinance)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--ticker", type=str)
     parser.add_argument("--no-benchmark", action="store_true")
     parser.add_argument("--lookback-days", type=int)
-    parser.add_argument("--since-last", action="store_true",
-                        help="Incremental: only fetch bars newer than what is stored")
+    parser.add_argument(
+        "--since-last",
+        action="store_true",
+        help="Incremental: only fetch bars newer than what is stored",
+    )
     args = parser.parse_args()
     try:
         config.preflight()
         summary = ingest(
-            dry_run=args.dry_run, limit=args.limit, ticker=args.ticker,
-            benchmark=not args.no_benchmark, lookback_days=args.lookback_days,
+            dry_run=args.dry_run,
+            limit=args.limit,
+            ticker=args.ticker,
+            benchmark=not args.no_benchmark,
+            lookback_days=args.lookback_days,
             since_last=args.since_last,
         )
     except Exception as exc:  # noqa: BLE001

@@ -22,13 +22,22 @@ from layers.portfolio import performance_store as perf_store
 
 PERF_CSV = config.RAW_DIR / "paper_performance.csv"
 PERF_COLUMNS = [
-    "date", "equity", "cash", "open_positions", "unrealized_pnl",
-    "realized_to_date", "total_return_pct", "exits_today", "opens_today",
-    "resized_today", "desk_positions",
+    "date",
+    "equity",
+    "cash",
+    "open_positions",
+    "unrealized_pnl",
+    "realized_to_date",
+    "total_return_pct",
+    "exits_today",
+    "opens_today",
+    "resized_today",
+    "desk_positions",
 ]
 
 
 def main() -> None:
+    """CLI entry: import the local paper_performance CSV into portfolio_performance."""
     ap = argparse.ArgumentParser(description="Sync local performance CSV to Supabase")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
@@ -57,9 +66,7 @@ def main() -> None:
         cur = raw.cursor()
         try:
             track_start = perf_store.tracking_start_date(cur)
-            cur.execute(
-                "SELECT starting_capital_usd FROM portfolio_account WHERE id=1"
-            )
+            cur.execute("SELECT starting_capital_usd FROM portfolio_account WHERE id=1")
             acct = cur.fetchone()
             start_cap = float(acct[0]) if acct and acct[0] else None
 
@@ -86,19 +93,28 @@ def main() -> None:
                     "snapshot_date": snap_date,
                     "equity": float(raw_row.get("equity") or 0),
                     "cash": float(raw_row["cash"]) if raw_row.get("cash") else None,
-                    "open_positions": int(raw_row["open_positions"])
-                    if raw_row.get("open_positions") else None,
-                    "unrealized_pnl": float(raw_row["unrealized_pnl"])
-                    if raw_row.get("unrealized_pnl") else None,
-                    "realized_to_date": float(raw_row["realized_to_date"])
-                    if raw_row.get("realized_to_date") else None,
-                    "total_return_pct": float(raw_row["total_return_pct"])
-                    if raw_row.get("total_return_pct") else None,
+                    "open_positions": (
+                        int(raw_row["open_positions"]) if raw_row.get("open_positions") else None
+                    ),
+                    "unrealized_pnl": (
+                        float(raw_row["unrealized_pnl"]) if raw_row.get("unrealized_pnl") else None
+                    ),
+                    "realized_to_date": (
+                        float(raw_row["realized_to_date"])
+                        if raw_row.get("realized_to_date")
+                        else None
+                    ),
+                    "total_return_pct": (
+                        float(raw_row["total_return_pct"])
+                        if raw_row.get("total_return_pct")
+                        else None
+                    ),
                     "exits_today": int(raw_row.get("exits_today") or 0),
                     "opens_today": int(raw_row.get("opens_today") or 0),
                     "resized_today": int(raw_row.get("resized_today") or 0),
-                    "desk_positions": int(raw_row["desk_positions"])
-                    if raw_row.get("desk_positions") else None,
+                    "desk_positions": (
+                        int(raw_row["desk_positions"]) if raw_row.get("desk_positions") else None
+                    ),
                     "xbi_close": xbi_close,
                     "xbi_return_pct": xbi_ret,
                     "benchmark_equity": bench_eq,
@@ -110,7 +126,9 @@ def main() -> None:
                 n += 1
             if not args.dry_run:
                 raw.commit()
-            print(f"{'Would sync' if args.dry_run else 'Synced'} {n} snapshot(s) to portfolio_performance.")
+            print(
+                f"{'Would sync' if args.dry_run else 'Synced'} {n} snapshot(s) to portfolio_performance."
+            )
         finally:
             cur.close()
 

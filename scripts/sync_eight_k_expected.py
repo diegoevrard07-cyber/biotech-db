@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -15,6 +14,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "eight_k
 
 
 def main() -> None:
+    """CLI entry: refresh fixture .expected.json event fields from current parser output."""
     for html_path in sorted(FIXTURES.rglob("*.html")):
         expected_path = html_path.with_suffix(".expected.json")
         if not expected_path.exists():

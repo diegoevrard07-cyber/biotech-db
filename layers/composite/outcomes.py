@@ -29,6 +29,7 @@ def _ret(pre: float | None, post: float | None) -> float | None:
 
 
 def label_outcome(abnormal_return: float | None, threshold: float) -> str | None:
+    """Classify a catalyst as hit/miss/ambiguous from its benchmark-adjusted move."""
     if abnormal_return is None:
         return None
     if abnormal_return >= threshold:

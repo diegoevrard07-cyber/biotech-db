@@ -1,8 +1,8 @@
 """Tests for base rate lookup fallback chain."""
 
-import pytest
-
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from layers.layer3.base_rate_lookup import (
     BaseRateResult,
@@ -140,7 +140,10 @@ def test_readout_uses_computed_rates(mock_get):
         rate_source="computed",
     )
     r = get_base_rate_for_catalyst(
-        "phase_readout", phase="PHASE2", indication_category="oncology_solid", min_confidence="medium"
+        "phase_readout",
+        phase="PHASE2",
+        indication_category="oncology_solid",
+        min_confidence="medium",
     )
     assert r is not None
     assert r.rate_source == "computed"

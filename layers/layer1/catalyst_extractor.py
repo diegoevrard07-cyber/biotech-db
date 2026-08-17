@@ -26,6 +26,7 @@ ADVISORY_PATTERN = re.compile(
 
 
 def new_funnel_stats() -> dict[str, int]:
+    """Return a zeroed counter dict tracking the catalyst extraction filter funnel."""
     return {
         "raw_extracted": 0,
         "dropped_date_past": 0,
@@ -37,6 +38,7 @@ def new_funnel_stats() -> dict[str, int]:
 
 
 def merge_funnel_stats(*parts: dict[str, int]) -> dict[str, int]:
+    """Sum per-trial funnel counters into one pipeline-wide attrition summary."""
     merged = new_funnel_stats()
     for part in parts:
         for key in merged:
@@ -183,6 +185,11 @@ def extract_catalysts(
             raise ValueError(f"Invalid catalyst_type: {c['catalyst_type']}")
 
     full_stats = new_funnel_stats()
-    for k in ("raw_extracted", "dropped_date_past", "dropped_invalid_phase", "dropped_no_expected_date"):
+    for k in (
+        "raw_extracted",
+        "dropped_date_past",
+        "dropped_invalid_phase",
+        "dropped_no_expected_date",
+    ):
         full_stats[k] = stats[k]
     return catalysts, full_stats

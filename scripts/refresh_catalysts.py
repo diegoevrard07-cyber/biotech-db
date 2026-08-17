@@ -21,16 +21,21 @@ log = setup_logger("refresh_catalysts")
 
 
 def main() -> None:
+    """CLI entry: re-extract and replace ctgov_v2 catalysts from stored trial JSON."""
     total = 0
     funnel = new_funnel_stats()
 
     with get_connection() as conn:
         companies = conn.execute(text("SELECT id, ticker FROM companies")).mappings().all()
         for co in companies:
-            trials = conn.execute(
-                text("SELECT id, nct_id, raw_json FROM trials WHERE company_id = :c"),
-                {"c": co["id"]},
-            ).mappings().all()
+            trials = (
+                conn.execute(
+                    text("SELECT id, nct_id, raw_json FROM trials WHERE company_id = :c"),
+                    {"c": co["id"]},
+                )
+                .mappings()
+                .all()
+            )
             cats: list[dict] = []
             company_funnel = new_funnel_stats()
             for t in trials:
@@ -51,8 +56,7 @@ def main() -> None:
             )
             for cat in deduped:
                 conn.execute(
-                    text(
-                        """
+                    text("""
                         INSERT INTO catalysts (
                             company_id, trial_id, catalyst_type, expected_date, date_confidence,
                             description, source, source_url, raw_data, requires_manual_verification
@@ -61,12 +65,13 @@ def main() -> None:
                             :description, :source, :source_url, CAST(:raw_data AS jsonb),
                             :requires_manual_verification
                         )
-                        """
-                    ),
+                        """),
                     {**cat, "raw_data": json.dumps(cat.get("raw_data") or {})},
                 )
             total += len(deduped)
-            log.info("company_refreshed", ticker=co["ticker"], catalysts=len(deduped), merges=merges)
+            log.info(
+                "company_refreshed", ticker=co["ticker"], catalysts=len(deduped), merges=merges
+            )
 
     funnel["final_upcoming"] = total
     print(f"Catalysts refreshed: {total}")

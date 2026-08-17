@@ -42,18 +42,26 @@ from logger import setup_logger
 log = setup_logger("returns_regression")
 
 HOLD = 3
-MIN_HISTORY = 60          # need >=60 pre-event bars for run_up_60d / vol
+MIN_HISTORY = 60  # need >=60 pre-event bars for run_up_60d / vol
 FEATURES = [
-    "run_up_5d", "run_up_10d", "run_up_30d", "run_up_60d",
-    "vol_30d", "log_dollar_vol_20d", "dist_52w_high", "log_mcap",
+    "run_up_5d",
+    "run_up_10d",
+    "run_up_30d",
+    "run_up_60d",
+    "vol_30d",
+    "log_dollar_vol_20d",
+    "dist_52w_high",
+    "log_mcap",
 ]
 
 
 def _load(conn):
     rows = conn.execute(
-        text("SELECT company_id, date, close, volume FROM price_history "
-             "WHERE company_id IS NOT NULL AND close IS NOT NULL "
-             "ORDER BY company_id, date ASC")
+        text(
+            "SELECT company_id, date, close, volume FROM price_history "
+            "WHERE company_id IS NOT NULL AND close IS NOT NULL "
+            "ORDER BY company_id, date ASC"
+        )
     ).all()
     px: dict[int, dict] = {}
     for cid, d, close, vol in rows:
@@ -62,14 +70,19 @@ def _load(conn):
         slot["close"].append(float(close))
         slot["vol"].append(float(vol) if vol is not None else 0.0)
 
-    mcap = {cid: float(m) for cid, m in conn.execute(
-        text("SELECT id, market_cap_usd FROM companies WHERE market_cap_usd IS NOT NULL")
-    ).all()}
+    mcap = {
+        cid: float(m)
+        for cid, m in conn.execute(
+            text("SELECT id, market_cap_usd FROM companies WHERE market_cap_usd IS NOT NULL")
+        ).all()
+    }
 
     events = conn.execute(
-        text("SELECT company_id, filing_date, abnormal_return FROM event_returns "
-             "WHERE hold_days = :h AND abnormal_return IS NOT NULL "
-             "ORDER BY filing_date ASC"),
+        text(
+            "SELECT company_id, filing_date, abnormal_return FROM event_returns "
+            "WHERE hold_days = :h AND abnormal_return IS NOT NULL "
+            "ORDER BY filing_date ASC"
+        ),
         {"h": HOLD},
     ).all()
     return px, mcap, events
@@ -80,7 +93,7 @@ def _features(px: dict, mcap: dict, cid, filing_date):
     if not p:
         return None
     dates, close, vol = p["dates"], p["close"], p["vol"]
-    i = bisect.bisect_left(dates, filing_date) - 1   # last bar strictly before filing
+    i = bisect.bisect_left(dates, filing_date) - 1  # last bar strictly before filing
     if i < MIN_HISTORY:
         return None
     c0 = close[i]
@@ -88,6 +101,7 @@ def _features(px: dict, mcap: dict, cid, filing_date):
         return None
 
     def runup(n):
+        """Pre-event return over the n bars ending at the last bar before filing."""
         j = i - n
         return c0 / close[j] - 1.0 if j >= 0 and close[j] > 0 else None
 
@@ -96,7 +110,7 @@ def _features(px: dict, mcap: dict, cid, filing_date):
     vol30 = float(np.std(rets)) if len(rets) >= 20 else None
 
     dvol = np.mean([close[k] * vol[k] for k in range(i - 19, i + 1)])
-    win52 = max(close[max(0, i - 251): i + 1])
+    win52 = max(close[max(0, i - 251) : i + 1])
     dist52 = c0 / win52 - 1.0 if win52 > 0 else None
 
     m = mcap.get(cid)
@@ -105,11 +119,14 @@ def _features(px: dict, mcap: dict, cid, filing_date):
         log_mcap = float(np.log(max(m * (c0 / close[-1]), 1.0)))
 
     feats = {
-        "run_up_5d": runup(5), "run_up_10d": runup(10),
-        "run_up_30d": runup(30), "run_up_60d": runup(60),
+        "run_up_5d": runup(5),
+        "run_up_10d": runup(10),
+        "run_up_30d": runup(30),
+        "run_up_60d": runup(60),
         "vol_30d": vol30,
         "log_dollar_vol_20d": float(np.log1p(dvol)) if dvol > 0 else None,
-        "dist_52w_high": dist52, "log_mcap": log_mcap,
+        "dist_52w_high": dist52,
+        "log_mcap": log_mcap,
     }
     if any(v is None for v in feats.values()):
         return None
@@ -137,6 +154,7 @@ def _r2(y, p):
 
 
 def run(lam: float = 10.0, test_frac: float = 0.30) -> dict:
+    """Fit signed + magnitude ridge models on a temporal split; print OOS metrics/verdict."""
     with get_connection() as conn:
         px, mcap, events = _load(conn)
 
@@ -165,8 +183,10 @@ def run(lam: float = 10.0, test_frac: float = 0.30) -> dict:
     Ztr, Zte = (Xtr - mu) / sd, (Xte - mu) / sd
 
     print("\n" + "=" * 64)
-    print(f"SIGNED-RETURN REGRESSION  (hold={HOLD}d, n={n}, "
-          f"train={cut} <{dts[cut]}  test={n-cut} >={dts[cut]})")
+    print(
+        f"SIGNED-RETURN REGRESSION  (hold={HOLD}d, n={n}, "
+        f"train={cut} <{dts[cut]}  test={n-cut} >={dts[cut]})"
+    )
     print("=" * 64)
 
     # ---- baseline: predict train mean ----
@@ -207,8 +227,10 @@ def run(lam: float = 10.0, test_frac: float = 0.30) -> dict:
     t = len(order) // 3
     lo_move = float(np.mean(yte_m[order[:t]]))
     hi_move = float(np.mean(yte_m[order[-t:]]))
-    print(f"    realized |move|: bottom-tercile {lo_move:.1%}  vs  top-tercile {hi_move:.1%} "
-          f"(by predicted size)")
+    print(
+        f"    realized |move|: bottom-tercile {lo_move:.1%}  vs  top-tercile {hi_move:.1%} "
+        f"(by predicted size)"
+    )
 
     print("\n[3] Standardized feature weights (sign model | size model):")
     for k, f in enumerate(FEATURES):
@@ -218,21 +240,37 @@ def run(lam: float = 10.0, test_frac: float = 0.30) -> dict:
     print("\n" + "-" * 64)
     sign_useful = (r2 > base_r2 + 1e-4) and (dir_acc > 0.52)
     size_useful = (r2m > base_r2m + 0.01) and (hi_move > lo_move * 1.25)
-    print(f"VERDICT: direction predictable? {'YES (weak)' if sign_useful else 'NO'}    "
-          f"size predictable? {'YES' if size_useful else 'NO'}")
+    print(
+        f"VERDICT: direction predictable? {'YES (weak)' if sign_useful else 'NO'}    "
+        f"size predictable? {'YES' if size_useful else 'NO'}"
+    )
     if size_useful and not sign_useful:
         print("=> Use the SIZE model for risk/sizing & option selection, NOT for direction.")
     if not sign_useful and not size_useful:
         print("=> Neither beats baseline OOS. Do NOT wire into the scorer. Need better features.")
     print("-" * 64)
 
-    log.info("returns_regression_done", n=n, r2_sign=r2, dir_acc=dir_acc,
-             r2_size=r2m, hi_move=hi_move, lo_move=lo_move)
-    return {"n": n, "r2_sign": r2, "dir_acc": dir_acc, "r2_size": r2m,
-            "hi_move": hi_move, "lo_move": lo_move}
+    log.info(
+        "returns_regression_done",
+        n=n,
+        r2_sign=r2,
+        dir_acc=dir_acc,
+        r2_size=r2m,
+        hi_move=hi_move,
+        lo_move=lo_move,
+    )
+    return {
+        "n": n,
+        "r2_sign": r2,
+        "dir_acc": dir_acc,
+        "r2_size": r2m,
+        "hi_move": hi_move,
+        "lo_move": lo_move,
+    }
 
 
 def main() -> None:
+    """CLI entry: signed/magnitude returns regression on the event_returns dataset."""
     ap = argparse.ArgumentParser(description="Signed/magnitude returns regression on event_returns")
     ap.add_argument("--lam", type=float, default=10.0, help="ridge L2 strength")
     ap.add_argument("--test-frac", type=float, default=0.30)

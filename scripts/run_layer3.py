@@ -11,8 +11,11 @@ SCRIPTS = ROOT / "scripts"
 
 
 def main() -> None:
+    """CLI entry: Layer 3 refresh — compute base rates, apply them, then verify."""
     for script in ("compute_base_rates.py", "apply_base_rates.py"):
-        subprocess.run([sys.executable, str(SCRIPTS / script), *sys.argv[1:]], cwd=str(ROOT), check=True)
+        subprocess.run(
+            [sys.executable, str(SCRIPTS / script), *sys.argv[1:]], cwd=str(ROOT), check=True
+        )
     subprocess.run([sys.executable, str(SCRIPTS / "verify_layer3.py")], cwd=str(ROOT), check=True)
 
 

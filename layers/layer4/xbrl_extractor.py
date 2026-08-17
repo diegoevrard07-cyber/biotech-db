@@ -22,6 +22,8 @@ ConfidenceKind = Literal["high", "medium", "low"]
 
 @dataclass
 class QuarterlyValue:
+    """One fiscal quarter's value for a us-gaap concept, with derivation provenance."""
+
     period_end: date
     value: float
     source: SourceKind

@@ -7,9 +7,13 @@ runs on whatever data is present. The script exits non-zero if any stage marked
 critical fails, or if any stage errored (so a scheduler can alert).
 
 Order:
-  load_companies -> ingest_layer1 -> classify_universe -> compute/apply base rates
+  apply_schema -> ingest_layer1 -> classify_universe -> compute/apply base rates
   -> run_layer4 (SEC) -> ingest_prices -> ingest_positioning -> ingest_insider
-  -> resolve_outcomes -> run_composite -> calibrate -> verifies
+  -> resolve_outcomes -> build_event_returns -> run_composite -> validate -> calibrate
+  -> action_sheet -> verify_signals
+
+`load_companies.py` is intentionally NOT a stage: it seeds the curated universe once
+per database, not on every refresh.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ SCRIPTS = ROOT / "scripts"
 
 # (script, args, critical)
 STAGES: list[tuple[str, list[str], bool]] = [
-    ("../apply_schema.py", [], False),   # ensure schema/indexes (e.g. uq_catalysts_ctgov) first
+    ("apply_schema.py", [], False),  # ensure schema/indexes (e.g. uq_catalysts_ctgov) first
     ("ingest_layer1.py", [], False),
     ("classify_universe.py", [], False),
     ("compute_base_rates.py", [], False),
@@ -45,13 +49,12 @@ STAGES: list[tuple[str, list[str], bool]] = [
 
 def _run(name: str, args: list[str]) -> int:
     print(f"\n{'='*70}\n>>> {name} {' '.join(args)}\n{'='*70}", flush=True)
-    proc = subprocess.run(
-        [sys.executable, str(SCRIPTS / name), *args], cwd=str(ROOT)
-    )
+    proc = subprocess.run([sys.executable, str(SCRIPTS / name), *args], cwd=str(ROOT))
     return proc.returncode
 
 
 def main() -> None:
+    """CLI entry: run every pipeline stage in order (fail-soft), exit non-zero on failures."""
     parser = argparse.ArgumentParser(description="Refresh the full Rung 2 pipeline (fail-soft)")
     parser.add_argument("--skip", nargs="*", default=[], help="Script names to skip")
     args = parser.parse_args()

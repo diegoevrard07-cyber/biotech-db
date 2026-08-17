@@ -29,7 +29,11 @@ log = setup_logger("fetch_eight_k_fixtures")
 FIXTURES_ROOT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "eight_k"
 
 SEARCH_QUERIES: dict[str, list[str]] = {
-    "pdufa_assigned": ['"PDUFA date"', '"Prescription Drug User Fee Act" date', "PDUFA action date"],
+    "pdufa_assigned": [
+        '"PDUFA date"',
+        '"Prescription Drug User Fee Act" date',
+        "PDUFA action date",
+    ],
     "crl": ['"complete response letter"', '"received a CRL"'],
     "approval": [
         "FDA approved ANNOV",
@@ -51,12 +55,36 @@ SEARCH_QUERIES: dict[str, list[str]] = {
 }
 
 NEGATIVE_META = [
-    {"prefix": "competitor_pdufa", "forbidden": "pdufa_assigned", "notes": "Forward-looking PDUFA risk, not assignment"},
-    {"prefix": "partner_approval", "forbidden": "approval", "notes": "Partner drug approved; filer is not the asset owner"},
-    {"prefix": "historical_crl", "forbidden": "crl", "notes": "Past CRL referenced in narrative, not new receipt"},
-    {"prefix": "routine_underwriting", "forbidden": "offering", "notes": "Shelf/incorporation by reference, not active offering"},
-    {"prefix": "expanded_access", "forbidden": "approval", "notes": "Expanded access mention, not approval milestone"},
-    {"prefix": "lifted_clinical_hold", "forbidden": "crl", "notes": "Clinical hold lifted — opposite of CRL"},
+    {
+        "prefix": "competitor_pdufa",
+        "forbidden": "pdufa_assigned",
+        "notes": "Forward-looking PDUFA risk, not assignment",
+    },
+    {
+        "prefix": "partner_approval",
+        "forbidden": "approval",
+        "notes": "Partner drug approved; filer is not the asset owner",
+    },
+    {
+        "prefix": "historical_crl",
+        "forbidden": "crl",
+        "notes": "Past CRL referenced in narrative, not new receipt",
+    },
+    {
+        "prefix": "routine_underwriting",
+        "forbidden": "offering",
+        "notes": "Shelf/incorporation by reference, not active offering",
+    },
+    {
+        "prefix": "expanded_access",
+        "forbidden": "approval",
+        "notes": "Expanded access mention, not approval milestone",
+    },
+    {
+        "prefix": "lifted_clinical_hold",
+        "forbidden": "crl",
+        "notes": "Clinical hold lifted — opposite of CRL",
+    },
 ]
 
 
@@ -75,6 +103,7 @@ def _sec_get(url: str, *, as_json: bool = True) -> requests.Response:
 
 
 def search_filings(query: str, *, size: int = 20) -> list[dict]:
+    """Full-text search EDGAR for 8-K filings matching the query; return hit sources."""
     params = {
         "q": query,
         "forms": "8-K",
@@ -84,9 +113,11 @@ def search_filings(query: str, *, size: int = 20) -> list[dict]:
         "startdt": "2020-01-01",
         "enddt": "2026-12-31",
     }
-    resp = _sec_get("https://efts.sec.gov/LATEST/search-index?" + "&".join(
-        f"{k}={requests.utils.quote(str(v))}" for k, v in params.items()
-    ), as_json=True)
+    resp = _sec_get(
+        "https://efts.sec.gov/LATEST/search-index?"
+        + "&".join(f"{k}={requests.utils.quote(str(v))}" for k, v in params.items()),
+        as_json=True,
+    )
     hits = resp.json().get("hits", {}).get("hits", [])
     return [h.get("_source", {}) for h in hits]
 
@@ -144,6 +175,7 @@ def resolve_primary_doc(cik: str, adsh: str) -> tuple[str, str] | None:
 
 
 def download_primary_html(cik: str, adsh: str, filename: str) -> str:
+    """Download the primary document HTML for one accession from EDGAR."""
     cik_int = str(int(cik))
     acc_nodash = adsh.replace("-", "")
     url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{acc_nodash}/{filename}"
@@ -158,7 +190,13 @@ CATEGORY_ANCHORS: dict[str, list[str]] = {
     "adcom_scheduled": ["advisory committee", "adcom"],
     "offering": ["public offering", "underwritten offering", "offering of"],
     "license_deal": ["license agreement", "collaboration agreement", "licensing agreement"],
-    "negative": ["pdufa", "complete response", "clinical hold", "expanded access", "incorporated by reference"],
+    "negative": [
+        "pdufa",
+        "complete response",
+        "clinical hold",
+        "expanded access",
+        "incorporated by reference",
+    ],
 }
 
 
@@ -187,6 +225,8 @@ def smart_truncate_html(html: str, category: str, max_bytes: int = 5120) -> str:
 
 
 def fetch_negative(limit_per_query: int = 1) -> list[dict]:
+    """Fetch near-miss 8-Ks that mention trigger words but are NOT the event (parser
+    must reject these)."""
     results: list[dict] = []
     seen: set[str] = set()
     for meta, query in zip(NEGATIVE_META, SEARCH_QUERIES["negative"]):
@@ -235,6 +275,7 @@ def fetch_negative(limit_per_query: int = 1) -> list[dict]:
 
 
 def fetch_category(category: str, limit: int = 4) -> list[dict]:
+    """Fetch up to `limit` real 8-K fixture records for one event category."""
     queries = SEARCH_QUERIES.get(category, [])
     seen_adsh: set[str] = set()
     results: list[dict] = []
@@ -297,6 +338,7 @@ def fetch_category(category: str, limit: int = 4) -> list[dict]:
 
 
 def save_fixture(record: dict, *, negative: bool = False) -> Path:
+    """Write the fixture .html plus a starter .expected.json under tests/fixtures/eight_k."""
     category = record["category"]
     acc_slug = record["accession"].replace("-", "")
     if negative:
@@ -337,6 +379,7 @@ def save_fixture(record: dict, *, negative: bool = False) -> Path:
 
 
 def main() -> None:
+    """CLI entry: fetch 8-K fixture corpus from EDGAR and write tests/fixtures/eight_k."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--category", action="append", help="Category to fetch")
     parser.add_argument("--limit", type=int, default=4)

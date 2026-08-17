@@ -35,6 +35,8 @@ FALSE_NARRATIVE = re.compile(
 
 @dataclass
 class OutcomeResult:
+    """Verdict on whether a trial's primary endpoint was met, plus confidence and method."""
+
     primary_outcome_met: bool | None
     primary_outcome_confidence: str
     extraction_method: str
@@ -43,12 +45,15 @@ class OutcomeResult:
 
 @dataclass
 class ExtractionStats:
+    """Running tally of outcome extractions by confidence level."""
+
     total: int = 0
     high: int = 0
     medium: int = 0
     low: int = 0
 
     def record(self, confidence: str) -> None:
+        """Add one extraction outcome to the tally."""
         self.total += 1
         if confidence == "high":
             self.high += 1
@@ -58,6 +63,7 @@ class ExtractionStats:
             self.low += 1
 
     def as_dict(self) -> dict[str, float]:
+        """Summarize the tally as counts and per-confidence percentages."""
         if self.total == 0:
             return {"total": 0, "high_pct": 0, "any_pct": 0}
         any_conf = self.high + self.medium
@@ -151,7 +157,10 @@ def _extract_from_ci(outcome: dict) -> OutcomeResult | None:
                 met = _ci_verdict(param, lo, hi)
                 if met is not None:
                     return OutcomeResult(
-                        met, "high", "effect_ci", {"lower": lo, "upper": hi, "param": param, "source": "analysis"}
+                        met,
+                        "high",
+                        "effect_ci",
+                        {"lower": lo, "upper": hi, "param": param, "source": "analysis"},
                     )
 
     param = default_param
@@ -171,7 +180,10 @@ def _extract_from_ci(outcome: dict) -> OutcomeResult | None:
                 met = _ci_verdict(param, lo, hi)
                 if met is not None:
                     return OutcomeResult(
-                        met, "high", "effect_ci", {"lower": lo, "upper": hi, "param": param, "source": "measurement"}
+                        met,
+                        "high",
+                        "effect_ci",
+                        {"lower": lo, "upper": hi, "param": param, "source": "measurement"},
                     )
     return None
 
@@ -188,7 +200,9 @@ def _extract_from_narrative(text: str) -> OutcomeResult | None:
 
 def extract_outcome(study: dict) -> OutcomeResult:
     """Determine if primary endpoint was met for a CT.gov study with results."""
-    nct_id = study.get("protocolSection", {}).get("identificationModule", {}).get("nctId", "unknown")
+    nct_id = (
+        study.get("protocolSection", {}).get("identificationModule", {}).get("nctId", "unknown")
+    )
     results = study.get("resultsSection") or {}
     primaries = _primary_outcomes(results)
 
@@ -233,6 +247,7 @@ def extract_outcome(study: dict) -> OutcomeResult:
 
 
 def normalize_phase(raw: str | None) -> str | None:
+    """Canonicalize a raw CT.gov phase string to PHASE1-4; highest phase wins."""
     if not raw:
         return None
     parts = {p.strip().upper() for p in raw.replace(",", "/").split("/")}

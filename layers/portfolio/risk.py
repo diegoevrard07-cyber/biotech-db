@@ -8,8 +8,7 @@ from __future__ import annotations
 from layers.portfolio.tracker import LONG
 
 
-def stop_loss_hit(side: str, entry_price: float, last_price: float | None,
-                  stop_pct: float) -> bool:
+def stop_loss_hit(side: str, entry_price: float, last_price: float | None, stop_pct: float) -> bool:
     """True when a LONG's mark is down more than stop_pct from entry.
 
     Shorts are not stopped here (long-only book; covers happen via the book sync).
@@ -19,8 +18,7 @@ def stop_loss_hit(side: str, entry_price: float, last_price: float | None,
     return (float(last_price) / float(entry_price) - 1.0) <= -abs(stop_pct)
 
 
-def drawdown_scale(equity: float, peak: float,
-                   tiers: list[tuple[float, float]]) -> float:
+def drawdown_scale(equity: float, peak: float, tiers: list[tuple[float, float]]) -> float:
     """Target-size multiplier for the current drawdown from peak.
 
     tiers: [(drawdown_pct, scale)] sorted ascending by drawdown; the deepest
@@ -36,8 +34,7 @@ def drawdown_scale(equity: float, peak: float,
     return scale
 
 
-def regime_scale(benchmark_closes: list[float], sma_days: int,
-                 derisk_factor: float) -> float:
+def regime_scale(benchmark_closes: list[float], sma_days: int, derisk_factor: float) -> float:
     """1.0 when the benchmark's latest close is at/above its sma_days SMA,
     otherwise derisk_factor. closes: oldest -> newest. Needs sma_days closes;
     returns 1.0 (no opinion) on insufficient data."""

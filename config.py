@@ -55,6 +55,7 @@ def check_sec_user_agent() -> None:
             'Set your real name and email in .env: "Firstname Lastname email@domain.com"'
         )
 
+
 # ---------------------------------------------------------------------------
 # GBM search terms (ClinicalTrials.gov)
 # ---------------------------------------------------------------------------
@@ -63,17 +64,38 @@ GBM_SEARCH_TERMS = ["glioblastoma", "GBM", "high-grade glioma"]
 # Broadened universe (Rung 2): small-cap oncology + CNS. GBM stays the flagship
 # subset (see is_gbm_focused). Used to tag companies, not to gate ingestion alone.
 ONCOLOGY_CNS_SEARCH_TERMS = [
-    "glioblastoma", "glioma", "astrocytoma", "brain tumor", "brain cancer",
-    "solid tumor", "carcinoma", "lymphoma", "leukemia", "myeloma", "sarcoma",
-    "melanoma", "neuroblastoma", "oncology",
-    "alzheimer", "parkinson", "multiple sclerosis", "epilepsy", "ALS",
-    "huntington", "neurodegenerative",
+    "glioblastoma",
+    "glioma",
+    "astrocytoma",
+    "brain tumor",
+    "brain cancer",
+    "solid tumor",
+    "carcinoma",
+    "lymphoma",
+    "leukemia",
+    "myeloma",
+    "sarcoma",
+    "melanoma",
+    "neuroblastoma",
+    "oncology",
+    "alzheimer",
+    "parkinson",
+    "multiple sclerosis",
+    "epilepsy",
+    "ALS",
+    "huntington",
+    "neurodegenerative",
 ]
 
 # Substrings (lowercased) that mark a row as GBM-focused for is_gbm_focused.
 GBM_FLAG_SUBSTRINGS = [
-    "glioblastoma", "gbm", "high-grade glioma", "high grade glioma",
-    "anaplastic astrocytoma", "diffuse midline glioma", "dipg",
+    "glioblastoma",
+    "gbm",
+    "high-grade glioma",
+    "high grade glioma",
+    "anaplastic astrocytoma",
+    "diffuse midline glioma",
+    "dipg",
 ]
 
 # ---------------------------------------------------------------------------
@@ -100,37 +122,39 @@ KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.25"))  # fractional Kelly
 MAX_SINGLE_NAME_WEIGHT = float(os.getenv("MAX_SINGLE_NAME_WEIGHT", "0.05"))  # 5% cap
 
 # Long-only mode: drop every short/fade (negative-weight) signal from the capped
-# book. When ON, the action desk and paper autopilot only ever hold longs, and any
-# existing open shorts fall out of the book and get covered on the next sync.
-# Owner preference: shorts/fades are experimental and were the main drag, so default ON.
+# book. Fades are also retired at the scorer (decide_trade → avoid). Default ON;
+# LONG_ONLY=0 is retained only as an emergency override and still cannot open
+# shorts at the execution guard while fade weights are forced to 0.
 LONG_ONLY = os.getenv("LONG_ONLY", "1") not in ("0", "false", "False")
 
 # Portfolio construction caps (action sheet)
-MAX_GROSS_LONG = float(os.getenv("MAX_GROSS_LONG", "1.0"))    # 100% long
-MAX_GROSS_SHORT = float(os.getenv("MAX_GROSS_SHORT", "0.30"))  # 30% short
-MAX_NET = float(os.getenv("MAX_NET", "0.60"))                  # net exposure
-MAX_GBM_WEIGHT = float(os.getenv("MAX_GBM_WEIGHT", "0.25"))    # GBM names are correlated
+MAX_GROSS_LONG = float(os.getenv("MAX_GROSS_LONG", "1.0"))  # 100% long
+MAX_GROSS_SHORT = float(os.getenv("MAX_GROSS_SHORT", "0.0"))  # shorts retired (was 30%)
+MAX_NET = float(os.getenv("MAX_NET", "0.60"))  # unused when LONG_ONLY (net=gross long)
+MAX_GBM_WEIGHT = float(os.getenv("MAX_GBM_WEIGHT", "0.25"))  # GBM names are correlated
 MAX_SECTOR_WEIGHT = float(os.getenv("MAX_SECTOR_WEIGHT", "0.40"))  # per indication_category
 URGENT_DAYS = int(os.getenv("URGENT_DAYS", "7"))
 
 # Paper autopilot: sync portfolio to the capped action desk daily.
 AUTOPILOT_HORIZON_DAYS = int(os.getenv("AUTOPILOT_HORIZON_DAYS", "365"))
-AUTOPILOT_REBALANCE_PCT = float(os.getenv("AUTOPILOT_REBALANCE_PCT", "0.10"))  # resize if |delta| > 10%
+AUTOPILOT_REBALANCE_PCT = float(
+    os.getenv("AUTOPILOT_REBALANCE_PCT", "0.10")
+)  # resize if |delta| > 10%
 
 # --- Risk mitigation overlays (paper autopilot) ---
 # Drawdown circuit breaker: if equity falls more than PCT below its prior peak,
 # de-risk the whole book (scale targets by FACTOR, pause new opens) until it
 # recovers. Catches correlated sector selloffs that per-name caps miss.
 DRAWDOWN_CIRCUIT_ENABLED = os.getenv("DRAWDOWN_CIRCUIT_ENABLED", "1") not in ("0", "false", "False")
-DRAWDOWN_CIRCUIT_PCT = float(os.getenv("DRAWDOWN_CIRCUIT_PCT", "0.10"))     # -10% from peak
+DRAWDOWN_CIRCUIT_PCT = float(os.getenv("DRAWDOWN_CIRCUIT_PCT", "0.10"))  # -10% from peak
 DRAWDOWN_DERISK_FACTOR = float(os.getenv("DRAWDOWN_DERISK_FACTOR", "0.5"))  # shrink targets to 50%
 
 # Graded drawdown tiers (act EARLIER and progressively instead of one -10% cliff).
 # (drawdown_from_peak, target_scale). New opens pause once scale <= OPEN_PAUSE_SCALE.
 DRAWDOWN_TIERS = [
-    (0.06, 0.75),   # -6% from peak: shrink targets to 75%
-    (0.10, 0.50),   # -10%: halve + pause new opens
-    (0.15, 0.25),   # -15%: quarter size (deep de-risk)
+    (0.06, 0.75),  # -6% from peak: shrink targets to 75%
+    (0.10, 0.50),  # -10%: halve + pause new opens
+    (0.15, 0.25),  # -15%: quarter size (deep de-risk)
 ]
 DRAWDOWN_OPEN_PAUSE_SCALE = float(os.getenv("DRAWDOWN_OPEN_PAUSE_SCALE", "0.50"))
 
@@ -153,9 +177,11 @@ REGIME_DERISK_FACTOR = float(os.getenv("REGIME_DERISK_FACTOR", "0.60"))
 # a core position into the catalyst. Self-limiting: stops once the name reverts.
 # Skips names with a catalyst within MIN_DAYS_TO_CATALYST so events can play out.
 PROFIT_LOCK_ENABLED = os.getenv("PROFIT_LOCK_ENABLED", "1") not in ("0", "false", "False")
-PROFIT_LOCK_GAIN_PCT = float(os.getenv("PROFIT_LOCK_GAIN_PCT", "0.20"))        # min +20% unrealized
-PROFIT_LOCK_TRIM_FRACTION = float(os.getenv("PROFIT_LOCK_TRIM_FRACTION", "0.25"))  # sell 25% of position
-PROFIT_LOCK_ZSCORE = float(os.getenv("PROFIT_LOCK_ZSCORE", "1.5"))            # extended >=1.5 std above mean
+PROFIT_LOCK_GAIN_PCT = float(os.getenv("PROFIT_LOCK_GAIN_PCT", "0.20"))  # min +20% unrealized
+PROFIT_LOCK_TRIM_FRACTION = float(
+    os.getenv("PROFIT_LOCK_TRIM_FRACTION", "0.25")
+)  # sell 25% of position
+PROFIT_LOCK_ZSCORE = float(os.getenv("PROFIT_LOCK_ZSCORE", "1.5"))  # extended >=1.5 std above mean
 PROFIT_LOCK_LOOKBACK_DAYS = int(os.getenv("PROFIT_LOCK_LOOKBACK_DAYS", "20"))  # mean/std window
 PROFIT_LOCK_MIN_DAYS_TO_CATALYST = int(os.getenv("PROFIT_LOCK_MIN_DAYS_TO_CATALYST", "3"))
 
@@ -166,12 +192,14 @@ PROFIT_LOCK_MIN_DAYS_TO_CATALYST = int(os.getenv("PROFIT_LOCK_MIN_DAYS_TO_CATALY
 # never increase it. Tiers: (market_cap_ceiling_usd, multiplier).
 RISK_HAIRCUT_ENABLED = os.getenv("RISK_HAIRCUT_ENABLED", "1") not in ("0", "false", "False")
 RISK_HAIRCUT_TIERS = [
-    (100_000_000, 0.50),     # nano (< $100M): half size
-    (300_000_000, 0.70),     # micro ($100-300M)
-    (1_000_000_000, 0.85),   # small ($300M-$1B)
-    (float("inf"), 1.00),    # >= $1B: full size
+    (100_000_000, 0.50),  # nano (< $100M): half size
+    (300_000_000, 0.70),  # micro ($100-300M)
+    (1_000_000_000, 0.85),  # small ($300M-$1B)
+    (float("inf"), 1.00),  # >= $1B: full size
 ]
-RISK_HAIRCUT_UNKNOWN = float(os.getenv("RISK_HAIRCUT_UNKNOWN", "0.70"))  # unknown mcap: conservative
+RISK_HAIRCUT_UNKNOWN = float(
+    os.getenv("RISK_HAIRCUT_UNKNOWN", "0.70")
+)  # unknown mcap: conservative
 
 # yfinance rate limit (be polite; it is unofficial)
 YF_MAX_REQUESTS_PER_SEC = float(os.getenv("YF_MAX_REQUESTS_PER_SEC", "2"))

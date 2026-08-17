@@ -34,6 +34,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from action_sheet import compute_book
+from ingest_prices import _rows_from_history
+
 import config
 from db import get_connection
 from layers.marketdata.yf_client import fetch_history_batch
@@ -41,17 +44,23 @@ from layers.portfolio import paper_sync as ps
 from layers.portfolio import performance_store as perf_store
 from layers.portfolio import risk
 from layers.portfolio import tracker as pf
-from ingest_prices import _rows_from_history
-from action_sheet import compute_book
 from logger import setup_logger
 
 log = setup_logger("paper_autopilot")
 
 PERF_CSV = config.RAW_DIR / "paper_performance.csv"
 PERF_COLUMNS = [
-    "date", "equity", "cash", "open_positions", "unrealized_pnl",
-    "realized_to_date", "total_return_pct", "exits_today", "opens_today",
-    "resized_today", "desk_positions",
+    "date",
+    "equity",
+    "cash",
+    "open_positions",
+    "unrealized_pnl",
+    "realized_to_date",
+    "total_return_pct",
+    "exits_today",
+    "opens_today",
+    "resized_today",
+    "desk_positions",
 ]
 
 
@@ -70,7 +79,7 @@ def _ensure_perf_header() -> None:
         if not old_header:
             return
         for row in reader:
-            padded = (row + [""] * len(PERF_COLUMNS))[:len(PERF_COLUMNS)]
+            padded = (row + [""] * len(PERF_COLUMNS))[: len(PERF_COLUMNS)]
             rows.append(padded)
     with open(PERF_CSV, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
@@ -98,8 +107,9 @@ def _refresh_prices(cur, tickers: list[str]) -> int:
             continue
         rows.extend(_rows_from_history(df, company_id=cmap.get(t), ticker=t))
     if rows:
-        from psycopg2.extras import execute_values
         from ingest_prices import _INSERT_SQL, _VALUES_TEMPLATE
+        from psycopg2.extras import execute_values
+
         execute_values(cur, _INSERT_SQL, rows, template=_VALUES_TEMPLATE, page_size=1000)
     return len(rows)
 
@@ -107,11 +117,14 @@ def _refresh_prices(cur, tickers: list[str]) -> int:
 def _latest_closes(cur, tickers: list[str]) -> dict[str, float]:
     if not tickers:
         return {}
-    cur.execute("""
+    cur.execute(
+        """
         SELECT DISTINCT ON (ticker) ticker, close
         FROM price_history WHERE close IS NOT NULL AND ticker = ANY(%s)
         ORDER BY ticker, date DESC
-    """, (list(set(tickers)),))
+    """,
+        (list(set(tickers)),),
+    )
     return {t: float(c) for t, c in cur.fetchall()}
 
 
@@ -126,28 +139,45 @@ def _load_open_paper(cur) -> list[dict]:
 
 
 def _holding_dicts(holds: list[dict]) -> list[dict]:
-    return [{"ticker": h["ticker"], "side": h["side"],
-             "shares": float(h["shares"]), "entry_price": float(h["entry_price"])}
-            for h in holds]
+    return [
+        {
+            "ticker": h["ticker"],
+            "side": h["side"],
+            "shares": float(h["shares"]),
+            "entry_price": float(h["entry_price"]),
+        }
+        for h in holds
+    ]
 
 
-def _close_position(cur, h: dict, px: float, today: date, reason: str,
-                    *, dry_run: bool) -> tuple[float, float]:
+def _close_position(
+    cur, h: dict, px: float, today: date, reason: str, *, dry_run: bool
+) -> tuple[float, float]:
     """Close a full position. Returns (cash_delta, realized_pnl)."""
     sh = float(h["shares"])
     ep = float(h["entry_price"])
     rp = pf.realized_pnl(h["side"], sh, ep, px)
     cash_delta = pf.cash_delta_on_close(h["side"], sh, px)
-    tag = {"exit_due": "EXIT", "not_in_book": "DROP", "side_flip": "FLIP",
-           "trade_change": "RETYPE", "long_only_cover": "COVER",
-           "stop_loss": "STOP"}.get(reason, "CLOSE")
-    print(f"  {tag} {h['ticker']:<6} {h['side']:<5} {h['trade_type']:<13} "
-          f"{sh:.2f} @ {px:.2f}  realized {rp:+,.0f}  ({reason})")
+    tag = {
+        "exit_due": "EXIT",
+        "not_in_book": "DROP",
+        "side_flip": "FLIP",
+        "trade_change": "RETYPE",
+        "long_only_cover": "COVER",
+        "stop_loss": "STOP",
+    }.get(reason, "CLOSE")
+    print(
+        f"  {tag} {h['ticker']:<6} {h['side']:<5} {h['trade_type']:<13} "
+        f"{sh:.2f} @ {px:.2f}  realized {rp:+,.0f}  ({reason})"
+    )
     if not dry_run:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE portfolio_holdings SET status='closed', exit_date=%s,
                 exit_price=%s, realized_pnl_usd=%s, updated_at=NOW() WHERE id=%s
-        """, (today, px, round(rp, 2), h["id"]))
+        """,
+            (today, px, round(rp, 2), h["id"]),
+        )
     return cash_delta, rp
 
 
@@ -157,24 +187,38 @@ def _open_position(cur, tgt: dict, today: date, *, dry_run: bool) -> float:
     px = float(tgt["price"])
     cost = round(sh * px, 2)
     cash_delta = pf.cash_delta_on_open(tgt["side"], sh, px)
-    print(f"  OPEN {tgt['ticker']:<6} {tgt['side']:<5} {tgt['trade_type']:<13} "
-          f"{sh:.2f} @ {px:.2f}  ${abs(cash_delta):,.0f}  wt {tgt['weight']:+.3f}  "
-          f"exit {tgt['planned_exit_date']}")
+    print(
+        f"  OPEN {tgt['ticker']:<6} {tgt['side']:<5} {tgt['trade_type']:<13} "
+        f"{sh:.2f} @ {px:.2f}  ${abs(cash_delta):,.0f}  wt {tgt['weight']:+.3f}  "
+        f"exit {tgt['planned_exit_date']}"
+    )
     if not dry_run:
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO portfolio_holdings
                 (ticker, company_id, catalyst_id, side, trade_type, entry_date,
                  shares, entry_price, cost_basis_usd, planned_exit_rule,
                  planned_exit_date, status, notes)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open','PAPER')
-        """, (tgt["ticker"], tgt["company_id"], tgt["catalyst_id"], tgt["side"],
-              tgt["trade_type"], today, sh, px, cost,
-              tgt["planned_exit_rule"], tgt["planned_exit_date"]))
+        """,
+            (
+                tgt["ticker"],
+                tgt["company_id"],
+                tgt["catalyst_id"],
+                tgt["side"],
+                tgt["trade_type"],
+                today,
+                sh,
+                px,
+                cost,
+                tgt["planned_exit_rule"],
+                tgt["planned_exit_date"],
+            ),
+        )
     return cash_delta
 
 
-def _resize_position(cur, h: dict, tgt: dict, today: date, *,
-                     dry_run: bool) -> tuple[float, float]:
+def _resize_position(cur, h: dict, tgt: dict, today: date, *, dry_run: bool) -> tuple[float, float]:
     """Resize toward target shares. Returns (cash_delta, realized_pnl)."""
     cur_sh = float(h["shares"])
     tgt_sh = float(tgt["target_shares"])
@@ -188,39 +232,78 @@ def _resize_position(cur, h: dict, tgt: dict, today: date, *,
         cash_delta = pf.cash_delta_on_open(h["side"], add, px)
         new_ep = (cur_sh * ep + add * px) / tgt_sh
         new_cost = round(tgt_sh * new_ep, 2)
-        print(f"  ADD  {h['ticker']:<6} +{add:.2f} -> {tgt_sh:.2f} @ {px:.2f}  "
-              f"wt {tgt['weight']:+.3f}")
+        print(
+            f"  ADD  {h['ticker']:<6} +{add:.2f} -> {tgt_sh:.2f} @ {px:.2f}  "
+            f"wt {tgt['weight']:+.3f}"
+        )
         if not dry_run:
-            cur.execute("""
+            cur.execute(
+                """
                 UPDATE portfolio_holdings SET shares=%s, entry_price=%s, cost_basis_usd=%s,
                     catalyst_id=%s, trade_type=%s, planned_exit_rule=%s,
                     planned_exit_date=%s, updated_at=NOW() WHERE id=%s
-            """, (tgt_sh, round(new_ep, 4), new_cost, tgt["catalyst_id"], tgt["trade_type"],
-                  tgt["planned_exit_rule"], tgt["planned_exit_date"], h["id"]))
+            """,
+                (
+                    tgt_sh,
+                    round(new_ep, 4),
+                    new_cost,
+                    tgt["catalyst_id"],
+                    tgt["trade_type"],
+                    tgt["planned_exit_rule"],
+                    tgt["planned_exit_date"],
+                    h["id"],
+                ),
+            )
         return cash_delta, rp
 
     trim = round(cur_sh - tgt_sh, 2)
     rp = pf.realized_pnl(h["side"], trim, ep, px)
     cash_delta = pf.cash_delta_on_close(h["side"], trim, px)
     new_cost = round(tgt_sh * ep, 2)
-    print(f"  TRIM {h['ticker']:<6} -{trim:.2f} -> {tgt_sh:.2f} @ {px:.2f}  "
-          f"realized {rp:+,.0f}  wt {tgt['weight']:+.3f}")
+    print(
+        f"  TRIM {h['ticker']:<6} -{trim:.2f} -> {tgt_sh:.2f} @ {px:.2f}  "
+        f"realized {rp:+,.0f}  wt {tgt['weight']:+.3f}"
+    )
     if not dry_run:
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO portfolio_holdings
                 (ticker, company_id, catalyst_id, side, trade_type, entry_date,
                  shares, entry_price, cost_basis_usd, exit_date, exit_price,
                  realized_pnl_usd, status, notes)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'closed','PAPER_TRIM')
-        """, (h["ticker"], h.get("company_id"), h.get("catalyst_id"), h["side"],
-              h.get("trade_type"), h.get("entry_date") or today, trim, ep,
-              round(trim * ep, 2), today, px, round(rp, 2)))
-        cur.execute("""
+        """,
+            (
+                h["ticker"],
+                h.get("company_id"),
+                h.get("catalyst_id"),
+                h["side"],
+                h.get("trade_type"),
+                h.get("entry_date") or today,
+                trim,
+                ep,
+                round(trim * ep, 2),
+                today,
+                px,
+                round(rp, 2),
+            ),
+        )
+        cur.execute(
+            """
             UPDATE portfolio_holdings SET shares=%s, cost_basis_usd=%s,
                 catalyst_id=%s, trade_type=%s, planned_exit_rule=%s,
                 planned_exit_date=%s, updated_at=NOW() WHERE id=%s
-        """, (tgt_sh, new_cost, tgt["catalyst_id"], tgt["trade_type"],
-              tgt["planned_exit_rule"], tgt["planned_exit_date"], h["id"]))
+        """,
+            (
+                tgt_sh,
+                new_cost,
+                tgt["catalyst_id"],
+                tgt["trade_type"],
+                tgt["planned_exit_rule"],
+                tgt["planned_exit_date"],
+                h["id"],
+            ),
+        )
     return cash_delta, rp
 
 
@@ -245,8 +328,9 @@ def _peak_equity(cur, current_equity: float) -> float:
     return max(peak, float(current_equity))
 
 
-def _profit_lock_trim(cur, h: dict, px: float, today: date, fraction: float,
-                      *, dry_run: bool) -> tuple[float, float, float]:
+def _profit_lock_trim(
+    cur, h: dict, px: float, today: date, fraction: float, *, dry_run: bool
+) -> tuple[float, float, float]:
     """Scale OUT `fraction` of a winning long. Returns (cash_delta, realized, new_shares)."""
     cur_sh = float(h["shares"])
     trim = round(cur_sh * fraction, 2)
@@ -257,27 +341,47 @@ def _profit_lock_trim(cur, h: dict, px: float, today: date, fraction: float,
     rp = pf.realized_pnl(h["side"], trim, ep, px)
     cash_delta = pf.cash_delta_on_close(h["side"], trim, px)
     gain_pct = (px / ep - 1) if ep else 0.0
-    print(f"  LOCK {h['ticker']:<6} -{trim:.2f} -> {remaining:.2f} @ {px:.2f}  "
-          f"realized {rp:+,.0f}  (+{gain_pct:.0%}, mean-revert trim)")
+    print(
+        f"  LOCK {h['ticker']:<6} -{trim:.2f} -> {remaining:.2f} @ {px:.2f}  "
+        f"realized {rp:+,.0f}  (+{gain_pct:.0%}, mean-revert trim)"
+    )
     if not dry_run:
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO portfolio_holdings
                 (ticker, company_id, catalyst_id, side, trade_type, entry_date,
                  shares, entry_price, cost_basis_usd, exit_date, exit_price,
                  realized_pnl_usd, status, notes)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'closed','PAPER_LOCK')
-        """, (h["ticker"], h.get("company_id"), h.get("catalyst_id"), h["side"],
-              h.get("trade_type"), h.get("entry_date") or today, trim, ep,
-              round(trim * ep, 2), today, px, round(rp, 2)))
-        cur.execute("""
+        """,
+            (
+                h["ticker"],
+                h.get("company_id"),
+                h.get("catalyst_id"),
+                h["side"],
+                h.get("trade_type"),
+                h.get("entry_date") or today,
+                trim,
+                ep,
+                round(trim * ep, 2),
+                today,
+                px,
+                round(rp, 2),
+            ),
+        )
+        cur.execute(
+            """
             UPDATE portfolio_holdings SET shares=%s, cost_basis_usd=%s, updated_at=NOW()
             WHERE id=%s
-        """, (remaining, round(remaining * ep, 2), h["id"]))
+        """,
+            (remaining, round(remaining * ep, 2), h["id"]),
+        )
     return cash_delta, rp, remaining
 
 
-def _profit_lock_pass(cur, holds: list[dict], closes: dict, targets: dict,
-                      today: date, *, dry_run: bool) -> tuple[float, float, int]:
+def _profit_lock_pass(
+    cur, holds: list[dict], closes: dict, targets: dict, today: date, *, dry_run: bool
+) -> tuple[float, float, int]:
     """Partial mean-reversion profit-take on extended long winners.
 
     Returns (cash_delta_total, realized_total, count). Adjusts `targets` so the
@@ -305,7 +409,8 @@ def _profit_lock_pass(cur, holds: list[dict], closes: dict, targets: dict,
         if z is None or z < config.PROFIT_LOCK_ZSCORE:
             continue  # not stretched above its mean -> nothing to revert
         cd, rp, new_sh = _profit_lock_trim(
-            cur, h, px, today, config.PROFIT_LOCK_TRIM_FRACTION, dry_run=dry_run)
+            cur, h, px, today, config.PROFIT_LOCK_TRIM_FRACTION, dry_run=dry_run
+        )
         if new_sh < float(h["shares"]):
             cash_delta_total += cd
             realized_total += rp
@@ -318,21 +423,32 @@ def _profit_lock_pass(cur, holds: list[dict], closes: dict, targets: dict,
 
 def _update_metadata(cur, h: dict, tgt: dict, *, dry_run: bool) -> None:
     """Refresh exit dates / catalyst when size is already on target."""
-    if (h.get("planned_exit_date") == tgt["planned_exit_date"]
-            and h.get("trade_type") == tgt["trade_type"]
-            and h.get("catalyst_id") == tgt["catalyst_id"]):
+    if (
+        h.get("planned_exit_date") == tgt["planned_exit_date"]
+        and h.get("trade_type") == tgt["trade_type"]
+        and h.get("catalyst_id") == tgt["catalyst_id"]
+    ):
         return
     if not dry_run:
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE portfolio_holdings SET catalyst_id=%s, trade_type=%s,
                 planned_exit_rule=%s, planned_exit_date=%s, updated_at=NOW()
             WHERE id=%s
-        """, (tgt["catalyst_id"], tgt["trade_type"], tgt["planned_exit_rule"],
-              tgt["planned_exit_date"], h["id"]))
+        """,
+            (
+                tgt["catalyst_id"],
+                tgt["trade_type"],
+                tgt["planned_exit_rule"],
+                tgt["planned_exit_date"],
+                h["id"],
+            ),
+        )
 
 
-def run(*, dry_run: bool = False, sync_book: bool = True,
-        horizon_days: int | None = None) -> None:
+def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | None = None) -> None:
+    """One daily autopilot cycle: refresh prices, close due exits, sync to the capped
+    book, and snapshot performance."""
     today = date.today()
     horizon = horizon_days or config.AUTOPILOT_HORIZON_DAYS
     tol = config.AUTOPILOT_REBALANCE_PCT
@@ -348,8 +464,10 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
         raw = conn.connection
         cur = raw.cursor()
         try:
-            cur.execute("INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
-                        "ON CONFLICT (id) DO NOTHING")
+            cur.execute(
+                "INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
+                "ON CONFLICT (id) DO NOTHING"
+            )
             cur.execute("SELECT cash_usd, starting_capital_usd FROM portfolio_account WHERE id=1")
             arow = cur.fetchone() or (0.0, None)
             cash = float(arow[0] or 0.0)
@@ -357,8 +475,9 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
 
             holds = _load_open_paper(cur)
             target_tickers = [r["ticker"] for r in book_rows]
-            want = sorted({h["ticker"] for h in holds} | set(target_tickers)
-                          | {config.BENCHMARK_TICKER})
+            want = sorted(
+                {h["ticker"] for h in holds} | set(target_tickers) | {config.BENCHMARK_TICKER}
+            )
             n_px = 0 if dry_run else _refresh_prices(cur, want)
             closes = _latest_closes(cur, want or ["XBI"])
 
@@ -374,30 +493,44 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                 dd_scale = risk.drawdown_scale(equity, peak, config.DRAWDOWN_TIERS)
                 if dd_scale < 1.0:
                     dd = (equity / peak - 1) if peak else 0.0
-                    print(f"  [DRAWDOWN] equity ${equity:,.0f} is {dd:+.1%} vs peak "
-                          f"${peak:,.0f} -> targets x{dd_scale}"
-                          + ("  (opens paused)" if dd_scale <= config.DRAWDOWN_OPEN_PAUSE_SCALE else ""))
+                    print(
+                        f"  [DRAWDOWN] equity ${equity:,.0f} is {dd:+.1%} vs peak "
+                        f"${peak:,.0f} -> targets x{dd_scale}"
+                        + (
+                            "  (opens paused)"
+                            if dd_scale <= config.DRAWDOWN_OPEN_PAUSE_SCALE
+                            else ""
+                        )
+                    )
             derisk = dd_scale <= config.DRAWDOWN_OPEN_PAUSE_SCALE
 
             # Market-regime filter: benchmark below its SMA -> lighter gross.
             rg_scale = 1.0
             if config.REGIME_FILTER_ENABLED:
-                xbi_hist = list(reversed(_trailing_closes(
-                    cur, config.BENCHMARK_TICKER, config.REGIME_SMA_DAYS)))
-                rg_scale = risk.regime_scale(xbi_hist, config.REGIME_SMA_DAYS,
-                                             config.REGIME_DERISK_FACTOR)
+                xbi_hist = list(
+                    reversed(_trailing_closes(cur, config.BENCHMARK_TICKER, config.REGIME_SMA_DAYS))
+                )
+                rg_scale = risk.regime_scale(
+                    xbi_hist, config.REGIME_SMA_DAYS, config.REGIME_DERISK_FACTOR
+                )
                 if rg_scale < 1.0:
-                    print(f"  [REGIME] {config.BENCHMARK_TICKER} below its "
-                          f"{config.REGIME_SMA_DAYS}d SMA -> targets x{rg_scale}")
+                    print(
+                        f"  [REGIME] {config.BENCHMARK_TICKER} below its "
+                        f"{config.REGIME_SMA_DAYS}d SMA -> targets x{rg_scale}"
+                    )
 
             scale = dd_scale * rg_scale
 
             print(f"\n=== PAPER AUTOPILOT  {today} ===")
-            print(f"Action desk: {book['positions']} targets  "
-                  f"(L {book['gross_long']:.0%} / S {book['gross_short']:.0%}  "
-                  f"net {book['net']:+.0%})  horizon {horizon}d")
-            print(f"Price rows refreshed: {n_px}   open positions: {len(holds)}   "
-                  f"equity ${equity:,.0f}")
+            print(
+                f"Action desk: {book['positions']} targets  "
+                f"(L {book['gross_long']:.0%} / S {book['gross_short']:.0%}  "
+                f"net {book['net']:+.0%})  horizon {horizon}d"
+            )
+            print(
+                f"Price rows refreshed: {n_px}   open positions: {len(holds)}   "
+                f"equity ${equity:,.0f}"
+            )
 
             targets = ps.build_targets(book_rows, equity, closes) if sync_book else {}
 
@@ -405,9 +538,9 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
             still_open: list[dict] = []
             for h in holds:
                 px_now = closes.get(h["ticker"])
-                if (config.STOP_LOSS_ENABLED
-                        and risk.stop_loss_hit(h["side"], float(h["entry_price"]),
-                                               px_now, config.STOP_LOSS_PCT)):
+                if config.STOP_LOSS_ENABLED and risk.stop_loss_hit(
+                    h["side"], float(h["entry_price"]), px_now, config.STOP_LOSS_PCT
+                ):
                     reason = "stop_loss"
                 elif sync_book:
                     reason = ps.close_reason(h, targets.get(h["ticker"]), today)
@@ -434,20 +567,24 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
             if sync_book and targets:
                 equity = pf.account_summary(_holding_dicts(holds), cash, closes)["equity"]
                 kept = set(targets.keys())
-                targets = {t: v for t, v in ps.build_targets(book_rows, equity, closes).items()
-                           if t in kept}
+                targets = {
+                    t: v
+                    for t, v in ps.build_targets(book_rows, equity, closes).items()
+                    if t in kept
+                }
 
                 # Risk overlays: shrink all targets by the combined scale.
                 if scale < 1.0:
                     for t in targets:
-                        targets[t]["target_shares"] = round(
-                            targets[t]["target_shares"] * scale, 2)
+                        targets[t]["target_shares"] = round(targets[t]["target_shares"] * scale, 2)
                         targets[t]["target_dollars"] = round(
-                            targets[t]["target_dollars"] * scale, 2)
+                            targets[t]["target_dollars"] * scale, 2
+                        )
 
                 # --- 1b) PARTIAL PROFIT-LOCK (mean reversion, longs only) ---
                 cd, rp, locked = _profit_lock_pass(
-                    cur, holds, closes, targets, today, dry_run=dry_run)
+                    cur, holds, closes, targets, today, dry_run=dry_run
+                )
                 cash += cd
                 realized_today += rp
 
@@ -496,8 +633,9 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                             held[t] = {"ticker": t}
                     elif ps.needs_resize(h, tgt, tol):
                         if float(tgt["target_shares"]) > float(h["shares"]):
-                            add_cd = pf.cash_delta_on_open(h["side"],
-                                float(tgt["target_shares"]) - float(h["shares"]), px)
+                            add_cd = pf.cash_delta_on_open(
+                                h["side"], float(tgt["target_shares"]) - float(h["shares"]), px
+                            )
                             if h["side"] == pf.LONG and -add_cd > cash + 1e-6:
                                 print(f"  [skip add] {t}: need ${-add_cd:,.0f}, cash ${cash:,.0f}")
                                 continue
@@ -512,27 +650,37 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
             open_after = _load_open_paper(cur) if not dry_run else holds
             summary = pf.account_summary(_holding_dicts(open_after), cash, closes)
 
-            cur.execute("SELECT COALESCE(SUM(realized_pnl_usd),0) FROM portfolio_holdings "
-                        "WHERE notes LIKE 'PAPER%' AND status='closed'")
+            cur.execute(
+                "SELECT COALESCE(SUM(realized_pnl_usd),0) FROM portfolio_holdings "
+                "WHERE notes LIKE 'PAPER%' AND status='closed'"
+            )
             realized_total = float(cur.fetchone()[0] or 0.0)
 
             if not dry_run:
-                cur.execute("UPDATE portfolio_account SET cash_usd=%s, updated_at=NOW() WHERE id=1",
-                            (round(cash, 2),))
+                cur.execute(
+                    "UPDATE portfolio_account SET cash_usd=%s, updated_at=NOW() WHERE id=1",
+                    (round(cash, 2),),
+                )
                 raw.commit()
                 open_after = _load_open_paper(cur)
                 summary = pf.account_summary(_holding_dicts(open_after), cash, closes)
-                cur.execute("SELECT COALESCE(SUM(realized_pnl_usd),0) FROM portfolio_holdings "
-                            "WHERE notes LIKE 'PAPER%' AND status='closed'")
+                cur.execute(
+                    "SELECT COALESCE(SUM(realized_pnl_usd),0) FROM portfolio_holdings "
+                    "WHERE notes LIKE 'PAPER%' AND status='closed'"
+                )
                 realized_total = float(cur.fetchone()[0] or 0.0)
 
             ret_pct = (summary["equity"] - sleeve) / sleeve if sleeve else 0.0
-            print(f"\n  Closed: {closed}  Opened: {opened}  Resized: {resized}  "
-                  f"Profit-locked: {locked}{'  [DE-RISKED]' if derisk else ''}")
-            print(f"  Cash ${cash:,.0f} | Equity ${summary['equity']:,.0f} | "
-                  f"Unrealized {summary['unrealized_pnl_usd']:+,.0f} | "
-                  f"Realized-to-date {realized_total:+,.0f} | "
-                  f"Total return {ret_pct:+.1%} vs ${sleeve:,.0f} sleeve")
+            print(
+                f"\n  Closed: {closed}  Opened: {opened}  Resized: {resized}  "
+                f"Profit-locked: {locked}{'  [DE-RISKED]' if derisk else ''}"
+            )
+            print(
+                f"  Cash ${cash:,.0f} | Equity ${summary['equity']:,.0f} | "
+                f"Unrealized {summary['unrealized_pnl_usd']:+,.0f} | "
+                f"Realized-to-date {realized_total:+,.0f} | "
+                f"Total return {ret_pct:+.1%} vs ${sleeve:,.0f} sleeve"
+            )
 
             if not dry_run:
                 PERF_CSV.parent.mkdir(parents=True, exist_ok=True)
@@ -542,10 +690,21 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                     w = csv.writer(fh)
                     if new_file:
                         w.writerow(PERF_COLUMNS)
-                    w.writerow([today, round(summary["equity"], 2), round(cash, 2),
-                                summary["positions"], summary["unrealized_pnl_usd"],
-                                round(realized_total, 2), round(ret_pct, 4),
-                                closed, opened, resized, book["positions"]])
+                    w.writerow(
+                        [
+                            today,
+                            round(summary["equity"], 2),
+                            round(cash, 2),
+                            summary["positions"],
+                            summary["unrealized_pnl_usd"],
+                            round(realized_total, 2),
+                            round(ret_pct, 4),
+                            closed,
+                            opened,
+                            resized,
+                            book["positions"],
+                        ]
+                    )
                 print(f"  Snapshot appended -> {PERF_CSV}")
 
                 xbi_px = closes.get(config.BENCHMARK_TICKER)
@@ -556,22 +715,25 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
                     starting_capital=sleeve if sleeve > 0 else None,
                     track_start=track_start,
                 )
-                perf_store.upsert_snapshot(cur, {
-                    "snapshot_date": today,
-                    "equity": round(summary["equity"], 2),
-                    "cash": round(cash, 2),
-                    "open_positions": summary["positions"],
-                    "unrealized_pnl": summary["unrealized_pnl_usd"],
-                    "realized_to_date": round(realized_total, 2),
-                    "total_return_pct": round(ret_pct, 4),
-                    "exits_today": closed,
-                    "opens_today": opened,
-                    "resized_today": resized,
-                    "desk_positions": book["positions"],
-                    "xbi_close": xbi_px,
-                    "xbi_return_pct": xbi_ret,
-                    "benchmark_equity": bench_eq,
-                })
+                perf_store.upsert_snapshot(
+                    cur,
+                    {
+                        "snapshot_date": today,
+                        "equity": round(summary["equity"], 2),
+                        "cash": round(cash, 2),
+                        "open_positions": summary["positions"],
+                        "unrealized_pnl": summary["unrealized_pnl_usd"],
+                        "realized_to_date": round(realized_total, 2),
+                        "total_return_pct": round(ret_pct, 4),
+                        "exits_today": closed,
+                        "opens_today": opened,
+                        "resized_today": resized,
+                        "desk_positions": book["positions"],
+                        "xbi_close": xbi_px,
+                        "xbi_return_pct": xbi_ret,
+                        "benchmark_equity": bench_eq,
+                    },
+                )
                 raw.commit()
                 print("  Snapshot upserted -> portfolio_performance (Supabase)")
             else:
@@ -579,41 +741,85 @@ def run(*, dry_run: bool = False, sync_book: bool = True,
         finally:
             cur.close()
 
-    log.info("autopilot_done", closed=closed, opened=opened, resized=resized,
-             profit_locked=locked, derisked=derisk,
-             desk_positions=book["positions"], equity=round(summary["equity"], 2),
-             realized_total=round(realized_total, 2))
+    log.info(
+        "autopilot_done",
+        closed=closed,
+        opened=opened,
+        resized=resized,
+        profit_locked=locked,
+        derisked=derisk,
+        desk_positions=book["positions"],
+        equity=round(summary["equity"], 2),
+        realized_total=round(realized_total, 2),
+    )
+
+
+def _load_open_shorts_and_fades(cur) -> list[dict]:
+    """Every open short OR fade — not limited to notes='PAPER'.
+
+    The Portfolio UI shows all open holdings; leftover fades from rogue runs
+    must be coverable even if notes differ.
+    """
+    cur.execute("""
+        SELECT id, ticker, company_id, catalyst_id, side, trade_type, entry_date,
+               shares, entry_price, cost_basis_usd, planned_exit_date, planned_exit_rule,
+               notes
+        FROM portfolio_holdings
+        WHERE status='open' AND (side='short' OR trade_type='fade')
+        ORDER BY ticker, id
+    """)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def cover_shorts(*, dry_run: bool = False) -> None:
-    """Close every open PAPER short at last close and free the cash. One-shot.
+    """Close every open short/fade at last close and free the cash. One-shot.
 
     Use to flatten shorts immediately (e.g. when switching to long-only) rather than
-    waiting for the daily sync to drop them as not_in_book.
+    waiting for the daily sync to drop them as not_in_book. Catches side='short'
+    OR trade_type='fade' across all notes (not just PAPER).
     """
     today = date.today()
     with get_connection() as conn:
         raw = conn.connection
         cur = raw.cursor()
         try:
-            cur.execute("INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
-                        "ON CONFLICT (id) DO NOTHING")
+            cur.execute(
+                "INSERT INTO portfolio_account (id, cash_usd) VALUES (1, 0) "
+                "ON CONFLICT (id) DO NOTHING"
+            )
             cur.execute("SELECT cash_usd FROM portfolio_account WHERE id=1")
             cash = float((cur.fetchone() or (0.0,))[0] or 0.0)
 
-            shorts = [h for h in _load_open_paper(cur) if h["side"] == pf.SHORT]
+            shorts = _load_open_shorts_and_fades(cur)
             print(f"\n=== COVER SHORTS  {today} ===")
             if not shorts:
-                print("  No open PAPER shorts.")
+                print("  No open shorts/fades.")
                 return
             tickers = [h["ticker"] for h in shorts]
             n_px = 0 if dry_run else _refresh_prices(cur, tickers)
             closes = _latest_closes(cur, tickers)
-            print(f"  Open shorts: {len(shorts)}   price rows refreshed: {n_px}")
+            print(f"  Open shorts/fades: {len(shorts)}   price rows refreshed: {n_px}")
+            for h in shorts:
+                print(
+                    f"    {h['ticker']:<6} side={h['side']:<5} type={h['trade_type']:<13} "
+                    f"notes={h.get('notes')!r} shares={float(h['shares']):.2f}"
+                )
 
             covered = 0
             realized_today = 0.0
             for h in shorts:
+                # Fade rows that somehow have side≠short: force short semantics
+                # so cover P&L/cash and strip_shorts both see them as shorts.
+                if h["side"] != pf.SHORT:
+                    print(f"  [coerce] {h['ticker']}: {h['side']}/{h['trade_type']} → short")
+                    if not dry_run:
+                        cur.execute(
+                            "UPDATE portfolio_holdings SET side=%s, updated_at=NOW() WHERE id=%s",
+                            (pf.SHORT, h["id"]),
+                        )
+                    h = dict(h)
+                    h["side"] = pf.SHORT
                 px = closes.get(h["ticker"])
                 if px is None:
                     print(f"  [skip] {h['ticker']}: no price")
@@ -623,32 +829,45 @@ def cover_shorts(*, dry_run: bool = False) -> None:
                 realized_today += rp
                 covered += 1
 
-            print(f"\n  Covered: {covered}/{len(shorts)}   realized {realized_today:+,.0f}   "
-                  f"cash -> ${cash:,.0f}")
+            print(
+                f"\n  Covered: {covered}/{len(shorts)}   realized {realized_today:+,.0f}   "
+                f"cash -> ${cash:,.0f}"
+            )
             if not dry_run:
-                cur.execute("UPDATE portfolio_account SET cash_usd=%s, updated_at=NOW() WHERE id=1",
-                            (round(cash, 2),))
+                cur.execute(
+                    "UPDATE portfolio_account SET cash_usd=%s, updated_at=NOW() WHERE id=1",
+                    (round(cash, 2),),
+                )
                 raw.commit()
                 print("  Committed.")
             else:
                 print("  (dry run — nothing written)")
         finally:
             cur.close()
-    log.info("cover_shorts_done", covered=covered if shorts else 0,
-             realized=round(realized_today, 2) if shorts else 0.0)
+    log.info(
+        "cover_shorts_done",
+        covered=covered if shorts else 0,
+        realized=round(realized_today, 2) if shorts else 0.0,
+    )
 
 
 def main() -> None:
+    """CLI entry: run the paper-trading autopilot (daily sync / exits-only / cover-shorts)."""
     ap = argparse.ArgumentParser(description="Paper autopilot — sync to capped action desk")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--exits-only", action="store_true",
-                    help="close due exits only; do not sync to action desk")
-    ap.add_argument("--no-open", action="store_true",
-                    help="alias for --exits-only (legacy)")
-    ap.add_argument("--cover-shorts", action="store_true",
-                    help="cover all open PAPER shorts now, then exit")
-    ap.add_argument("--horizon-days", type=int, default=None,
-                    help=f"action desk horizon (default {config.AUTOPILOT_HORIZON_DAYS})")
+    ap.add_argument(
+        "--exits-only", action="store_true", help="close due exits only; do not sync to action desk"
+    )
+    ap.add_argument("--no-open", action="store_true", help="alias for --exits-only (legacy)")
+    ap.add_argument(
+        "--cover-shorts", action="store_true", help="cover all open PAPER shorts now, then exit"
+    )
+    ap.add_argument(
+        "--horizon-days",
+        type=int,
+        default=None,
+        help=f"action desk horizon (default {config.AUTOPILOT_HORIZON_DAYS})",
+    )
     args = ap.parse_args()
     exits_only = args.exits_only or args.no_open
     try:
@@ -656,8 +875,7 @@ def main() -> None:
         if args.cover_shorts:
             cover_shorts(dry_run=args.dry_run)
             return
-        run(dry_run=args.dry_run, sync_book=not exits_only,
-            horizon_days=args.horizon_days)
+        run(dry_run=args.dry_run, sync_book=not exits_only, horizon_days=args.horizon_days)
     except Exception as exc:  # noqa: BLE001
         log.error("autopilot_failed", error=str(exc))
         print(f"ERROR: {exc}")

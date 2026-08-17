@@ -1,28 +1,25 @@
-# AGENT HANDOFF — GBM Sentiment Arbitrage Project
+# PROJECT HANDBOOK — GBM / Onc-CNS Edge Engine
 
-> Read this first. It is the single source of truth for *intent, mental model, current
-> state, and known traps*. The `.cursorrules` file holds hard coding standards; this
-> file holds the *why* and the *where we are*. Keep both in sync. Update the
-> "Current State" and "Roadmap" sections whenever you finish meaningful work.
+> Single source of truth for *intent, mental model, current state, and known traps*.
+> The `.cursorrules` file holds hard coding standards; this document holds the *why*
+> and the *where we are*.
 >
-> **Operations log:** record every operational change (trading/risk rules, scheduling,
-> pipeline, schema, notable UI) in `OPERATIONS_LOG.md`, newest first, so changes can be
-> reviewed and evaluated later. Add an entry as part of the same change.
+> **Operations log:** every operational change (trading/risk rules, scheduling,
+> pipeline, schema, notable UI) is recorded in `docs/OPERATIONS_LOG.md`, newest first.
 
 ---
 
 ## 1. What this project is (the goal)
 
-Build a **Bloomberg-terminal-style decision-support engine** for trading small-cap
+A **Bloomberg-terminal-style decision-support engine** for trading small-cap
 biotech (GBM-focused, broadened to oncology/CNS) around clinical/regulatory catalysts.
 
-The owner's goal, in their words: **make as much money as possible in both the short
-and long term, and build something that matters.** They read *Noise* (Kahneman) and
-want an *objective, formulaic* process, not gut feel.
+The design goal is an *objective, formulaic* process — the lesson of Kahneman's
+*Noise* — rather than gut feel.
 
 **Operating model = "Rung 2":** the pipeline ingests data, scores it, and proposes a
 risk-capped trade book. A human reviews and executes. **No automated broker
-integration. No auto-trading.**
+integration. No auto-trading.** All positions are paper trades.
 
 ---
 
@@ -107,7 +104,7 @@ few factors, near-equal weights, no kitchen-sink overfitting.
 
 Orchestrator: `scripts/refresh_all.py` (fail-soft, runs stages in order). Key stages:
 
-1. `apply_schema.py` — idempotent schema (`schema.sql`).
+1. `scripts/apply_schema.py` — idempotent schema (`schema.sql`).
 2. Ingestion: companies/trials/catalysts/financials (existing), then
    `classify_universe.py` (oncology/CNS categories, GBM flag, small-cap filter),
    `ingest_prices.py` (OHLCV via yfinance), `ingest_positioning.py` (short interest,
@@ -124,11 +121,11 @@ Orchestrator: `scripts/refresh_all.py` (fail-soft, runs stages in order). Key st
    Catalyst Calendar, Validation, **Glossary** (plain-language defs), Data Health.
    Run: `streamlit run scripts/terminal.py --server.port 8520`.
 
-PORTFOLIO TRACKER (the user's real money — persists to REMOTE Supabase, NOT local):
-- IMPORTANT: `DATABASE_URL` points to `aws-1-ap-southeast-1.pooler.supabase.com:6543`
-  (Supabase cloud), despite `.cursorrules` claiming a local postgres. Anything entered
-  in the dashboard saves to that cloud DB and persists across restarts/devices. It is
-  NOT private-to-machine. To make it truly local, repoint `DATABASE_URL` at local PG.
+PORTFOLIO TRACKER (paper trading — persists to REMOTE Supabase, NOT local):
+- IMPORTANT: `DATABASE_URL` points to a Supabase cloud Postgres pooler, despite
+  `.cursorrules` describing a local postgres. Anything entered in the dashboard saves
+  to that cloud DB and persists across restarts/devices. It is NOT private-to-machine.
+  To make it truly local, repoint `DATABASE_URL` at a local Postgres.
 - Tables: `portfolio_account` (singleton: cash_usd auto-adjusts on open/close),
   `portfolio_holdings` (one row per position, open/closed, linked to a catalyst for
   exit timing).
@@ -148,9 +145,7 @@ TRADING-READINESS TOOLS (added 2026-06-21):
 - `scripts/seed_paper_trades.py` — seeds PAPER longs (buy_the_rumor/hold_through only;
   fades excluded) from the near-term book into `portfolio_holdings` (notes='PAPER'), sized
   at de-risked weight vs a paper sleeve, exit dates from `tracker.planned_exit`. Idempotent;
-  `--reset` wipes PAPER + resets cash. CURRENT PAPER STATE: sleeve $10k, 7 open longs
-  (ADCT/IMVT/MIST/OCUL/BHVN/CLDX/BNTX), ~$2.7k deployed, cash $7.3k. SAGE skipped (no price).
-  This is the owner practicing the workflow before real money — NOT real positions.
+  `--reset` wipes PAPER + resets cash. All seeded positions are paper trades.
 
 PAPER AUTOPILOT (unattended daily run, added 2026-06-21):
 - `scripts/paper_autopilot.py` — one daily cycle: refresh prices for held/candidate
@@ -158,14 +153,9 @@ PAPER AUTOPILOT (unattended daily run, added 2026-06-21):
   the latest close, book realized P&L, return cash), optionally OPEN new near-term longs,
   then append a snapshot to `data/raw/paper_performance.csv`. Fail-soft on price-fetch.
   Only touches notes='PAPER'. Flags: `--dry-run`, `--no-open`.
-- Wrapper: `scripts/run_paper_autopilot.ps1` (logs to `data/logs/autopilot_run_<date>.log`).
-- Windows Task Scheduler task **"BiotechPaperAutopilot"** runs it weekdays 23:00 local
-  (after US close). Requires the machine ON + user logged in; `-StartWhenAvailable` catches
-  up if missed. Manage: `Get-ScheduledTask BiotechPaperAutopilot` /
-  `Disable-ScheduledTask` / `Unregister-ScheduledTask -TaskName BiotechPaperAutopilot`.
-- NOTE: the agent cannot run live across weeks; this scheduled task is the actual
-  automation. It writes to the same remote Supabase tables, so results show in the
-  dashboard Portfolio page.
+- Scheduling: GitHub Actions (`.github/workflows/paper-autopilot.yml`) runs it on
+  weekdays after the data refresh. It writes to the same remote Supabase tables, so
+  results show in the dashboard Portfolio page.
 
 Run a single script directly (e.g. `python scripts/ingest_prices.py --lookback-days 400`).
 Most support `--dry-run`, `--limit`, `--ticker`.
@@ -189,13 +179,12 @@ Most support `--dry-run`, `--limit`, `--ticker`.
 calibrated** across all probability buckets. This is real but modest. It predicts
 *clinical trial success*, which is a FEATURE — not stock returns.
 
-**Live book:** `action_sheet.py` produces ~39 positions, long/short, all caps enforced
-(gross long ≤100%, gross short ≤30%, net ≤±60%, GBM ≤25%). 36 `fade` signals exist only
-because positioning/implied-move data is now populated.
+**Live book:** long-only. `action_sheet.py` drops every short/fade; scorer maps former
+fade setups to `avoid`. Caps: gross long ≤100%, gross short = 0, GBM ≤25%.
 
-**Honest risk:** the LONGS lean on the validated base-rate edge. The FADE/SHORTS are
-theory-driven and have ZERO realized validation. Trade longs at size; paper/half-size
-shorts until they earn a record.
+**Honest risk:** the LONGS lean on the validated base-rate edge. Fades/shorts are
+**retired** (unvalidated; were the main drag). Run `scripts/fix_long_only_book.py`
+on the live DB if any leftover shorts or stale fade scores remain.
 
 **Returns dataset — PARTIALLY UNBLOCKED (2026-06-21):** the earlier blocker
 ("no announcement dates") was wrong. `sec_filings` holds **2,028 8-K filings across 106
@@ -266,8 +255,8 @@ edge_gap itself isn't backtestable yet.
      ×0.7, small ×0.85, ≥$1B ×1.0) BEFORE portfolio caps. Encodes the magnitude finding
      (small mcap = violent) as DE-RISKING only — it can never enlarge a position. Config:
      `RISK_HAIRCUT_*` (toggle via `RISK_HAIRCUT_ENABLED=0`). Tested (`test_risk_haircut.py`).
-     Effect on current book: gross long 86.9%→82.6%, short 30%→27.7% (per-name bigger:
-     tiny-caps 5%→3.5%). Owner context: satellite sleeve + discipline-tool use.
+     Effect on the book at introduction: gross long 86.9%→82.6%, short 30%→27.7%
+     (per-name bigger: tiny-caps 5%→3.5%).
    - Remaining levers to improve: parse 8-K ITEM CODES (not stored; needs EDGAR re-fetch)
      to drop routine filings; add options skew / short-interest-change once historical
      snapshots accrue; non-linear model only AFTER better features (linear isn't the limit).
@@ -281,12 +270,10 @@ edge_gap itself isn't backtestable yet.
 
 ---
 
-## 7. Discipline reminders (from the owner)
+## 7. Working agreements
 
-- Speed + correctness. The owner does not want to "learn"; they want working code, but
-  they MUST be told when something failed silently, when you took a shortcut, made an
-  assumption, or skipped verification.
-- After any change: run the affected scripts, report what ACTUALLY happened (row counts,
-  sample data, query results as proof), and flag silent failures / fallback paths.
-- Scope discipline: GBM/onco-CNS only. Filter at ingestion. Don't over-engineer. Don't
-  add features outside this roadmap without confirmation.
+- Speed + correctness, with radical transparency: report when something failed
+  silently, when a shortcut was taken, an assumption made, or verification skipped.
+- After any change: run the affected scripts, report what ACTUALLY happened (row
+  counts, sample data, query results as proof), and flag silent failures / fallbacks.
+- Scope discipline: GBM/onco-CNS only. Filter at ingestion. Don't over-engineer.

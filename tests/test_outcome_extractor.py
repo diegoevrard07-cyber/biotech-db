@@ -80,11 +80,7 @@ def test_hr_ci_success():
                 "type": "PRIMARY",
                 "paramType": "Hazard Ratio",
                 "classes": [
-                    {
-                        "categories": [
-                            {"measurements": [{"lowerLimit": "0.5", "upperLimit": "0.9"}]}
-                        ]
-                    }
+                    {"categories": [{"measurements": [{"lowerLimit": "0.5", "upperLimit": "0.9"}]}]}
                 ],
             }
         ]

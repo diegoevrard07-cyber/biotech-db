@@ -43,6 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_material_events_filed ON material_events(filing_d
 
 
 def migrate(*, dry_run: bool = False) -> None:
+    """Add catalyst SEC-provenance columns and create the material_events table."""
     statements = [s.strip() for s in MIGRATION_SQL.split(";") if s.strip()]
     if dry_run:
         for stmt in statements:
@@ -57,6 +58,7 @@ def migrate(*, dry_run: bool = False) -> None:
 
 
 def main() -> None:
+    """CLI entry: run the idempotent Layer 4 schema migration."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

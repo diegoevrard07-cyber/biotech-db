@@ -1,191 +1,251 @@
 # GBM / Onc-CNS Edge Engine
 
-Multi-layer biotech investment research pipeline. Originally GBM-only; broadened
-(Rung 2) to small-cap oncology/CNS with GBM kept as a flagged flagship vertical.
-Combines clinical catalysts, historical base rates, SEC financials + insider
-activity, market price/positioning, labeled outcomes, and a decision layer that
-emits an objective trade type and position size. Decision support only — a human
-verifies data and places trades (no broker integration).
+**A research pipeline that estimates whether small-cap oncology/CNS biotech stocks are
+mispriced ahead of clinical-trial readouts and FDA decisions — and turns that estimate
+into sized, typed paper trades.**
 
-## Architecture
+![Python](https://img.shields.io/badge/python-3.12%2B-blue)
+![Tests](https://github.com/diegoevrard07-cyber/biotech-db/actions/workflows/tests.yml/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+![Edge Terminal — cockpit view: paper-book equity vs the XBI biotech benchmark](docs/img/terminal.png)
+
+![Edge Terminal — the action desk: ranked catalyst trades with type, weight, and timing](docs/img/dashboard.png)
+
+## Why this exists
+
+Small-cap biotech is a market built on binary events. A Phase 2 readout or a PDUFA
+decision can move a stock 50% overnight, and the *behavioral* patterns around those
+events repeat: prices run up into the print, hype concentrates in names with weak
+historical odds, and companies that can't fund themselves to their own catalyst get
+diluted at the worst moment. I built this project on a simple thesis: the **direction**
+of a trial result is close to unforecastable, but the **odds** are estimable from
+history, and the **crowd's pricing of those odds** is measurable. The tradeable
+quantity is the gap between the two.
+
+I anchor every score on historical base rates — how often trials like this one, by
+phase, disease, and sponsor type, have actually succeeded — and I deliberately keep
+the scoring model simple: few factors, near-equal weights. That's the explicit lesson
+of Kahneman, Sibony, and Sunstein's *Noise*: in low-signal domains, a simple formula
+consistently beats expert judgment and kitchen-sink models alike. This project tested
+that directly — a regularized logistic regression with more features did *not* beat
+the plain base-rate lookup, so the lookup stayed.
+
+The discipline stance is the point: **trust nothing until calibration (Brier score,
+reliability buckets) and walk-forward backtesting show a positive edge on resolved
+outcomes.** Every signal here is paper-traded, every assumption is measured, and the
+results — including the negative ones — are in the repo.
+
+## What it does
+
+The engine runs a daily pipeline from raw public data to a risk-capped trade book:
+
+1. **Ingest** upcoming catalysts (trial readouts, PDUFA dates, advisory committees)
+   from ClinicalTrials.gov; financials, 8-K filings, and Form 4 insider transactions
+   from SEC EDGAR; and prices, short interest, and options data via yfinance.
+2. **Anchor on base rates** — the empirical success probability of a trial given its
+   phase, indication, and sponsor class, mined from ~52,000 historical trials.
+3. **Grade each catalyst** with a three-factor composite (catalyst proximity, base
+   rate, balance-sheet survivability) — deliberately no sentiment in the grade.
+4. **Compare against the market.** The model's *expected move* for the event is set
+   against the options market's *implied move* (how big a move traders have priced
+   in). The difference is the **edge gap** — the mispricing estimate everything
+   hangs on.
+5. **Decide and size.** A decision layer emits a trade type — `buy_the_rumor` (ride
+   the run-up, exit before the print), `hold_through` (own the binary when odds
+   justify it), or `avoid` — and a **Kelly-fractional** position weight (the Kelly
+   criterion's optimal bet fraction, taken at quarter-Kelly and capped at 5% per
+   name). A fourth type, `fade` (shorting overhyped names), existed and was
+   **retired after measurement** — the event study found no reliable edge in it, and
+   in paper trading it was the main P&L drag.
+6. **Cap the risk** — sector, GBM-cluster, and gross-exposure caps, a market-cap risk
+   haircut, and EOD overlays (stop-loss, drawdown tiers, regime filter) that can only
+   ever *reduce* exposure.
+7. **Execute on paper, daily**, via a GitHub Actions autopilot, and display in a
+   Bloomberg-style Streamlit terminal.
 
 ```
-Layer 1 (Catalysts)  → companies, trials, catalysts
-Layer 2 (Science)    → council_judgments, trial_scores  [Poe API]
-Layer 3 (Base Rates) → historical_trials, base_rates
-Layer 4 (Financials) → sec_filings, financials          [SEC EDGAR]
-Market data          → price_history, positioning        [yfinance]
-Insider              → insider_transactions              [SEC Form 4]
-Outcomes             → catalyst_outcomes (labeled returns)
-Composite + Decision → edge_scores (trade_type, suggested_weight, edge_gap)
-Validation           → calibration_runs + backtest
+                        ┌───────────────────── DATA SOURCES ─────────────────────┐
+                        │  ClinicalTrials.gov   SEC EDGAR (8-K/XBRL/Form 4)      │
+                        │  yfinance (OHLCV, short interest, options-implied move)│
+                        └───────────────┬─────────────────────────────────────────┘
+                                        │  scripts/ingest_*.py  (idempotent upserts)
+                                        ▼
+                              PostgreSQL (schema.sql — 22 tables)
+                                        │
+        ┌───────────────────────────────┼────────────────────────────────────┐
+        ▼                               ▼                                    ▼
+ layers/layer1   catalysts       layers/layer3   base rates           layers/layer4
+ trials, readouts, PDUFA         52k historical trials → empirical    cash runway, burn,
+ dates, dedupe                   P(success | phase, indication,       insider flow
+                                 sponsor)
+        └───────────────────────────────┬────────────────────────────────────┘
+                                        ▼
+                    layers/composite/scorer.py  — the decision engine
+                      grade   = 0.25·proximity + 0.45·base_rate + 0.30·financial
+                      edge_gap = model expected move − options-implied move
+                      → trade_type (buy_the_rumor / hold_through / avoid)
+                      → Kelly-fractional weight, market-cap risk haircut
+                                        ▼
+                    scripts/action_sheet.py — risk-capped long-only book
+                      (sector ≤ 40%, GBM cluster ≤ 25%, single name ≤ 5%)
+                                        ▼
+        ┌───────────────────────────────┴───────────────────────────────┐
+        ▼                                                               ▼
+ scripts/terminal.py  (Streamlit terminal)        scripts/paper_autopilot.py
+ Cockpit · Portfolio · Action Desk ·              daily paper-trading sync with
+ Strategy · Market & Models                       stop-loss, drawdown tiers,
+                                                  XBI regime filter (GitHub Actions)
+                                        ▼
+              Validation: calibrate.py (Brier/reliability) · backtest.py
+              (walk-forward) · validate_base_rates.py (temporal holdout)
 ```
 
-## Rung 2 decision engine
+The project started GBM-only and was later broadened to small-cap oncology/CNS with
+GBM kept as the flagged flagship vertical (that expansion was internally "Rung 2" —
+this README just says "the decision engine" from here).
 
-The composite scorer stays simple and base-rate-anchored (few factors, near-equal
-weights — the lesson from *Noise*), then a decision layer adds:
+## Results & validation
 
-- `trade_type`: `buy_the_rumor` (own the pre-catalyst run-up, exit before the
-  print), `fade` (short/avoid hyped low-base-rate names with dilution risk),
-  `hold_through` (take the binary when odds justify), or `avoid`.
-- `expected_move` (model) vs `implied_move` (options market) → `edge_gap`.
-- `financing_tilt` (dilution risk) and `insider_tilt` (open-market buying).
-- `suggested_weight`: Kelly-fractional, capped at `MAX_SINGLE_NAME_WEIGHT`.
+Numbers below are from the committed project logs; samples are dated where it matters.
+The short version: the *scientific* prediction is validated; the *trading* record is
+young and honestly small.
 
-Trust nothing until `scripts/calibrate.py` (Brier/reliability) and
-`scripts/backtest.py` (walk-forward) show a positive edge on resolved outcomes.
+**Validated — trial-success base-rate model** (temporal holdout: train pre-2019, test
+post-2019, n = **10,127** labeled trials): Brier skill **+0.098** over the base-rate
+prior, AUC **0.676**, well-calibrated across all probability buckets. This predicts
+*clinical trial success* — a feature, not a stock return — and it's the load-bearing
+input to everything downstream.
 
-## Setup
+**Measured — what catalyst reactions look like** (event study of **2,028** real SEC
+8-Ks, 6,084 event-return rows vs the XBI biotech benchmark, as of 2026-06-21): median
+3-day abnormal return ≈ **−1%**, std ≈ **22%**, ~30% of events move ≥10%. Most 8-Ks
+are noise — the edge has to come from *selection*, not participation.
 
-1. Python 3.14+ with virtualenv recommended
-2. Copy `.env.example` → `.env` and fill in:
-   - `DATABASE_URL` — Supabase Postgres connection string
-   - `POE_API_KEY` — Poe API key for Layer 2 council
-   - `SEC_USER_AGENT` — Your name + email (SEC requirement)
-3. Install dependencies: `pip install -r requirements.txt`
-4. Apply schema: `python apply_schema.py`
-5. Verify: `python verify.py`
+**Validated negatives (the useful kind):**
 
-## Run Order
+- Reaction *direction* is not predictable from pre-event price action: ridge
+  regression on leakage-safe technical features, OOS R² **−0.001**, hit rate **47.6%**
+  — below a coin flip. No price-based direction signal is wired in.
+- Reaction *magnitude* is weakly predictable (OOS R² **+0.019**; predicted-big events
+  realized **13.9%** vs **7.8%** average absolute move, 1.8×). Used for *sizing*
+  (small-cap risk haircut), never direction.
+- A pure-numpy logistic regression (AUC 0.655) did not beat the base-rate lookup
+  (0.672). The simple model won; the fancier one is kept as a research tool.
+
+**Honestly early — the paper-trading record.** The live paper book is weeks old with
+a tiny sample: as of 2026-07-03, 39 closed longs at +3.7% on cost with a 79% win rate,
+but lagging buy-and-hold XBI over the same hot window, and resolved-catalyst
+calibration is nearly empty (n ≈ 1–3). The shorts/fades book was measured to be the
+main drag and was killed; the long book leans on the validated base-rate edge. This is
+ongoing validation, not a claim of alpha — the point of the repo is the *process* that
+will prove or disprove it.
+
+Universe scale (as of 2026-06-21): 131 companies · 450 tracked catalysts · 52,341
+historical trials · ~142k daily price rows across 115 tickers · 6,822 insider
+transactions · 180+ automated tests.
+
+## Design decisions I'd defend in an interview
+
+- **Simple, near-equal weights — on evidence, not taste.** In a domain this noisy,
+  extra parameters fit noise. The *Noise* hypothesis was tested: the logistic model
+  lost to the lookup, so the lookup stayed.
+- **Once-daily, end-of-day cadence is optimal here.** Every signal is EOD granularity
+  (daily closes; SEC/CT.gov change slowly). Polling more often adds no signal, risks
+  yfinance/SEC rate-limit bans, and burns CI minutes.
+- **Risk overlays only ever reduce risk.** Stop-loss, drawdown tiers, regime filter,
+  profit-lock, and the market-cap haircut can shrink or block a position — never
+  enlarge one. There is no code path that adds risk dynamically.
+- **The human stays in the loop.** This is decision support: the engine proposes a
+  sized book, a human reviews and executes. No broker integration, no auto-trading —
+  the autopilot only ever touches paper positions.
+- **All state lives in Postgres**, so the whole loop — ingestion, scoring, paper
+  trading, dashboard — runs serverless on GitHub Actions and Streamlit Cloud, and the
+  UI reads exactly what the autopilot writes.
+- **Models are pure numpy, no sklearn.** A few hundred lines I can audit line-by-line
+  beat a black-box dependency for a few thousand rows.
+
+## Quickstart
+
+Requires Python 3.12+ and a Postgres database — a free [Supabase](https://supabase.com)
+project, or local Docker (`docker compose up -d`, then
+`DATABASE_URL=postgresql://postgres:postgres@localhost:5432/biotech`).
 
 ```bash
-python scripts/load_companies.py
-python scripts/ingest_layer1.py --limit 5   # smoke test
-python scripts/ingest_layer1.py             # full ingest
-python scripts/verify_layer1.py
-python scripts/run_layer1.py
-python scripts/run_layer2.py --limit 5   # smoke test first
-python scripts/run_layer3.py
-python scripts/run_layer4.py          # SEC ingest (requires SEC_USER_AGENT)
-# --- Rung 2 ---
-python scripts/classify_universe.py   # tag is_gbm_focused / indication_category / in_universe
-python scripts/ingest_prices.py --lookback-days 400   # yfinance OHLCV + XBI benchmark
-python scripts/ingest_positioning.py  # short interest, implied move, IV, run-up
-python scripts/ingest_insider.py      # SEC Form 4 (requires SEC_USER_AGENT)
-python scripts/resolve_outcomes.py    # label past catalysts from price reaction
-python scripts/run_composite.py       # composite + decision layer
-python scripts/calibrate.py           # Brier / reliability vs outcomes
-python scripts/backtest.py --csv data/raw/backtest_trades.csv
-python scripts/verify_signals.py      # signal coverage / freshness
-# Or all at once (fail-soft orchestrator):
-python scripts/refresh_all.py
+git clone https://github.com/diegoevrard07-cyber/biotech-db.git
+cd biotech-db
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env
+# edit .env: DATABASE_URL (Postgres) and SEC_USER_AGENT ("Name email" — SEC requirement)
+# POE_API_KEY is optional — the Layer-2 science council is scaffolded, not wired in
+
+python scripts/apply_schema.py     # create tables (idempotent)
+python scripts/refresh_all.py      # full pipeline: ingest → score → validate (fail-soft)
+streamlit run scripts/terminal.py  # the Edge Terminal
 ```
 
-All scripts support `--dry-run` (no DB writes). Ingestion scripts also support
-`--limit` and `--ticker` for smoke tests.
+`python -m pytest` runs the 180+ test suite (DB-backed tests skip automatically
+without `DATABASE_URL`). The full script-by-script run order, per-script flags, and
+verify scripts are in [docs/PIPELINE.md](docs/PIPELINE.md).
 
-## Terminal dashboard (Rung 2 cockpit)
-
-A Bloomberg-style dark terminal:
-
-```bash
-streamlit run scripts/terminal.py
-```
-
-Panels: Trade Blotter (ranked signals with trade type + weight), Security
-(price/positioning/insider), Catalyst Calendar, Validation (calibration +
-backtest), and Data Health. The original `scripts/dashboard.py` still works.
-
-## Scheduling (unattended Rung 2)
-
-Run the fail-soft pipeline daily via Windows Task Scheduler:
-
-```powershell
-schtasks /Create /SC DAILY /TN "EdgeEngineRefresh" /ST 18:00 ^
-  /TR "cmd /c cd /d C:\Users\Diegos PC\Documents\biotech-db && python scripts\refresh_all.py >> data\logs\refresh.out 2>&1"
-```
-
-`refresh_all.py` continues past non-critical ingest failures and exits non-zero
-if any stage fails, so the scheduler can surface problems.
-
-## Dashboard
-
-A read-only Streamlit dashboard visualizes the pipeline output:
-
-```bash
-streamlit run scripts/dashboard.py
-```
-
-Five pages (sidebar): Catalyst Watchlist, Catalyst Detail, Company View, Catalyst
-Calendar, Data Health. It reads `DATABASE_URL` from `.env`, caches every query for
-5 minutes, and never hardcodes credentials. Dark theme is set in
-`.streamlit/config.toml`.
-
-## Data Directories
-
-| Path | Purpose | Gitignored |
-|------|---------|------------|
-| `data/seeds/` | Curated CSV seed data | No |
-| `data/raw/` | Unmatched sponsors, raw exports | Yes |
-| `data/cache/` | 24h API response cache | Yes |
-| `data/logs/` | JSON structured logs | Yes |
-
-## Database
-
-Schema defined in `schema.sql`. Applied idempotently via `apply_schema.py` using `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`.
-
-Connection via `DATABASE_URL` in `.env` (Supabase Postgres pooler).
-
-Portfolio data (syncs across machines):
-
-| Table | Purpose |
-|-------|---------|
-| `portfolio_account` | Cash + starting capital (singleton) |
-| `portfolio_holdings` | Every open/closed trade (PAPER + manual) |
-| `portfolio_performance` | Daily equity snapshots + XBI benchmark |
-
-Run `python apply_schema.py` after pulling to create new tables. Import local CSV history once with `python scripts/sync_performance_to_db.py`.
-
-## Risk mitigation overlays (paper autopilot)
-
-Two dynamic, end-of-day risk controls run inside `paper_autopilot.py` (all configurable in `.env`, all reduce risk only):
-
-| Overlay | What it does | Key knobs (defaults) |
-|---------|--------------|----------------------|
-| **Drawdown circuit breaker** | If equity falls > X% below its peak, shrink all targets and pause new opens until it recovers (catches correlated sector selloffs). | `DRAWDOWN_CIRCUIT_PCT=0.10`, `DRAWDOWN_DERISK_FACTOR=0.5` |
-| **Partial profit-lock (mean reversion)** | Scale OUT a fraction of a LONG winner when it is both in profit AND stretched above its short-term mean (z-score). Keeps a core into the catalyst; skips names with a catalyst within N days. | `PROFIT_LOCK_GAIN_PCT=0.20`, `PROFIT_LOCK_TRIM_FRACTION=0.25`, `PROFIT_LOCK_ZSCORE=1.5`, `PROFIT_LOCK_MIN_DAYS_TO_CATALYST=3` |
-
-Disable either with `DRAWDOWN_CIRCUIT_ENABLED=0` / `PROFIT_LOCK_ENABLED=0`. Note: EOD-based — they mitigate multi-day slides and over-extension, not single-name overnight gaps (the 5% per-name cap covers that).
-
-## Cloud automation (no laptop required)
-
-Because all state lives in Supabase, the autopilot can run on GitHub Actions instead of a local scheduler — see `.github/workflows/`:
-
-| Workflow | Trigger | Runs |
-|----------|---------|------|
-| `daily-refresh.yml` | cron daily 22:00 UTC (after US close) | `refresh_all.py` (keeps signals fresh) |
-| `paper-autopilot.yml` | **after** the refresh completes, weekdays only | `paper_autopilot.py` (syncs the PAPER book) |
-
-The autopilot is **chained** to the refresh (`workflow_run`), so trades always run on fresh data no matter how long the refresh takes — no fixed-gap race. The refresh runs every day (research data stays current); the autopilot gates itself to weekdays.
-
-**Why once a day, not every few minutes:** every signal here is end-of-day granularity (prices use daily closes; SEC/CT.gov change slowly). Polling more often adds no signal, risks rate-limit bans from yfinance/SEC, and burns Actions minutes. Once daily after the close is optimal.
-
-**Setup (one time):** add repo secrets under *Settings → Secrets and variables → Actions*: `DATABASE_URL` (both jobs) and `SEC_USER_AGENT` (refresh only, for SEC EDGAR). `POE_API_KEY` is **not** needed — the Layer-2 council is scaffolded but not wired into the active pipeline. Both workflows also have a manual *Run workflow* button (`workflow_dispatch`).
-
-Caveats: GitHub Actions cron is best-effort (can be delayed minutes) and scheduled workflows auto-disable after ~60 days of repo inactivity (re-enable in the Actions tab). For a once-daily paper job this is fine. The local launchd/cron setup still works if you prefer running on your Mac — use one or the other to avoid double-trading.
-
-To host the dashboard 24/7, deploy `scripts/terminal.py` to **Streamlit Community Cloud** (free) and add the same secrets there.
-
-## SEC User-Agent (required before Layer 4)
-
-SEC EDGAR requires a descriptive `User-Agent` header with your real contact info. Set in `.env`:
+## Repository layout
 
 ```
-SEC_USER_AGENT=Firstname Lastname email@domain.com
+├── config.py               # every parameter/threshold, env-overridable, documented
+├── schema.sql              # Postgres schema — 22 tables, idempotent DDL
+├── layers/                 # the pipeline package
+│   ├── layer1/             #   catalyst discovery (ClinicalTrials.gov)
+│   ├── layer3/             #   historical base rates (52k trials → P(success))
+│   ├── layer4/             #   SEC financials, Form 4 insiders, 8-K parsing
+│   ├── marketdata/         #   yfinance prices, options-implied move
+│   ├── composite/          #   scorer, calibration, backtest metrics, logreg
+│   └── portfolio/          #   position/P&L math, risk overlays, paper sync
+├── scripts/                # CLI entry points (terminal.py, refresh_all.py, …)
+├── tests/                  # pytest suite — pure logic; DB tests skip w/o DATABASE_URL
+├── data/                   # seeds (committed) + runtime artifacts (gitignored)
+└── docs/                   # PIPELINE.md · OPERATIONS.md · DATA.md · handbook · ops log
 ```
 
-Layer 2+ council does not need this; Layer 4 `fetch_filings.py` will call `check_sec_user_agent()` and fail fast if unset.
+## Methods & references
 
-## Python Version Notes
+- **Reference-class forecasting / base rates** — Kahneman & Tversky; *Noise*
+  (Kahneman, Sibony, Sunstein 2021) for the few-factors, equal-weights discipline.
+- **Kelly criterion** — Kelly (1956); fractional (λ = 0.25), capped per name.
+- **Calibration** — Brier (1950); Brier score + reliability buckets vs resolved outcomes.
+- **Models** — L2 logistic regression and ridge regression in pure numpy; temporal
+  holdouts throughout to block leakage.
+- **Data** — ClinicalTrials.gov API v2; SEC EDGAR (submissions, XBRL companyfacts,
+  Form 4); yfinance. Benchmark: XBI (SPDR S&P Biotech ETF).
 
-This project runs on **Python 3.14** with version-bumped dependencies where upstream wheels are unavailable:
+## Limitations & roadmap
 
-| Package | Pinned | Original pin | Reason |
-|---------|--------|--------------|--------|
-| pandas | 2.3.3 | 2.2.3 | cp314 wheel + Streamlit requires pandas<3 |
-| pydantic | 2.13.4 | 2.10.3 | pydantic-core needs prebuilt wheel |
-| lxml | 6.1.1 | 5.3.0 | No cp314 wheel |
-| rapidfuzz | 3.14.5 | 3.10.1 | No cp314 wheel |
+1. **EOD granularity** can't catch intraday/overnight single-name gaps beyond the 5%
+   per-name cap → next: intraday risk checks need a live data feed.
+2. **Resolved-catalyst sample is tiny** (calibration nearly empty) → accrues
+   automatically as the forward book resolves; re-run `calibrate.py` monthly.
+3. **`edge_gap` compares move magnitude, not signed return** → next: accumulate
+   implied-move snapshots to build a signed mispricing signal.
+4. **Survivorship/lookahead risk** — the universe is today's listed names; guards are
+   temporal holdouts and as-of decision rules in the backtest → next: point-in-time
+   universe including delistings.
+5. **Layer-2 science council** (LLM mechanism/design critique via Poe) is scaffolded
+   but not wired in → next: connect it to the scorer's `science_score` slot.
+6. **Paper trading only** — no transaction-cost, borrow, or slippage model → next:
+   a cost model before any real-money consideration.
+7. **Event-study window is ~2 years** and 8-Ks include routine non-catalyst noise →
+   next: parse 8-K item codes to drop routine filings.
 
-**Python 3.12** is the recommended fallback if a future library lacks 3.14 wheels. Do not downgrade automatically — test on 3.12 in a separate venv if needed.
+## Disclaimer & license
+
+Personal research project. Decision support only; all tracked positions are paper
+trades. Not financial advice. MIT — see [LICENSE](LICENSE).
+
+---
+
+*More detail: [docs/PIPELINE.md](docs/PIPELINE.md) (full run order) ·
+[docs/OPERATIONS.md](docs/OPERATIONS.md) (scheduling, hosting, risk overlays) ·
+[docs/DATA.md](docs/DATA.md) (data sources, schema, Python notes) ·
+[docs/AGENT_HANDOFF.md](docs/AGENT_HANDOFF.md) (project handbook) ·
+[docs/OPERATIONS_LOG.md](docs/OPERATIONS_LOG.md) (change journal)*

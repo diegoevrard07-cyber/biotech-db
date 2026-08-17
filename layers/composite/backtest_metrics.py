@@ -13,15 +13,17 @@ from typing import Any
 
 
 def equity_curve(weighted_returns: list[float], *, start: float = 1.0) -> list[float]:
+    """Compounded equity path of the book from per-trade weighted returns."""
     eq = start
     curve = [start]
     for r in weighted_returns:
-        eq *= (1.0 + r)
+        eq *= 1.0 + r
         curve.append(eq)
     return curve
 
 
 def max_drawdown(curve: list[float]) -> float:
+    """Worst peak-to-trough loss of an equity curve (negative fraction, 0.0 if none)."""
     if not curve:
         return 0.0
     peak = curve[0]
@@ -34,6 +36,7 @@ def max_drawdown(curve: list[float]) -> float:
 
 
 def per_trade_sharpe(returns: list[float]) -> float | None:
+    """Mean/std of per-trade returns; None if fewer than 2 trades or zero variance."""
     if len(returns) < 2:
         return None
     mean = sum(returns) / len(returns)

@@ -1,7 +1,7 @@
 # Operations Log
 
 A running record of operational changes to the GBM Sentiment Arbitrage system so they
-can be reviewed and evaluated later. This complements `AGENT_HANDOFF.md` (intent +
+can be reviewed and evaluated later. This complements `docs/AGENT_HANDOFF.md` (intent +
 current state) and `.cursorrules` (coding standards): this file is a chronological
 journal of **what changed, when, why, and how to evaluate it.**
 
@@ -17,17 +17,74 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-08-17 — Public-release cleanup (GitHub-ready)
+
+**Branch/PR:** `cursor/github-ready-0203`
+
+Repo prepared for public release. No scientific logic, parameters, or results changed.
+
+- **Layout:** root scripts moved into `scripts/` (`apply_schema.py`, `verify.py`,
+  `test_connection.py` → `check_db_connection.py`, no longer echoes the DSN host
+  with credentials adjacent); ops docs moved to `docs/`.
+- **Dead code removed:** 4 unreferenced one-off scripts (`_layer3_report`,
+  `_layer3_status`, `_apply_triage`, `_generate_companies_seed`), 4 empty shim
+  packages (`layer1_catalysts`, `layer2_science`, `layer3_base_rates`,
+  `layer4_financials`), auto-generated Windows wrapper `.ps1` files with personal
+  machine paths, and the superseded launchd installers (GH Actions is the venue).
+- **Reproducibility:** `pyproject.toml` (pytest/black/isort), expanded `.gitignore`,
+  MIT LICENSE, `data/README.md` (data provenance), `certifi` pinned; unused
+  `openai`/`pdfplumber`/`lxml` moved to commented optional section.
+- **CI:** `.github/workflows/tests.yml` runs pytest on push/PR; DB-backed tests
+  auto-skip without `DATABASE_URL` (`tests/conftest.py`).
+- **Docs:** README rewritten (results table, architecture, quickstart, limitations);
+  personal paths/timezone/machine references sanitized; scheduler TZ default → UTC.
+- **Docstrings:** every package `__init__` and public function documented; scorer
+  decision thresholds extracted to named, justified constants (values unchanged).
+
+**Verify:** `python -m pytest` → 180 passed, 7 skipped (DB-gated); black/isort clean;
+all CLIs compile and `--help` runs.
+
+---
+
+## 2026-07-19 — Kill fades at source + fix long-only books
+
+**Branch/PR:** `cursor/kill-fades-fix-books-0203`
+
+Fades/shorts were still being *scored and shown* even with `LONG_ONLY` on, which kept
+polluting the Action Desk blotter and left a path for stale checkouts / leftover DB
+rows to mess up the paper book (see 2026-07-14 rogue-shorts incident).
+
+**What changed:**
+- **Scorer:** former fade rules in `decide_trade` now return `avoid`. `suggested_weight(fade)`
+  is forced to `0` — no negative weights emitted.
+- **Action book:** `compute_book` always drops `weight ≤ 0` (not only when `LONG_ONLY`).
+- **Paper sync:** refuses negative weights, `trade_type=fade`, and non-long sides.
+- **UI:** Action Desk filters / Portfolio add-trade / Strategy page no longer offer or
+  document fades as a live trade. Gross-short metrics hidden in long-only mode.
+- **Caps:** `MAX_GROSS_SHORT` default → `0`.
+- **GH Actions:** `LONG_ONLY=1` + `MAX_GROSS_SHORT=0` pinned; autopilot covers leftovers
+  before each sync.
+- **One-shot fixer:** `scripts/fix_long_only_book.py` covers open shorts, strips short
+  history (via `strip_shorts`), and retires stale `edge_scores` fade rows → avoid/0.
+
+**Live DB fixed (2026-07-19):** Actions run `cover-shorts-now` #29680502632 covered
+all 9 open fades (ABOS ADCT KPTI OMER ORIC QURE RGNX SLS WVE), realized −$14,
+stripped 68 short history rows, restated 15 performance snapshots, retired 33
+stale `edge_scores` fade rows → avoid. Proof: **zero open shorts/fades**.
+
+**Verify:** refresh Edge Terminal Portfolio — no fade rows; open book is long-only.
+
+---
+
 ## 2026-07-14 — Rogue shorts incident + risk-hardening package
 
 **Branch/PR:** `cursor/risk-hardening-7e76`
 
 **Incident:** 8 shorts (the old fade book: ABOS QURE RGNX SLS ADCT KPTI ORIC OMER)
-were re-opened at 08:26 UTC by an autopilot run OUTSIDE GitHub Actions — timestamp
-matches the Mac launchd catch-up firing on wake (10:26 Brussels) from a checkout/env
-without long-only active. GH Actions' own run (00:16 UTC) was clean. Covered all 8
-immediately (≈$0 realized). **Owner action: remove the Mac scheduler**
-(`./scripts/setup_launchd_macos.sh --remove`) so GitHub Actions is the only execution
-venue.
+were re-opened at 08:26 UTC by an autopilot run OUTSIDE GitHub Actions — a stale
+local checkout/env without long-only active fired on machine wake. GH Actions' own
+run (00:16 UTC) was clean. Covered all 8 immediately (≈$0 realized). Lesson: GitHub
+Actions must be the only execution venue.
 
 **Market context:** XBI −5.4% from its 7/10 high; portfolio −2.5% from peak
 ($10,943→$10,670) — half the index downside. Same-window: portfolio +6.7% vs XBI +6.5%.
@@ -299,8 +356,8 @@ These shipped to `main` before this log existed; recorded here for completeness.
 - **XBI benchmark.** Dedicated "Benchmark · XBI" strip and chart overlay in the Cockpit;
   `portfolio_performance` table for daily equity/XBI snapshots; autopilot writes to
   Supabase + local CSV.
-- **macOS launchd scheduler.** `scripts/setup_launchd_macos.sh` with wake catch-up
-  (Brussels: refresh 23:00, autopilot 23:30) and a KeepAlive Streamlit service on port
-  8520. (Superseded by GitHub Actions for users who don't want laptop dependency.)
+- **Local schedulers (superseded).** An earlier launchd/Task-Scheduler setup ran the
+  refresh + autopilot from a laptop. Superseded by GitHub Actions — a single cloud
+  execution venue avoids stale-checkout incidents.
 - **Streamlit usability.** Manual "Refresh data" button + 30s cache TTL on portfolio
   data.

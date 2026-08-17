@@ -18,7 +18,9 @@ def brier_score(pairs: list[tuple[float, int]]) -> float | None:
     return round(sum((p - a) ** 2 for p, a in valid) / len(valid), 6)
 
 
-def reliability_table(pairs: list[tuple[float, int]], *, n_buckets: int = 5) -> list[dict[str, Any]]:
+def reliability_table(
+    pairs: list[tuple[float, int]], *, n_buckets: int = 5
+) -> list[dict[str, Any]]:
     """Bucket predictions and compare mean predicted prob vs observed hit rate."""
     valid = [(p, a) for p, a in pairs if p is not None and a is not None]
     table: list[dict[str, Any]] = []
@@ -44,6 +46,7 @@ def reliability_table(pairs: list[tuple[float, int]], *, n_buckets: int = 5) -> 
 
 
 def hit_rate(actuals: list[int]) -> float | None:
+    """Observed fraction of hits; the base rate a calibrated model must beat."""
     if not actuals:
         return None
     return round(sum(actuals) / len(actuals), 4)

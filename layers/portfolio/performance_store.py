@@ -66,6 +66,7 @@ def _xbi_base_close(cur, track_start: date) -> float | None:
 
 
 def tracking_start_date(cur) -> date | None:
+    """First day of the paper track record: earliest holding entry, else earliest snapshot."""
     cur.execute("SELECT MIN(entry_date) FROM portfolio_holdings")
     row = cur.fetchone()
     if row and row[0]:
@@ -94,18 +95,18 @@ def benchmark_fields(
 
 
 def upsert_snapshot(cur, row: dict[str, Any]) -> None:
+    """Insert or refresh one daily portfolio_performance snapshot (idempotent on date)."""
     cur.execute(_UPSERT_SQL, row)
 
 
 def load_history(cur) -> list[dict[str, Any]]:
-    cur.execute(
-        """
+    """Return every stored snapshot as a list of dicts, ordered by snapshot_date."""
+    cur.execute("""
         SELECT snapshot_date, equity, cash, open_positions, unrealized_pnl,
                realized_to_date, total_return_pct, exits_today, opens_today,
                resized_today, desk_positions, xbi_close, xbi_return_pct, benchmark_equity
         FROM portfolio_performance
         ORDER BY snapshot_date
-        """
-    )
+        """)
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
