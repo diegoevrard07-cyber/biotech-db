@@ -1,15 +1,19 @@
 # Images
 
-`README.md` references `docs/img/cockpit.png` — a screenshot of the Edge
-Terminal Cockpit page (equity curve + XBI benchmark + action book).
+`README.md` references two screenshots of the Edge Terminal (the most visually
+impressive artifacts of the project). They are intentionally not committed by
+automation — they must reflect the live dashboard.
 
-To generate it:
+To capture them:
 
 ```bash
 streamlit run scripts/terminal.py --server.port 8520
-# open http://localhost:8520, land on the Cockpit page, screenshot it,
-# and save as docs/img/cockpit.png
+# open http://localhost:8520
 ```
 
-(The image is intentionally not committed by automation — it must reflect the
-live dashboard.)
+1. **`docs/img/terminal.png`** — the **Cockpit** page (landing view): KPI cards,
+   equity curve with the XBI benchmark overlay, allocation panels.
+2. **`docs/img/dashboard.png`** — the **Action Desk** page: the ranked trade blotter
+   (ticker, trade type, weight, timing) — the Bloomberg-style table.
+
+Full-window screenshots at 1440px+ width read best on GitHub.
