@@ -35,6 +35,7 @@ from dotenv import load_dotenv
 import config
 from layers.composite import scorer
 from layers.marketdata.yf_client import fetch_history
+from layers.portfolio import stats as pstats
 from layers.portfolio import tracker as pf
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -1084,6 +1085,152 @@ def _purge_open_shorts_once() -> None:
         st.error(f"Failed to cover shorts: {exc}")
 
 
+def _closed_trade_record(closed_df: pd.DataFrame) -> tuple[dict | None, float, list[float]]:
+    """Realized-trade stats for closed longs with a cost basis.
+
+    Returns (stats dict, total realized P&L $, per-trade returns).
+    """
+    if closed_df.empty:
+        return None, 0.0, []
+    cl = closed_df.copy()
+    cl["realized_pnl_usd"] = pd.to_numeric(cl["realized_pnl_usd"], errors="coerce")
+    cl["cost_basis_usd"] = pd.to_numeric(cl["cost_basis_usd"], errors="coerce")
+    cl = cl[(cl["side"] == "long") & (cl["cost_basis_usd"] > 0) & cl["realized_pnl_usd"].notna()]
+    if cl.empty:
+        return None, 0.0, []
+    rets = (cl["realized_pnl_usd"] / cl["cost_basis_usd"]).tolist()
+    return pstats.closed_trade_stats(rets), float(cl["realized_pnl_usd"].sum()), rets
+
+
+def render_trading_record(closed_df: pd.DataFrame) -> None:
+    """Compact realized-record strip: closed trades, win rate, expectancy, payoff, P&L."""
+    record, realized_total, _ = _closed_trade_record(closed_df)
+    if not record:
+        return
+    payoff_txt = "∞" if record["payoff"] == float("inf") else f"{record['payoff']:.2f}"
+    with st.container(border=True):
+        st.markdown(
+            '<div class="pf-stat-label">Trading record · realized</div>', unsafe_allow_html=True
+        )
+        render_kpi_row(
+            [
+                _stat_card("Closed trades", f"{record['n']}"),
+                _stat_card("Win rate", f"{record['win_rate']:.0%}"),
+                _stat_card(
+                    "Expectancy / trade",
+                    f"{record['expectancy']:+.1%}",
+                    delta_dir=_dir(record["expectancy"]),
+                ),
+                _stat_card(
+                    "Payoff ratio",
+                    payoff_txt,
+                    sub=f"avg win {record['avg_win']:+.1%} · avg loss {record['avg_loss']:+.1%}",
+                ),
+                _stat_card(
+                    "Realized P&L",
+                    f"${realized_total:+,.0f}",
+                    delta_dir=_dir(realized_total),
+                ),
+            ]
+        )
+        if record["n"] < 30:
+            st.caption(f"Small sample (n={record['n']}); treat every stat as provisional.")
+
+
+def _render_performance_risk() -> None:
+    """Equity-curve stats, closed-trade distribution, and the XBI yardstick.
+
+    Same math as scripts/risk_report.py via layers/portfolio/stats.py.
+    """
+    perf = load_performance_history()
+    closed_df = load_holdings("closed")
+    bench_df = load_benchmark_closes()
+
+    curve = None
+    if not perf.empty and perf["equity"].notna().any():
+        rows = perf.dropna(subset=["equity"])
+        curve = pstats.equity_curve_stats(
+            [float(e) for e in rows["equity"]],
+            benchmark=[float(x) if pd.notna(x) else None for x in rows["xbi_close"]],
+        )
+    record, _, rets = _closed_trade_record(closed_df)
+    ref = None
+    if not bench_df.empty:
+        ref = pstats.benchmark_reference_stats([float(c) for c in bench_df["close"]])
+
+    with st.expander("Performance & risk", expanded=bool(curve or record)):
+        c1, c2, c3 = st.columns(3, gap="medium")
+
+        with c1:
+            st.markdown(
+                '<div class="pf-stat-label">Paper equity curve</div>', unsafe_allow_html=True
+            )
+            if curve:
+                st.metric("Period return", f"{curve['period_return']:+.1%}")
+                bits = []
+                if curve["ann_vol"] is not None:
+                    bits.append(f"ann. vol {curve['ann_vol']:.1%}")
+                if curve["sharpe"] is not None:
+                    bits.append(f"Sharpe {curve['sharpe']:.2f}")
+                bits.append(f"max DD {curve['max_drawdown']:.1%}")
+                if curve["beta"] is not None:
+                    bits.append(
+                        f"beta vs {config.BENCHMARK_TICKER} {curve['beta']:+.2f} "
+                        f"({curve['beta_days']}d)"
+                    )
+                st.caption(" · ".join(bits))
+                if curve["n"] < 60:
+                    st.caption(f"n={curve['n']} daily snapshots; too small to trust.")
+            else:
+                st.caption("Not enough snapshots yet.")
+
+        with c2:
+            st.markdown('<div class="pf-stat-label">Closed trades</div>', unsafe_allow_html=True)
+            if record:
+                st.metric("Expectancy / trade", f"{record['expectancy']:+.1%}")
+                payoff_txt = "∞" if record["payoff"] == float("inf") else f"{record['payoff']:.2f}"
+                st.caption(
+                    f"n={record['n']} · win rate {record['win_rate']:.0%} · "
+                    f"payoff {payoff_txt}"
+                    + (
+                        f" · per-trade Sharpe {record['per_trade_sharpe']:.2f}"
+                        if record["per_trade_sharpe"] is not None
+                        else ""
+                    )
+                )
+                fig = px.histogram(pd.DataFrame({"ret": rets}), x="ret", nbins=15)
+                fig.update_layout(
+                    height=180,
+                    showlegend=False,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color=THEME["text"],
+                    xaxis_tickformat=".0%",
+                    xaxis_title="",
+                    yaxis_title="",
+                    margin=dict(l=8, r=8, t=8, b=8),
+                )
+                fig.update_traces(marker_color=THEME["accent"])
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.caption("No closed trades yet.")
+
+        with c3:
+            st.markdown(
+                f'<div class="pf-stat-label">{config.BENCHMARK_TICKER} reference</div>',
+                unsafe_allow_html=True,
+            )
+            if ref:
+                st.metric("Ann. return", f"{ref['ann_return']:+.1%}")
+                st.caption(
+                    f"{ref['n']} days · vol {ref['ann_vol']:.1%} · "
+                    f"Sharpe {ref['sharpe']:.2f} · max DD {ref['max_drawdown']:.1%}"
+                )
+                st.caption("Long-run risk bar the book has to beat.")
+            else:
+                st.caption("Insufficient benchmark history.")
+
+
 def page_portfolio() -> None:
     """Render the Portfolio page: account setup, open positions, action center, history."""
     st.title("Portfolio")
@@ -1141,6 +1288,9 @@ def page_portfolio() -> None:
             f"({tot/float(acct['starting_capital']):+.1%})"
         )
     freshness_caption()
+
+    st.divider()
+    _render_performance_risk()
 
     st.divider()
     render_action_center(open_df)
@@ -1580,6 +1730,34 @@ def page_home() -> None:
             )
             st.markdown(_alloc_legend_html(now_buckets, equity), unsafe_allow_html=True)
 
+        with st.container(border=True):
+            st.markdown('<div class="pf-stat-label">Next catalysts</div>', unsafe_allow_html=True)
+            blot = load_blotter()
+            upcoming = pd.DataFrame()
+            if not blot.empty:
+                upcoming = blot.dropna(subset=["expected_date"])
+                upcoming = upcoming[(upcoming["days_until"] >= 0) & (upcoming["days_until"] <= 60)]
+                upcoming = upcoming.sort_values("days_until").drop_duplicates("ticker").head(5)
+            if upcoming.empty:
+                st.caption("No catalysts in the next 60 days.")
+            else:
+                show = upcoming[
+                    ["ticker", "catalyst_type", "days_until", "trade_type", "suggested_weight"]
+                ].rename(
+                    columns={
+                        "catalyst_type": "event",
+                        "days_until": "in (d)",
+                        "trade_type": "signal",
+                        "suggested_weight": "wt",
+                    }
+                )
+                st.dataframe(
+                    show.style.format({"in (d)": "{:.0f}", "wt": "{:.1%}"}, na_rep="—"),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=46 + 34 * len(show),
+                )
+
     # ---------- kept charts: position breakdown + portfolio allocation ----------
     if not hv.empty and hv["pnl_usd"].notna().any():
         pcol = st.columns(2, gap="medium")
@@ -1728,6 +1906,8 @@ def page_home() -> None:
                     hide_index=True,
                     height=min(420, 46 + 34 * len(cd)),
                 )
+
+    render_trading_record(closed_df)
 
     render_action_center(open_df)
 
