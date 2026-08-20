@@ -1947,8 +1947,22 @@ def page_thesis() -> None:
 
 
 def main() -> None:
-    """Render the research note (default), the trade thesis, and positions."""
+    """Render the research note (default), the trade thesis, and positions.
+
+    Supports ?view=note|thesis|positions deep links (used by the screenshot
+    capture in CI and handy for sharing a specific view).
+    """
     _inject_css()
+    view = st.query_params.get("view", "")
+    if view == "thesis":
+        page_thesis()
+        return
+    if view == "positions":
+        page_positions()
+        return
+    if view == "note":
+        page_note()
+        return
     tab_note, tab_thesis, tab_positions = st.tabs(
         ["Research note", "Trade thesis", "Positions & activity"]
     )

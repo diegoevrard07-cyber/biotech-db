@@ -47,20 +47,20 @@ def capture(*, port: int, out_dir: Path, width: int = 1440, height: int = 900) -
         page.screenshot(path=str(out_dir / "terminal.png"))
         page.screenshot(path=str(out_dir / "note_full.png"), full_page=True)
 
-        # the Trade thesis tab (second tab) for the README's secondary slot
+        # the Trade thesis view (deep link) for the README's secondary slot
         try:
-            page.click('[data-baseweb="tab"]:has-text("Trade thesis")', timeout=30_000)
-            page.wait_for_selector("text=The event", timeout=60_000)
+            page.goto(f"{url}?view=thesis", wait_until="networkidle", timeout=120_000)
+            page.wait_for_selector("text=The event", timeout=120_000)
             page.wait_for_function(
                 "document.querySelectorAll('[data-stale=\"true\"]').length === 0",
                 timeout=60_000,
             )
             page.wait_for_timeout(6_000)
             page.screenshot(path=str(out_dir / "thesis.png"), full_page=True)
-            print("thesis tab captured")
+            print("thesis view captured")
         except Exception as exc:  # noqa: BLE001 — diagnostics, never fail the job
             print(f"THESIS CAPTURE FAILED: {type(exc).__name__}")
-            print("body text after click:", page.inner_text("body")[:800])
+            print("body text:", page.inner_text("body")[:800])
         browser.close()
     print(f"wrote terminal.png, note_full.png in {out_dir}")
 
