@@ -31,7 +31,10 @@ def normalize_database_url(raw: str | None) -> str:
 
     Handles surrounding quotes, a duplicated ``DATABASE_URL=`` prefix, and the
     frequent paste of an ``https://`` dashboard link (which makes libpq try to
-    resolve the hostname ``https``). Returns ``""`` when unset.
+    resolve the hostname ``https``). For Supabase pooler hosts, forces
+    ``sslmode=require`` and prefers session-mode port ``5432`` over transaction
+    pooler ``6543`` (psycopg2 often fails 6543 with "server didn't return client
+    encoding"). Returns ``""`` when unset.
     """
     if not raw:
         return ""
@@ -49,15 +52,24 @@ def normalize_database_url(raw: str | None) -> str:
         raise RuntimeError(
             "DATABASE_URL looks like a web link (starts with https://). "
             "It must be a Postgres URI starting with postgresql://. "
-            "In Supabase: Project → Connect → Transaction pooler → URI "
-            "(port 6543). Replace [YOUR-PASSWORD] with your database password."
+            "In Supabase: Project → Connect → Session pooler → URI "
+            "(port 5432). Replace [YOUR-PASSWORD] with your database password."
         )
     if not (value.startswith("postgresql://") or value.startswith("postgres://")):
         raise RuntimeError(
             "DATABASE_URL must start with postgresql:// "
             f"(got {value.split(':', 1)[0]!r}:…). "
-            "In Supabase: Project → Connect → Transaction pooler → URI."
+            "In Supabase: Project → Connect → Session pooler → URI."
         )
+
+    # Supabase: psycopg2 + transaction pooler (6543) often fails handshake.
+    # Prefer session pooler (5432) on the same host, and always require SSL.
+    if "supabase.com" in value:
+        if ".pooler.supabase.com:6543/" in value:
+            value = value.replace(".pooler.supabase.com:6543/", ".pooler.supabase.com:5432/", 1)
+        if "sslmode=" not in value:
+            value = value + ("&" if "?" in value else "?") + "sslmode=require"
+
     return value
 
 

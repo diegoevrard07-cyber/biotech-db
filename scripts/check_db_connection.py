@@ -52,6 +52,13 @@ def main() -> int:
         return 0
     except Exception as exc:
         print(f"FAIL: {exc}")
+        err = str(exc).lower()
+        if "client encoding" in err or "ssl" in err:
+            print(
+                "HINT: for Supabase + this app use Session pooler port 5432 and sslmode=require, e.g.\n"
+                "  ...@aws-1-REGION.pooler.supabase.com:5432/postgres?sslmode=require\n"
+                "(not transaction pooler port 6543)."
+            )
         return 1
 
 
