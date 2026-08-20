@@ -13,6 +13,7 @@ into sized, typed paper trades.**
 *The dashboard is a one-page research note: what the system does, what it recommends,
 whether it works, and how much data is behind it — on one screen.
 [Full note](docs/img/note_full.png) ·
+[trade thesis](docs/img/thesis.png) ·
 [printable memo](docs/report_sample.pdf)*
 
 ## The numbers, as they actually are
