@@ -16,8 +16,9 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-# A string only the fully rendered note contains (the masthead title).
-READY_TEXT = "Biotech Catalyst Edge Engine"
+# Selectors that only exist once the note has fully rendered with data.
+READY_TEXT = "Biotech Catalyst Edge Engine"  # masthead title
+READY_TABLE = '[data-testid="stDataFrame"]'  # the signals blotter
 
 
 def capture(*, port: int, out_dir: Path, width: int = 1440, height: int = 900) -> None:
@@ -25,12 +26,24 @@ def capture(*, port: int, out_dir: Path, width: int = 1440, height: int = 900) -
     out_dir.mkdir(parents=True, exist_ok=True)
     url = f"http://localhost:{port}"
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="chrome", headless=True)
+        browser = p.chromium.launch(
+            channel="chrome",
+            headless=True,
+            args=["--disable-dev-shm-usage", "--force-device-scale-factor=1"],
+        )
         page = browser.new_page(viewport={"width": width, "height": height})
-        page.goto(url, wait_until="networkidle", timeout=90_000)
-        page.wait_for_selector(f"text={READY_TEXT}", timeout=90_000)
-        # charts render after the DOM settles; give Plotly a moment
-        page.wait_for_timeout(6_000)
+        page.goto(url, wait_until="networkidle", timeout=120_000)
+        page.wait_for_selector(f"text={READY_TEXT}", timeout=120_000)
+        page.wait_for_selector(READY_TABLE, timeout=120_000)
+        # let any in-flight rerun settle: wait until nothing is marked stale,
+        # then give Plotly charts a moment to draw
+        page.wait_for_function(
+            "document.querySelectorAll('[data-stale=\"true\"]').length === 0",
+            timeout=60_000,
+        )
+        page.wait_for_timeout(8_000)
+        body_len = len(page.inner_text("body"))
+        print(f"rendered body text: {body_len} chars")
         page.screenshot(path=str(out_dir / "terminal.png"))
         page.screenshot(path=str(out_dir / "note_full.png"), full_page=True)
         browser.close()
