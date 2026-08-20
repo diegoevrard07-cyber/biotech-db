@@ -64,5 +64,6 @@ jobs:
             docs/report_sample.pdf
             docs/img/terminal.png
             docs/img/note_full.png
+            docs/img/thesis.png
           if-no-files-found: warn
           retention-days: 30

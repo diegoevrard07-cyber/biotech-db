@@ -46,8 +46,18 @@ def capture(*, port: int, out_dir: Path, width: int = 1440, height: int = 900) -
         print(f"rendered body text: {body_len} chars")
         page.screenshot(path=str(out_dir / "terminal.png"))
         page.screenshot(path=str(out_dir / "note_full.png"), full_page=True)
+
+        # the Trade thesis tab (second tab) for the README's secondary slot
+        page.click("button:has-text('Trade thesis')")
+        page.wait_for_selector("text=The event", timeout=60_000)
+        page.wait_for_function(
+            "document.querySelectorAll('[data-stale=\"true\"]').length === 0",
+            timeout=60_000,
+        )
+        page.wait_for_timeout(6_000)
+        page.screenshot(path=str(out_dir / "thesis.png"), full_page=True)
         browser.close()
-    print(f"wrote {out_dir / 'terminal.png'} and {out_dir / 'note_full.png'}")
+    print(f"wrote terminal.png, note_full.png, thesis.png in {out_dir}")
 
 
 def main() -> None:
