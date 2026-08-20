@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # project root (layers.*)
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ (action_sheet)
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -35,6 +36,7 @@ from dotenv import load_dotenv
 import config
 from layers.composite import scorer
 from layers.marketdata.yf_client import fetch_history
+from layers.portfolio import projection as pj
 from layers.portfolio import stats as pstats
 from layers.portfolio import tracker as pf
 
@@ -107,7 +109,13 @@ def _inject_css() -> None:
             background:
               radial-gradient(1200px 600px at 15% -10%, #141b2b 0%, rgba(20,27,43,0) 55%),
               radial-gradient(1000px 500px at 100% 0%, #17131f 0%, rgba(23,19,31,0) 50%),
+              radial-gradient(900px 520px at 55% 115%, #0e1f1b 0%, rgba(14,31,27,0) 55%),
               {t['bg']};
+          }}
+          .stApp::before {{
+            content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+            background-image: radial-gradient(rgba(139,148,167,.05) 1px, transparent 1px);
+            background-size: 26px 26px;
           }}
           header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
           [data-testid="stToolbar"] {{ right: 1rem; }}
@@ -151,8 +159,8 @@ def _inject_css() -> None:
           .pf-stat-label {{ color: {t['muted']}; font-size: .66rem; text-transform: uppercase;
                             letter-spacing: .09em; font-weight: 600; margin-bottom: 10px; }}
           .pf-stat-row {{ display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }}
-          .pf-stat-val {{ font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em;
-                          font-family: {t['mono']}; }}
+          .pf-stat-val {{ font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em;
+                          font-family: {t['mono']}; font-variant-numeric: tabular-nums; }}
           .pf-stat-sub {{ color: {t['muted']}; font-size: .72rem; margin-top: 7px; }}
           .pf-arrow {{ color: {t['muted']}; font-weight: 600; }}
           .pf-delta {{ font-size: .74rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }}
@@ -3094,10 +3102,450 @@ def page_strategy() -> None:
     )
 
 
+# ===========================================================================
+def _scene_axes(title_x: str, title_y: str, title_z: str) -> dict:
+    """Shared dark styling for 3D scenes."""
+    ax = dict(
+        gridcolor=THEME["border"],
+        zerolinecolor=THEME["border"],
+        showbackground=True,
+        backgroundcolor="rgba(14,18,26,.55)",
+        color=THEME["muted"],
+    )
+    return dict(
+        xaxis={**ax, "title": title_x},
+        yaxis={**ax, "title": title_y},
+        zaxis={**ax, "title": title_z},
+    )
+
+
+def _book_daily_returns(perf: pd.DataFrame, bench_df: pd.DataFrame, beta: float | None):
+    """Daily returns to bootstrap from: the book's own history when long enough,
+    otherwise XBI daily returns scaled by beta (labeled as a proxy).
+
+    Returns (returns list, source label).
+    """
+    if not perf.empty and perf["equity"].notna().sum() >= 21:
+        eq = [float(x) for x in perf["equity"].dropna()]
+        return pstats.simple_returns(eq), "book history"
+    if not bench_df.empty and len(bench_df) >= 40:
+        closes = [float(c) for c in bench_df["close"]]
+        b = beta if beta is not None else 1.0
+        rets = [b * r for r in pstats.simple_returns(closes)]
+        return rets, f"XBI proxy × beta {b:+.2f} (book history too short)"
+    return [], ""
+
+
+def page_risk_lab() -> None:
+    """Risk Lab: Monte Carlo projection, index scenarios, 3D catalyst landscape,
+    Kelly sizing surface, drawdown profile, and cap utilization."""
+    perf = load_performance_history()
+    closed_df = load_holdings("closed")
+    open_df = load_holdings("open")
+    bench_df = load_benchmark_closes()
+    acct = get_account()
+    prices = latest_prices()
+    summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
+    equity = float(summ["equity"] or 0.0)
+    gross = float(summ.get("gross_long_pct") or 0.0)
+
+    curve = None
+    if not perf.empty and perf["equity"].notna().any():
+        rows = perf.dropna(subset=["equity"])
+        curve = pstats.equity_curve_stats(
+            [float(e) for e in rows["equity"]],
+            benchmark=[float(x) if pd.notna(x) else None for x in rows["xbi_close"]],
+        )
+    beta = curve["beta"] if curve and curve["beta"] is not None else None
+    record, _, trade_rets = _closed_trade_record(closed_df)
+
+    badges = ['<span class="pf-badge">● SIMULATION</span>']
+    chips = [("Equity", fmt_usd(equity)), ("Gross long", f"{gross:.0%}")]
+    if beta is not None:
+        chips.append(("Beta vs XBI", f"{beta:+.2f}"))
+    render_page_header("Risk Lab", badges=badges, chips=chips)
+
+    # ---------- headline risk stats ----------
+    rets, ret_src = _book_daily_returns(perf, bench_df, beta)
+    var95 = None
+    if len(rets) >= 20:
+        var95 = float(np.percentile(np.asarray(rets), 5)) * equity
+    render_kpi_row(
+        [
+            _stat_card(
+                "Ann. volatility",
+                f"{curve['ann_vol']:.1%}" if curve and curve["ann_vol"] is not None else "—",
+                sub=f"n={curve['n']} snapshots" if curve else "needs history",
+            ),
+            _stat_card(
+                "Max drawdown",
+                f"{curve['max_drawdown']:.1%}" if curve else "—",
+                delta_dir="down" if curve and curve["max_drawdown"] < 0 else "flat",
+            ),
+            _stat_card(
+                "Beta vs XBI",
+                f"{beta:+.2f}" if beta is not None else "—",
+                sub=f"{curve['beta_days']}d overlap" if curve and beta is not None else None,
+            ),
+            _stat_card(
+                "1-day VaR (95%)",
+                f"${abs(var95):,.0f}" if var95 is not None else "—",
+                sub=f"from {ret_src}" if var95 is not None else "needs 20+ returns",
+            ),
+            _stat_card(
+                "Deployed",
+                f"{gross:.0%}",
+                sub=f"cash {1 - gross:.0%} · cap {config.MAX_GROSS_LONG:.0%}",
+            ),
+        ]
+    )
+
+    # ---------- Monte Carlo projection ----------
+    left, right = st.columns([3, 2], gap="medium")
+    with left:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">6-month Monte Carlo projection · '
+                "2,000 bootstrap paths</div>",
+                unsafe_allow_html=True,
+            )
+            if len(rets) >= 5 and equity > 0:
+                paths = pj.bootstrap_equity_paths(rets, equity, days=126, n_paths=2000)
+                qs = pj.path_quantiles(paths)
+                summ_p = pj.projection_summary(paths)
+                x = list(range(paths.shape[1]))
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=x + x[::-1],
+                        y=list(qs[95]) + list(qs[5])[::-1],
+                        fill="toself",
+                        fillcolor="rgba(108,140,255,.10)",
+                        line=dict(width=0),
+                        name="P5–P95",
+                        hoverinfo="skip",
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=x + x[::-1],
+                        y=list(qs[75]) + list(qs[25])[::-1],
+                        fill="toself",
+                        fillcolor="rgba(108,140,255,.22)",
+                        line=dict(width=0),
+                        name="P25–P75",
+                        hoverinfo="skip",
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=x,
+                        y=qs[50],
+                        line=dict(color=THEME["accent"], width=2.4),
+                        name="Median",
+                    )
+                )
+                fig.add_hline(y=equity, line_dash="dot", line_color=THEME["muted"])
+                fig.update_layout(
+                    height=360,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color=THEME["text"],
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis_title="trading days ahead",
+                    yaxis_title="",
+                    legend=dict(orientation="h", y=1.05),
+                )
+                fig.update_xaxes(gridcolor=THEME["border_soft"])
+                fig.update_yaxes(gridcolor=THEME["border_soft"], tickprefix="$")
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.caption(
+                    f"Resampling {ret_src}. 6-month outcomes: P5 {fmt_usd(summ_p['p05'])} · "
+                    f"median {fmt_usd(summ_p['p50'])} · P95 {fmt_usd(summ_p['p95'])} · "
+                    f"P(loss) {summ_p['prob_loss']:.0%} · P(−10%) {summ_p['prob_down_10']:.0%}. "
+                    "IID bootstrap; ignores catalysts and regime shifts by construction."
+                )
+            else:
+                st.caption("Needs price/return history. Run the pipeline first.")
+
+    with right:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Index shock scenarios · '
+                "first-order beta approximation</div>",
+                unsafe_allow_html=True,
+            )
+            b_used = beta if beta is not None else 1.0
+            rows = pj.scenario_impacts(b_used, gross, equity)
+            sc = pd.DataFrame(rows)
+            sc["XBI move"] = sc["shock"].map(lambda s: f"{s:+.0%}")
+            sc["Book %"] = sc["book_pct"]
+            sc["Book $"] = sc["book_usd"]
+            fig = px.bar(
+                sc,
+                x="XBI move",
+                y="book_usd",
+                color="book_usd",
+                color_continuous_scale=[THEME["red"], THEME["muted"], THEME["green"]],
+            )
+            fig.update_layout(
+                height=230,
+                showlegend=False,
+                coloraxis_showscale=False,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color=THEME["text"],
+                margin=dict(l=8, r=8, t=8, b=8),
+                xaxis_title="",
+                yaxis_title="",
+            )
+            fig.update_yaxes(gridcolor=THEME["border_soft"], tickprefix="$")
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.dataframe(
+                sc[["XBI move", "Book %", "Book $"]].style.format(
+                    {"Book %": "{:+.1%}", "Book $": "${:+,.0f}"}
+                ),
+                use_container_width=True,
+                hide_index=True,
+                height=46 + 34 * len(sc),
+            )
+            note = "measured beta" if beta is not None else "beta assumed 1.0 (history too short)"
+            st.caption(
+                f"Impact = beta × shock × gross. Using {note}. Stop-losses and "
+                "drawdown tiers would cut exposure before the worst rows fully land."
+            )
+
+    # ---------- 3D catalyst landscape + Kelly surface ----------
+    c3d1, c3d2 = st.columns(2, gap="medium")
+    with c3d1:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Catalyst landscape · odds vs priced move '
+                "(drag to rotate)</div>",
+                unsafe_allow_html=True,
+            )
+            blot = load_blotter()
+            land = pd.DataFrame()
+            if not blot.empty:
+                land = blot.dropna(subset=["days_until", "base_rate", "implied_move"]).copy()
+                land = land[(land["days_until"] >= 0) & (land["days_until"] <= 365)]
+            if land.empty:
+                st.caption("Needs catalysts with base rates and implied moves.")
+            else:
+                land["w"] = land["suggested_weight"].abs().fillna(0.005).clip(0.004, 0.06)
+                fig = go.Figure()
+                for tt, grp in land.groupby("trade_type"):
+                    fig.add_trace(
+                        go.Scatter3d(
+                            x=grp["days_until"],
+                            y=grp["base_rate"],
+                            z=grp["implied_move"],
+                            mode="markers",
+                            name=str(tt),
+                            text=grp["ticker"],
+                            hovertemplate=(
+                                "<b>%{text}</b><br>in %{x:.0f}d · "
+                                "P(win) %{y:.0%} · implied ±%{z:.0%}<extra></extra>"
+                            ),
+                            marker=dict(
+                                size=(grp["w"] * 220).clip(4, 14),
+                                color=TRADE_COLORS.get(str(tt), THEME["muted"]),
+                                opacity=0.85,
+                                line=dict(width=0),
+                            ),
+                        )
+                    )
+                fig.update_layout(
+                    height=430,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    scene=_scene_axes("days to catalyst", "trial odds", "implied move"),
+                    scene_camera=dict(eye=dict(x=1.7, y=-1.6, z=0.75)),
+                    margin=dict(l=0, r=0, t=6, b=0),
+                    legend=dict(orientation="h", y=0.99),
+                    font_color=THEME["text"],
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption(
+                    "Each dot is one upcoming catalyst; size = suggested weight. "
+                    "The book hunts high-odds names whose priced move looks wrong."
+                )
+
+    with c3d2:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Kelly sizing surface · where the book sits '
+                "(drag to rotate)</div>",
+                unsafe_allow_html=True,
+            )
+            wp, po, surf = pj.kelly_surface()
+            fig = go.Figure(
+                go.Surface(
+                    x=wp,
+                    y=po,
+                    z=surf,
+                    colorscale=[
+                        [0.0, "#101623"],
+                        [0.35, "#28406e"],
+                        [0.7, "#6c8cff"],
+                        [1.0, "#2fd39a"],
+                    ],
+                    opacity=0.96,
+                    showscale=False,
+                    contours=dict(z=dict(show=True, usecolormap=True, project_z=True, width=1)),
+                )
+            )
+            if record and record["payoff"] not in (0, float("inf")):
+                fig.add_trace(
+                    go.Scatter3d(
+                        x=[record["win_rate"]],
+                        y=[min(record["payoff"], 3.0)],
+                        z=[pj.kelly_fraction(record["win_rate"], record["payoff"])],
+                        mode="markers+text",
+                        text=["book"],
+                        textposition="top center",
+                        textfont=dict(color=THEME["text"]),
+                        marker=dict(size=7, color=THEME["red"]),
+                        name="current book",
+                    )
+                )
+            fig.update_layout(
+                height=430,
+                paper_bgcolor="rgba(0,0,0,0)",
+                scene=_scene_axes("win probability", "payoff ratio", "full-Kelly f*"),
+                scene_camera=dict(eye=dict(x=-1.7, y=-1.5, z=0.8)),
+                margin=dict(l=0, r=0, t=6, b=0),
+                showlegend=False,
+                font_color=THEME["text"],
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            cap = "Sizing runs at quarter-Kelly of this surface, capped 5% per name."
+            if record and record["payoff"] not in (0, float("inf")):
+                cap += (
+                    f" Book operating point: win rate {record['win_rate']:.0%}, "
+                    f"payoff {record['payoff']:.2f}."
+                )
+            st.caption(cap)
+
+    # ---------- drawdown profile + cap utilization ----------
+    d1, d2 = st.columns([3, 2], gap="medium")
+    with d1:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Drawdown profile · % below running peak</div>',
+                unsafe_allow_html=True,
+            )
+            if not perf.empty and perf["equity"].notna().sum() >= 3:
+                dd_df = perf.dropna(subset=["equity"]).copy()
+                peak = dd_df["equity"].cummax()
+                dd_df["dd"] = dd_df["equity"] / peak - 1.0
+                fig = go.Figure(
+                    go.Scatter(
+                        x=dd_df["date"],
+                        y=dd_df["dd"],
+                        fill="tozeroy",
+                        line=dict(color=THEME["red"], width=1.6),
+                        fillcolor="rgba(247,106,131,.18)",
+                    )
+                )
+                for tier_dd, factor in sorted(config.DRAWDOWN_TIERS, reverse=True):
+                    fig.add_hline(
+                        y=-abs(tier_dd),
+                        line_dash="dot",
+                        line_color=THEME["amber"],
+                        annotation_text=f"de-risk ×{factor:.2f}",
+                        annotation_font_color=THEME["muted"],
+                        annotation_position="right",
+                    )
+                fig.update_layout(
+                    height=280,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color=THEME["text"],
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    yaxis_tickformat=".0%",
+                    xaxis_title="",
+                    yaxis_title="",
+                )
+                fig.update_xaxes(gridcolor=THEME["border_soft"])
+                fig.update_yaxes(gridcolor=THEME["border_soft"])
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.caption(
+                    "Dotted lines are the live drawdown tiers: targets shrink automatically "
+                    "as the book falls, and recover with it."
+                )
+            else:
+                st.caption("Needs equity history.")
+
+    with d2:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Cap utilization · hard limits</div>',
+                unsafe_allow_html=True,
+            )
+            book = load_action_book(90)
+            caps = [
+                ("Gross long", gross, config.MAX_GROSS_LONG),
+                ("GBM cluster", float(book.get("gbm_pct") or 0.0), config.MAX_GBM_WEIGHT),
+                (
+                    "Largest name",
+                    float(
+                        max(
+                            (h.get("weight") or 0.0 for h in book.get("rows", [])),
+                            default=0.0,
+                        )
+                    ),
+                    config.MAX_SINGLE_NAME_WEIGHT,
+                ),
+            ]
+            fig = go.Figure()
+            for name, used, cap in reversed(caps):
+                frac = min(used / cap, 1.0) if cap else 0.0
+                color = THEME["green"] if frac < 0.8 else THEME["amber"]
+                fig.add_trace(
+                    go.Bar(
+                        x=[cap],
+                        y=[name],
+                        orientation="h",
+                        marker=dict(color="rgba(139,148,167,.15)"),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
+                fig.add_trace(
+                    go.Bar(
+                        x=[used],
+                        y=[name],
+                        orientation="h",
+                        marker=dict(color=color),
+                        text=f"{used:.0%} / {cap:.0%}",
+                        textposition="outside",
+                        textfont=dict(color=THEME["text"]),
+                        showlegend=False,
+                    )
+                )
+            fig.update_layout(
+                height=280,
+                barmode="overlay",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color=THEME["text"],
+                margin=dict(l=10, r=30, t=10, b=10),
+                xaxis_tickformat=".0%",
+                xaxis_range=[0, max(c for _, _, c in caps) * 1.25],
+            )
+            fig.update_xaxes(gridcolor=THEME["border_soft"])
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.caption(
+                "Caps are enforced in sizing, not advisory: sector ≤ 40%, GBM cluster "
+                "≤ 25%, single name ≤ 5% after the market-cap haircut."
+            )
+
+
 PAGES: dict[str, callable] = {
     "Cockpit": page_home,
     "Portfolio": page_portfolio,
     "Action Desk": page_action_desk,
+    "Risk Lab": page_risk_lab,
     "Strategy": page_strategy,
     "Market & Models": page_research,
 }
