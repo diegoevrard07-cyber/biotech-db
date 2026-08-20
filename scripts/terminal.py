@@ -636,7 +636,7 @@ def _pipeline_strip(blotter: pd.DataFrame, perf: pd.DataFrame) -> None:
     brier = _f(latest_cal["brier_score"]) if latest_cal is not None else None
     n_pairs = int(latest_cal["n_pairs"]) if latest_cal is not None else 0
     tot = _f(perf.iloc[-1]["total_return_pct"]) if not perf.empty else None
-    xbi = _f(perf.iloc[-1]["xbi_return_pct"]) if not perf.empty else None
+    days = len(perf) if not perf.empty else 0
 
     stages = [
         ("Universe", f_int(cov.get("companies")), "small-cap oncology/CNS companies"),
@@ -648,7 +648,7 @@ def _pipeline_strip(blotter: pd.DataFrame, perf: pd.DataFrame) -> None:
             f"{brier:.3f}" if brier is not None else "—",
             f"Brier score, n={n_pairs} (small)",
         ),
-        ("Paper book", f_pct(tot, 1, True), f"vs XBI {f_pct(xbi, 1, True)}"),
+        ("Paper book", f_pct(tot, 1, True), f"{days} trading days, paper only"),
     ]
     cells = "".join(
         f"<div class='stage'><div class='t'>{t}</div><div class='n'>{n}</div>"
@@ -660,7 +660,7 @@ def _pipeline_strip(blotter: pd.DataFrame, perf: pd.DataFrame) -> None:
         "<div class='fnote'>The pipeline, left to right: a fixed universe of companies → "
         "their dated clinical/FDA events → each event scored → events that have already "
         "happened get labeled → those labels test the model → the paper portfolio's "
-        "record against XBI, the biotech index benchmark.</div>",
+        "cumulative record.</div>",
         unsafe_allow_html=True,
     )
 
@@ -795,6 +795,164 @@ def _signals_section(blotter: pd.DataFrame, book: dict, equity: float) -> None:
         )
 
 
+def _runup_quintiles(ev: pd.DataFrame) -> pd.DataFrame | None:
+    """Mean 3-day abnormal return by 30-day run-up quintile (the barbell test)."""
+    d = ev[ev["hold_days"] == 3][["run_up_30d", "abnormal_return"]].dropna()
+    if len(d) < 50:
+        return None
+    d = d.copy()
+    d["bucket"] = pd.qcut(d["run_up_30d"], 5, labels=["Q1", "Q2", "Q3", "Q4", "Q5"])
+    return d.groupby("bucket", observed=True)["abnormal_return"].mean().reset_index(name="mean_fwd")
+
+
+def _landscape_section(blotter: pd.DataFrame) -> None:
+    """THE LANDSCAPE: where the model sees edge, shown graphically."""
+    st.markdown(
+        "<div class='kicker'>The landscape — <span class='q'>where the model sees "
+        "edge, and where it sees none</span></div>",
+        unsafe_allow_html=True,
+    )
+    if blotter.empty:
+        st.caption("No scored signals.")
+        return
+
+    # -- 3D signal map: model odds x market-implied move x model move --------
+    st.markdown("**The signal map** — every tracked catalyst in three dimensions")
+    d = blotter.dropna(subset=["base_rate", "implied_move", "expected_move"]).copy()
+    if d.empty:
+        st.caption("Implied-move coverage too sparse for the 3-D map.")
+    else:
+        colors = {
+            "hold_through": BURGUNDY,
+            "buy_the_rumor": GOOD,
+            "avoid": "#C9C2B6",
+        }
+        fig = go.Figure()
+        for ttype, grp in d.groupby("trade_type"):
+            fig.add_trace(
+                go.Scatter3d(
+                    x=grp["base_rate"],
+                    y=grp["implied_move"],
+                    z=grp["expected_move"],
+                    mode="markers",
+                    name=TRADE_LABELS.get(ttype, ttype),
+                    marker=dict(
+                        size=(grp["suggested_weight"].abs().fillna(0) * 90 + 2.5),
+                        color=colors.get(ttype, FAINT),
+                        opacity=0.85,
+                    ),
+                    text=grp["ticker"],
+                    hovertemplate=(
+                        "%{text}<br>model prob %{x:.0%} · market-implied %{y:.0%} · "
+                        "model move %{z:.0%}<extra></extra>"
+                    ),
+                )
+            )
+        fig.update_layout(
+            height=430,
+            paper_bgcolor=PANEL,
+            font=dict(family=MONO, color=INK, size=10),
+            margin=dict(l=0, r=0, t=6, b=0),
+            showlegend=True,
+            legend=dict(orientation="h", y=1.02, x=0, font=dict(size=9, color=MUTED)),
+            scene=dict(
+                xaxis=dict(
+                    title="Model probability",
+                    tickformat=".0%",
+                    backgroundcolor=PANEL,
+                    gridcolor="#ECE7DC",
+                ),
+                yaxis=dict(
+                    title="Market-implied move",
+                    tickformat=".0%",
+                    backgroundcolor=PANEL,
+                    gridcolor="#ECE7DC",
+                ),
+                zaxis=dict(
+                    title="Model move", tickformat=".0%", backgroundcolor=PANEL, gridcolor="#ECE7DC"
+                ),
+            ),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.markdown(
+            "<div class='fnote'><b>How to read this:</b> each point is one catalyst. "
+            "Right = higher historical success odds; up = bigger expected move. Where the "
+            "model's expected move (height) sits above the market's implied move, the "
+            "engine sees edge and holds through (burgundy); where the market out-prices "
+            "the model, it stands aside (grey). Point size = suggested weight. "
+            "Source: edge_scores + positioning, recomputed daily.</div>",
+            unsafe_allow_html=True,
+        )
+
+    # -- sector edge + calendar composition ----------------------------------
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.markdown("**Where the edge sits, by indication**")
+        sec = (
+            blotter.dropna(subset=["edge_gap"])
+            .groupby("indication_category")
+            .agg(
+                signals=("ticker", "count"),
+                longs=("trade_type", lambda s: int((s != "avoid").sum())),
+                mean_edge=("edge_gap", "mean"),
+                mean_prob=("base_rate", "mean"),
+            )
+            .sort_values("mean_edge", ascending=False)
+            .reset_index()
+        )
+        if not sec.empty:
+            sec.columns = ["Indication", "Signals", "Longs", "Mean edge", "Mean prob."]
+            st.dataframe(
+                sec.style.map(_sign_color, subset=["Mean edge"]).format(
+                    {"Mean edge": "{:+.1%}", "Mean prob.": "{:.0%}"}, na_rep="—"
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+            st.markdown(
+                "<div class='fnote'>Mean edge vs market by indication category, across all "
+                "scored catalysts (including avoids). Source: edge_scores.</div>",
+                unsafe_allow_html=True,
+            )
+    with right:
+        st.markdown("**What the next 90 days hold**")
+        cal = blotter[(blotter["days_until"] >= 0) & (blotter["days_until"] <= 90)].copy()
+        if cal.empty:
+            st.caption("No dated catalysts in the next 90 days.")
+        else:
+            cal["week"] = pd.to_datetime(cal["expected_date"]).dt.to_period("W").dt.start_time
+            comp = cal.groupby(["week", "catalyst_type"]).size().reset_index(name="n")
+            type_colors = {
+                "phase_readout": BURGUNDY,
+                "pdufa": INK,
+                "advisory_committee": FAINT,
+            }
+            fig = go.Figure()
+            for ctype, grp in comp.groupby("catalyst_type"):
+                fig.add_trace(
+                    go.Bar(
+                        x=grp["week"],
+                        y=grp["n"],
+                        name=ctype.replace("_", " "),
+                        marker_color=type_colors.get(ctype, FAINT),
+                    )
+                )
+            fig.update_layout(barmode="stack")
+            _plotly_note(fig, height=190)
+            fig.update_layout(
+                showlegend=True,
+                legend=dict(orientation="h", y=1.12, x=0, font=dict(size=9, color=MUTED)),
+            )
+            fig.update_yaxes(title_text="events", title_font=dict(size=9, color=MUTED))
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.markdown(
+                "<div class='fnote'>Dated catalysts per week, stacked by type. PDUFA is "
+                "the FDA's decision deadline; an advisory committee is a public expert "
+                "panel vote ahead of approval. Source: catalysts table.</div>",
+                unsafe_allow_html=True,
+            )
+
+
 def _evidence_section(perf: pd.DataFrame) -> None:
     """DOES IT WORK?: calibration and paper-book vs benchmark, with honest verdicts."""
     st.markdown(
@@ -847,7 +1005,7 @@ def _evidence_section(perf: pd.DataFrame) -> None:
         )
 
     with right:
-        st.markdown("**Track record — the paper portfolio vs the benchmark**")
+        st.markdown("**Track record — the paper portfolio**")
         if perf.empty or len(perf) < 2:
             st.caption("Track record starts when the first daily snapshot lands.")
         else:
@@ -858,14 +1016,7 @@ def _evidence_section(perf: pd.DataFrame) -> None:
                 mode="lines",
                 line=dict(color=BURGUNDY, width=1.6),
             )
-            if perf["benchmark_equity"].notna().any():
-                fig.add_scatter(
-                    x=perf["snapshot_date"],
-                    y=perf["benchmark_equity"],
-                    mode="lines",
-                    line=dict(color=FAINT, width=1.2, dash="dot"),
-                )
-            # direct labeling at line ends instead of a legend
+            # direct labeling at the line end instead of a legend
             fig.add_annotation(
                 x=perf["snapshot_date"].iloc[-1],
                 y=perf["equity"].iloc[-1],
@@ -875,34 +1026,19 @@ def _evidence_section(perf: pd.DataFrame) -> None:
                 yanchor="bottom",
                 font=dict(size=9, color=BURGUNDY, family=MONO),
             )
-            if perf["benchmark_equity"].notna().any():
-                fig.add_annotation(
-                    x=perf["snapshot_date"].iloc[-1],
-                    y=perf["benchmark_equity"].dropna().iloc[-1],
-                    text="XBI",
-                    showarrow=False,
-                    xanchor="left",
-                    yanchor="top",
-                    font=dict(size=9, color=MUTED, family=MONO),
-                )
             _plotly_note(fig, height=230)
             fig.update_yaxes(tickformat="$,.0f")
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             tot = _f(perf.iloc[-1]["total_return_pct"])
-            xbi = _f(perf.iloc[-1]["xbi_return_pct"])
             days = len(perf)
-            ahead = tot is not None and xbi is not None and tot > xbi
             st.markdown(
-                f"<div class='verdict'><span class='vnum'>{f_pct(tot, 1, True)}</span> vs "
-                f"XBI <span class='vnum'>{f_pct(xbi, 1, True)}</span> over "
-                f"<span class='vnum'>{days}</span> trading days — "
-                f"{'ahead of' if ahead else 'behind'} the benchmark; too short a window "
+                f"<div class='verdict'><span class='vnum'>{f_pct(tot, 1, True)}</span> over "
+                f"<span class='vnum'>{days}</span> trading days — too short a window "
                 f"to conclude either way.</div>",
                 unsafe_allow_html=True,
             )
             st.markdown(
-                "<div class='fnote'>Source: portfolio_performance daily snapshots; "
-                "benchmark is XBI (SPDR biotech ETF) normalized to the same start. "
+                "<div class='fnote'>Source: portfolio_performance daily snapshots. "
                 "Paper fills at prior close; no transaction costs modeled.</div>",
                 unsafe_allow_html=True,
             )
@@ -915,15 +1051,59 @@ def _evidence_section(perf: pd.DataFrame) -> None:
         med = h3.median() if len(h3) else None
         sd = h3.std() if len(h3) else None
         big = (h3.abs() >= 0.10).mean() if len(h3) else None
-        st.markdown(
-            f"<div class='fnote' style='margin-top:10px'><b>What history says:</b> across "
-            f"<b>{f_int(n_events)}</b> past biotech 8-K events, the median 3-day abnormal "
-            f"move is <b>{f_pct(med, 1)}</b> with a typical spread of <b>±{f_pct(sd, 0)}</b>; "
-            f"<b>{f_pct(big, 0)}</b> of events move 10% or more. Direction is close to a coin "
-            f"flip — the edge must come from selecting which events to trade, not predicting "
-            f"outcomes. Source: event_returns (stock minus XBI over the window).</div>",
-            unsafe_allow_html=True,
-        )
+
+        c1, c2 = st.columns(2, gap="large")
+        with c1:
+            st.markdown("**How violent are these events?**")
+            if len(h3) > 10:
+                fig = go.Figure(
+                    go.Histogram(
+                        x=h3,
+                        nbinsx=50,
+                        marker_color=BURGUNDY,
+                        opacity=0.85,
+                        showlegend=False,
+                    )
+                )
+                _plotly_note(fig, height=190)
+                fig.update_xaxes(tickformat=".0%")
+                fig.update_yaxes(title_text="events", title_font=dict(size=9, color=MUTED))
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.markdown(
+                f"<div class='fnote'>Distribution of 3-day abnormal returns across "
+                f"<b>{f_int(n_events)}</b> past biotech 8-K events: median "
+                f"<b>{f_pct(med, 1)}</b>, typical spread <b>±{f_pct(sd, 0)}</b>, "
+                f"<b>{f_pct(big, 0)}</b> move 10%+. Source: event_returns (stock return "
+                f"minus the biotech index over the same window).</div>",
+                unsafe_allow_html=True,
+            )
+        with c2:
+            st.markdown("**Does the pre-event run-up predict the reaction?**")
+            quint = _runup_quintiles(ev)
+            if quint is not None:
+                fig = go.Figure(
+                    go.Bar(
+                        x=quint["bucket"],
+                        y=quint["mean_fwd"],
+                        marker_color=[BAD if v < 0 else GOOD for v in quint["mean_fwd"]],
+                        text=[f"{v:+.1%}" for v in quint["mean_fwd"]],
+                        textposition="outside",
+                        textfont=dict(size=9, family=MONO, color=INK),
+                    )
+                )
+                _plotly_note(fig, height=190)
+                fig.update_yaxes(tickformat=".0%", range=[None, max(quint["mean_fwd"]) * 1.25])
+                fig.update_xaxes(
+                    title_text="30-day run-up quintile (Q1 = crashed, Q5 = mooned)",
+                    title_font=dict(size=9, color=MUTED),
+                )
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.markdown(
+                "<div class='fnote'>Mean 3-day abnormal return by pre-event run-up "
+                "quintile. The middle drifts up; the extremes give back — a weak barbell, "
+                "which is why the engine does not short run-ups. Source: event_returns.</div>",
+                unsafe_allow_html=True,
+            )
 
 
 def _coverage_section() -> None:
@@ -1002,6 +1182,7 @@ def page_note() -> None:
     _masthead()
     _pipeline_strip(blotter, perf)
     _signals_section(blotter, book, summ["equity"])
+    _landscape_section(blotter)
     _evidence_section(perf)
     _coverage_section()
 

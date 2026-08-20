@@ -129,6 +129,16 @@ def collect() -> dict:
             """,
         )
 
+        # Realized 3-day abnormal moves around past 8-K events (the evidence base).
+        out["event_moves"] = [
+            float(r[0])
+            for r in _q(
+                cur,
+                "SELECT abnormal_return FROM event_returns "
+                "WHERE hold_days = 3 AND abnormal_return IS NOT NULL",
+            )
+        ]
+
         for name, sql in {
             "companies": "SELECT COUNT(*) FROM companies WHERE in_universe",
             "catalysts_upcoming": "SELECT COUNT(*) FROM catalysts WHERE expected_date >= CURRENT_DATE",
@@ -255,6 +265,57 @@ def _line_svg(
                 f'<text x="{lx + 5:.1f}" y="{ly + 3:.1f}" font-size="8" '
                 f'fill="{color}">{esc(label)}</text>'
             )
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _hist_svg(
+    vals: list[float],
+    *,
+    width: int = 470,
+    height: int = 120,
+    bins: int = 41,
+    lo: float = -0.5,
+    hi: float = 0.5,
+) -> str:
+    """Inline-SVG histogram of realized abnormal returns (clipped to ±50%)."""
+    vals = [v for v in vals if lo <= v <= hi]
+    if not vals:
+        return ""
+    step = (hi - lo) / bins
+    counts = [0] * bins
+    for v in vals:
+        i = min(bins - 1, int((v - lo) / step))
+        counts[i] += 1
+    peak = max(counts) or 1
+    pad_l, pad_r, pad_t, pad_b = 40, 8, 8, 16
+    bw = (width - pad_l - pad_r) / bins
+    parts = [
+        f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" '
+        f'style="width:100%;height:auto">'
+    ]
+    for i, c in enumerate(counts):
+        if c == 0:
+            continue
+        h = (height - pad_t - pad_b) * c / peak
+        x = pad_l + i * bw
+        center = lo + (i + 0.5) * step
+        color = GOOD if center >= 0 else BAD
+        parts.append(
+            f'<rect x="{x:.1f}" y="{height - pad_b - h:.1f}" '
+            f'width="{max(bw - 0.6, 0.5):.1f}" height="{h:.1f}" fill="{color}"/>'
+        )
+    zero_x = pad_l + (0 - lo) / (hi - lo) * (width - pad_l - pad_r)
+    parts.append(
+        f'<line x1="{zero_x:.1f}" y1="{pad_t}" x2="{zero_x:.1f}" '
+        f'y2="{height - pad_b}" stroke="{INK}" stroke-width="0.8"/>'
+    )
+    for mark in (-0.5, -0.25, 0.0, 0.25, 0.5):
+        x = pad_l + (mark - lo) / (hi - lo) * (width - pad_l - pad_r)
+        parts.append(
+            f'<text x="{x:.1f}" y="{height - 4}" font-size="7.5" fill="{MUTED}" '
+            f'text-anchor="middle">{mark:+.0%}</text>'
+        )
     parts.append("</svg>")
     return "".join(parts)
 
@@ -410,9 +471,8 @@ def build_html(d: dict) -> str:
     eq_rows = d["equity"]
     start_cap = float(d["account"][0][1]) if d["account"] and d["account"][0][1] else None
     latest_eq = float(eq_rows[-1][1]) if eq_rows else None
-    bench_latest = float(eq_rows[-1][2]) if eq_rows and eq_rows[-1][2] else None
     tot = (latest_eq / start_cap - 1) if latest_eq and start_cap else None
-    xbi = (bench_latest / start_cap - 1) if bench_latest and start_cap else None
+    n_days = len(eq_rows)
     n_outcomes = sum(n for _, n in d["outcomes"]) if d["outcomes"] else 0
 
     stages = [
@@ -429,7 +489,7 @@ def build_html(d: dict) -> str:
             f"{brier:.3f}" if brier is not None else "—",
             f"Brier, n={n_pairs} (small)",
         ),
-        ("Paper book", pct(tot, 1, True), f"vs XBI {pct(xbi, 1, True)}"),
+        ("Paper book", pct(tot, 1, True), f"{n_days} trading days, paper only"),
     ]
     parts.append(
         "<div class='pipe'>"
@@ -441,8 +501,7 @@ def build_html(d: dict) -> str:
         + "</div>"
         "<div class='fnote'>The pipeline, left to right: a fixed universe of companies → "
         "their dated clinical/FDA events → each event scored → resolved events labeled → "
-        "labels test the model → the paper portfolio's record against XBI, the biotech "
-        "index benchmark.</div>"
+        "labels test the model → the paper portfolio's cumulative record.</div>"
     )
 
     # -- current signals -------------------------------------------------------
@@ -521,26 +580,36 @@ def build_html(d: dict) -> str:
     if len(d["equity"]) >= 2:
         start = float(d["equity"][0][1]) or 1.0
         eq_n = [float(r[1]) / start - 1 for r in d["equity"]]
-        b_n = [(float(r[2]) / start - 1) if r[2] is not None else None for r in d["equity"]]
-        svg = _line_svg([("paper book", eq_n, BURGUNDY), ("XBI", b_n, FAINT)])
+        svg = _line_svg([("paper book", eq_n, BURGUNDY)])
         if svg:
             parts.append(svg)
         days = len(d["equity"])
-        ahead = tot is not None and xbi is not None and tot > xbi
         parts.append(
-            f"<div class='verdict'><span class='v'>{pct(tot, 1, True)}</span> vs XBI "
-            f"<span class='v'>{pct(xbi, 1, True)}</span> over <span class='v'>{days}</span> "
-            f"trading days — {'ahead of' if ahead else 'behind'} the benchmark; too short "
+            f"<div class='verdict'><span class='v'>{pct(tot, 1, True)}</span> over "
+            f"<span class='v'>{days}</span> trading days — too short "
             f"a window to conclude either way.</div>"
-            f"<div class='fnote'>Source: portfolio_performance daily snapshots; XBI "
-            f"normalized to the same start. Paper fills at prior close; no transaction "
-            f"costs modeled.</div>"
+            f"<div class='fnote'>Source: portfolio_performance daily snapshots. "
+            f"Paper fills at prior close; no transaction costs modeled.</div>"
         )
     else:
         parts.append(
             "<div class='fnote'>Track record starts when the first daily " "snapshot lands.</div>"
         )
     parts.append("</div></div>")
+
+    # -- event-study histogram ---------------------------------------------------
+    ev = d.get("event_moves") or []
+    if len(ev) > 10:
+        med = sorted(ev)[len(ev) // 2]
+        parts.append(
+            "<h2>What history says <span class='q'>— realized 3-day abnormal moves "
+            f"around {num(len(ev))} past 8-K events</span></h2>"
+            f"{_hist_svg(ev)}"
+            f"<div class='fnote'>Median <b>{pct(med, 1)}</b>; most events are noise — "
+            f"the edge must come from selecting which events to trade, not predicting "
+            f"direction. Source: event_returns (stock return minus the biotech index "
+            f"over the same window).</div>"
+        )
 
     # -- calendar ----------------------------------------------------------------
     if d["calendar"]:

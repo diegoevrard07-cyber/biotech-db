@@ -30,7 +30,7 @@ Queried from the live database on **2026-08-20** (regenerate: `python scripts/db
 | Event study | 6,855 return rows from real 8-K events | median 3d abnormal ≈ −1%, std ≈ 22% |
 | Historical trials mined | 52,341 (14,959 with success labels) | ClinicalTrials.gov |
 | Price history | 146,222 rows · 114 tickers · through 2026-08-19 | yfinance EOD |
-| Paper book | +7.9% vs XBI +16.2% over 28 trading days | 35-position book; young record, lagging a hot tape |
+| Paper book | +7.9% over 28 trading days | 35-position book; young record, still being validated |
 
 ## Why this exists
 
