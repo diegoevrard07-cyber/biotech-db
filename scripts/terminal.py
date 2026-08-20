@@ -1043,6 +1043,28 @@ def _evidence_section(perf: pd.DataFrame) -> None:
                 unsafe_allow_html=True,
             )
 
+    # -- risk discipline -------------------------------------------------------
+    if not perf.empty and len(perf) >= 2:
+        eq = perf["equity"].astype(float)
+        rets = eq.pct_change().dropna()
+        max_dd = float((eq / eq.cummax() - 1).min())
+        vol = float(rets.std() * (252**0.5)) if len(rets) > 1 else None
+        sharpe = (
+            float(rets.mean() / rets.std() * (252**0.5))
+            if len(rets) > 1 and rets.std() > 0
+            else None
+        )
+        st.markdown(
+            "<div class='fnote' style='margin-top:10px'><b>Risk discipline:</b> every "
+            "position is capped at 5% of the book, the GBM cluster at 25%, each sector "
+            "at 40%; a stop-loss, drawdown tiers, and a tape-regime filter can only ever "
+            "reduce exposure. Live: max drawdown "
+            f"<b>{f_pct(max_dd, 1)}</b> · annualized vol <b>{f_pct(vol, 1)}</b> · "
+            f"Sharpe (rf=0) <b>{f'{sharpe:.2f}' if sharpe is not None else '—'}</b> "
+            f"over {len(perf)} daily snapshots — small sample, shown as-is.</div>",
+            unsafe_allow_html=True,
+        )
+
     # -- event study: what history says about these events -------------------
     ev = load_event_returns()
     if not ev.empty:
@@ -1167,6 +1189,41 @@ def _coverage_section() -> None:
     )
 
 
+def _this_week_strip() -> None:
+    """One-line liveliness digest: what changed in the last 7 days."""
+    new_cats = q(
+        "SELECT COUNT(*) AS n FROM catalysts WHERE created_at >= NOW() - INTERVAL '7 days'"
+    ).iloc[0]["n"]
+    opens = q(
+        "SELECT COUNT(*) AS n FROM portfolio_holdings " "WHERE entry_date >= CURRENT_DATE - 7"
+    ).iloc[0]["n"]
+    closes = q(
+        "SELECT COUNT(*) AS n FROM portfolio_holdings WHERE exit_date >= CURRENT_DATE - 7"
+    ).iloc[0]["n"]
+    widest = q("""
+        SELECT co.ticker, es.edge_gap FROM edge_scores es
+        JOIN companies co ON co.id = es.company_id
+        JOIN catalysts c ON c.id = es.catalyst_id
+        WHERE es.edge_gap IS NOT NULL AND es.trade_type <> 'avoid'
+          AND c.expected_date >= CURRENT_DATE AND c.expected_date <= CURRENT_DATE + 90
+        ORDER BY es.edge_gap DESC LIMIT 1
+        """)
+    bits = [
+        f"{f_int(new_cats)} new dated catalysts",
+        f"{f_int(opens)} opened / {f_int(closes)} closed",
+    ]
+    if not widest.empty:
+        bits.append(
+            f"widest near-term gap: {widest.iloc[0]['ticker']} "
+            f"{f_pp(_f(widest.iloc[0]['edge_gap']))}"
+        )
+    st.markdown(
+        "<div class='fnote' style='margin:2px 0 2px'><b style='color:#8A1F2D'>THIS WEEK"
+        "</b> · " + " · ".join(bits) + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def page_note() -> None:
     """The landing view: a complete research note, top to bottom."""
     _purge_open_shorts_once()
@@ -1181,6 +1238,7 @@ def page_note() -> None:
 
     _masthead()
     _pipeline_strip(blotter, perf)
+    _this_week_strip()
     _signals_section(blotter, book, summ["equity"])
     _landscape_section(blotter)
     _evidence_section(perf)
@@ -1387,12 +1445,218 @@ def _trade_forms(open_df: pd.DataFrame, prices: dict[str, float]) -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Trade thesis (analyst-style write-up for one name)
+# ---------------------------------------------------------------------------
+
+CATALYST_PLAIN = {
+    "phase_readout": "a clinical trial readout — the company reports whether the drug met its endpoint",
+    "pdufa": "a PDUFA date — the FDA's deadline to approve or reject the drug",
+    "advisory_committee": "an FDA advisory-committee vote — a public expert panel that recommends for or against approval",
+}
+
+
+def page_thesis() -> None:
+    """A structured, analyst-style thesis for one name, written from live data."""
+    blotter = load_blotter()
+    book = load_action_book(365)
+    if blotter.empty or not book["rows"]:
+        st.caption("No signals to write up.")
+        return
+
+    book_tickers = [r["ticker"] for r in book["rows"]]
+    pick = st.selectbox("Name", book_tickers, index=0)
+    s = blotter[blotter["ticker"] == pick].sort_values("days_until").iloc[0]
+
+    ttype = s["trade_type"]
+    action = TRADE_LABELS.get(ttype, ttype)
+    base = _f(s["base_rate"])
+    exp_mv = _f(s["expected_move"])
+    imp_mv = _f(s["implied_move"])
+    gap = _f(s["edge_gap"])
+    days = s["days_until"]
+    ctype = s["catalyst_type"]
+    w = next((r["weight"] for r in book["rows"] if r["ticker"] == pick), None)
+
+    # -- header ---------------------------------------------------------------
+    st.markdown(
+        f"<div class='masthead-title' style='font-size:1.4rem'>{pick} — "
+        f"{action}{f' · {f_pct(w, 1)} of the book' if w else ''}</div>"
+        f"<div class='masthead-sub'>{s['company']} · "
+        f"{s['indication_category'] or '—'}"
+        f"{' · GBM flagship' if s['is_gbm_focused'] else ''}</div>"
+        f"<hr class='masthead-rule'><hr class='masthead-rule2'>",
+        unsafe_allow_html=True,
+    )
+
+    # -- the event -------------------------------------------------------------
+    st.markdown("<div class='kicker'>The event</div>", unsafe_allow_html=True)
+    reliable = "the date is SEC-confirmed" if s["sec_confirmed"] else "the date is model-estimated"
+    st.markdown(
+        f"The catalyst is **{CATALYST_PLAIN.get(ctype, ctype)}**, "
+        f"expected **{f_date(s['expected_date'])}**"
+        f"{f' ({int(days)} days away)' if pd.notna(days) else ''}; {reliable}. "
+        f"Binary events like this dominate small-cap biotech pricing — the median 8-K "
+        f"reaction in our event study is close to zero with a ±22% spread, so position "
+        f"sizing matters more than conviction.",
+        unsafe_allow_html=True,
+    )
+
+    # -- market vs model ---------------------------------------------------------
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.markdown("<div class='kicker'>What the market prices</div>", unsafe_allow_html=True)
+        mkt = pd.DataFrame(
+            {
+                "Measure": [
+                    "Implied move (options market)",
+                    "30-day run-up",
+                    "Short interest (% float)",
+                ],
+                "Value": [
+                    f_pct(imp_mv, 0),
+                    f_pct(_f(s["run_up_30d"]), 1, True),
+                    f_pct(_f(s["short_pct_float"]), 1),
+                ],
+            }
+        )
+        st.dataframe(mkt, use_container_width=True, hide_index=True)
+        st.markdown(
+            "<div class='fnote'>The implied move is what options traders pay for the "
+            "event; the run-up measures how much hope is already in the price.</div>",
+            unsafe_allow_html=True,
+        )
+    with right:
+        st.markdown("<div class='kicker'>What the model sees</div>", unsafe_allow_html=True)
+        mod = pd.DataFrame(
+            {
+                "Measure": [
+                    "Model probability (base rate)",
+                    "Model expected move",
+                    "Edge vs market",
+                    "Composite grade",
+                    "Confidence",
+                ],
+                "Value": [
+                    f_pct(base, 0),
+                    f_pct(exp_mv, 0),
+                    f_pp(gap),
+                    f"{_f(s['composite_score']):.2f}" if pd.notna(s["composite_score"]) else "—",
+                    f"{_f(s['confidence']):.2f}" if pd.notna(s["confidence"]) else "—",
+                ],
+            }
+        )
+        st.dataframe(
+            mod.style.map(_sign_color, subset=[]), use_container_width=True, hide_index=True
+        )
+        comp = pd.DataFrame(
+            {
+                "Component": ["Timing", "Base rate", "Financial"],
+                "Score": [
+                    _f(s["catalyst_proximity_score"]),
+                    _f(s["base_rate_score"]),
+                    _f(s["financial_score"]),
+                ],
+            }
+        )
+        fig = go.Figure(
+            go.Bar(
+                y=comp["Component"],
+                x=comp["Score"],
+                orientation="h",
+                marker_color=[BURGUNDY, BURGUNDY, BURGUNDY],
+                text=[f"{v:.2f}" if pd.notna(v) else "—" for v in comp["Score"]],
+                textposition="outside",
+                textfont=dict(size=9, family=MONO, color=INK),
+            )
+        )
+        _plotly_note(fig, height=130)
+        fig.update_xaxes(range=[0, 1.15], showgrid=False, showticklabels=False)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.markdown(
+            "<div class='fnote'>The grade blends timing, historical odds, and "
+            "balance-sheet strength at near-equal weights — deliberately simple.</div>",
+            unsafe_allow_html=True,
+        )
+
+    # -- risks ---------------------------------------------------------------------
+    st.markdown("<div class='kicker'>The risks</div>", unsafe_allow_html=True)
+    runway = _f(s["runway_months"])
+    fin = _f(s["financing_tilt"])
+    risk_bits = []
+    if runway is not None:
+        risk_bits.append(
+            f"cash runway is **{runway:.0f} months** — "
+            + (
+                "ample into the event"
+                if runway >= 12
+                else (
+                    "tight; a raise before the catalyst would dilute"
+                    if runway >= 6
+                    else "distressed; dilution risk is high"
+                )
+            )
+        )
+    if fin is not None and fin < 0:
+        risk_bits.append(f"financing tilt is negative ({fin:+.2f})")
+    risk_bits.append(
+        "single-name event risk is bounded by the 5% position cap and the −15% "
+        "stop-loss; an overnight gap beyond the stop is the residual risk"
+    )
+    st.markdown(" · ".join(risk_bits), unsafe_allow_html=True)
+
+    # -- invalidation ---------------------------------------------------------------
+    st.markdown("<div class='kicker'>What would change the call</div>", unsafe_allow_html=True)
+    if ttype == "buy_the_rumor":
+        inv = (
+            "The date proves unreliable (it drives the timing), the run-up extends "
+            "into mania territory, or financing stress emerges — any of these flips "
+            "the signal to avoid."
+        )
+    else:
+        inv = (
+            "The market's implied move rises above the model's expected move (the "
+            "edge gap closes), a financing event hits, or the date slips — any of "
+            "these flips the signal to avoid."
+        )
+    st.markdown(inv, unsafe_allow_html=True)
+
+    # -- position context -------------------------------------------------------------
+    open_df = load_holdings("open")
+    held = open_df[open_df["ticker"] == pick] if not open_df.empty else pd.DataFrame()
+    st.markdown("<div class='kicker'>Position</div>", unsafe_allow_html=True)
+    if held.empty:
+        st.markdown("Not currently held in the paper book.", unsafe_allow_html=True)
+    else:
+        h = held.iloc[0]
+        prices = latest_prices()
+        cur = prices.get(pick)
+        pnl = pf.unrealized_pnl(h["side"], float(h["shares"]), float(h["entry_price"]), cur)
+        pnl_pct = pf.unrealized_pnl_pct(h["side"], float(h["entry_price"]), cur)
+        st.markdown(
+            f"Held since {f_date(h['entry_date'])} — {float(h['shares']):,.1f} shares at "
+            f"{f_px(h['entry_price'])}; marked {f_px(cur)} → "
+            f"**{f_usd(pnl)} ({f_pct(pnl_pct, 1, True)})**. "
+            f"Planned exit: {f_date(h['planned_exit_date'])}.",
+            unsafe_allow_html=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
 def main() -> None:
-    """Render the research note (default) and the positions appendix."""
+    """Render the research note (default), the trade thesis, and positions."""
     _inject_css()
-    tab_note, tab_positions = st.tabs(["Research note", "Positions & activity"])
+    tab_note, tab_thesis, tab_positions = st.tabs(
+        ["Research note", "Trade thesis", "Positions & activity"]
+    )
     with tab_note:
         page_note()
+    with tab_thesis:
+        page_thesis()
     with tab_positions:
         page_positions()
 
