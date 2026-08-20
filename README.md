@@ -12,7 +12,9 @@ GitHub Actions and reports into a Streamlit terminal.
 
 ![Edge Terminal cockpit: paper-book equity vs the XBI biotech benchmark](docs/img/terminal.png)
 
-![Edge Terminal action desk: ranked catalyst trades with type, weight and timing](docs/img/dashboard.png)
+![Risk Lab: 6-month Monte Carlo fan chart and index-shock scenarios](docs/img/risk-lab.png)
+
+![Risk Lab: 3D catalyst landscape and Kelly sizing surface](docs/img/dashboard.png)
 
 ## The idea
 
