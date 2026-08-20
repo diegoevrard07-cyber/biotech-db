@@ -17,6 +17,30 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-08-20 — Landscape graphics layer; XBI comparison removed from presentation
+
+**Branch:** `cursor/data-first-dashboard-0203`
+
+Owner direction: more conclusions presented graphically; drop the XBI benchmark
+comparison from the presentation layer. Presentation-only; the pipeline still
+computes and stores XBI fields — only rendering changed.
+
+- **New "The landscape" section** (note, between signals and evidence): a 3-D signal
+  map (every catalyst in model-odds × market-implied × model-move space, sized by
+  weight, colored by action), edge-by-indication table, and the 90-day catalyst
+  calendar stacked by type.
+- **Evidence gains two charts:** the abnormal-return histogram (how violent events
+  are) and the run-up quintile barbell (why the engine doesn't short run-ups).
+- **XBI removed** from the pipeline strip, equity chart, and verdict captions on
+  screen and in the memo. Flagged: the benchmark comparison is the accountability
+  anchor for a track record; removed per owner instruction.
+- Memo (`generate_report.py`) gains the event-study histogram as inline SVG; still
+  one page. Screenshots + memo regenerated in Actions run 32336206600.
+
+**Verify:** 180 passed / 7 skipped; AppTest render clean; screenshots inspected.
+
+---
+
 ## 2026-08-20 — Research-note redesign (stranger-test legibility) + real screenshots
 
 **Branch:** `cursor/data-first-dashboard-0203`
