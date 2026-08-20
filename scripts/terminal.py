@@ -39,8 +39,16 @@ from layers.portfolio import stats as pstats
 from layers.portfolio import tracker as pf
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(PROJECT_ROOT / ".env")
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+load_dotenv(PROJECT_ROOT / ".env", override=True)
+# Re-normalize after loading .env so a just-edited file is picked up.
+try:
+    DATABASE_URL = config.normalize_database_url(os.getenv("DATABASE_URL", ""))
+    config.DATABASE_URL = DATABASE_URL
+    config.DATABASE_URL_ERROR = None
+except RuntimeError as exc:
+    DATABASE_URL = ""
+    config.DATABASE_URL = ""
+    config.DATABASE_URL_ERROR = str(exc)
 
 st.set_page_config(
     page_title="Edge Terminal", layout="wide", page_icon="◆", initial_sidebar_state="collapsed"
@@ -394,10 +402,34 @@ def _book_sized_table(book: dict, equity: float, prices: dict[str, float]) -> pd
 
 def get_conn():
     """Return a fresh psycopg2 connection from DATABASE_URL (stops the app if unset)."""
-    if not DATABASE_URL:
-        st.error("DATABASE_URL not set in .env")
+    env_path = PROJECT_ROOT / ".env"
+    if config.DATABASE_URL_ERROR:
+        st.error(config.DATABASE_URL_ERROR)
+        st.info(
+            f"Edit `{env_path}` so the only DATABASE_URL line looks like:\n\n"
+            "`DATABASE_URL=postgresql://postgres.xxxxx:PASSWORD@aws-0-xxxxx.pooler.supabase.com:6543/postgres`\n\n"
+            "Must start with `postgresql://`, never `https://`. Then restart Streamlit."
+        )
         st.stop()
-    return psycopg2.connect(DATABASE_URL)
+    url = config.DATABASE_URL or DATABASE_URL
+    if not url:
+        st.error("DATABASE_URL not set in .env")
+        st.info(
+            f"Create `{env_path}` with one line:\n\n"
+            "`DATABASE_URL=postgresql://…` from Supabase → Connect → Transaction pooler → URI."
+        )
+        st.stop()
+    try:
+        return psycopg2.connect(url)
+    except Exception as exc:
+        msg = str(exc)
+        st.error(f"Could not connect to the database: {msg}")
+        if "https" in msg.lower() or "could not translate host name" in msg.lower():
+            st.info(
+                f"Your DATABASE_URL in `{env_path}` is malformed (often an `https://` paste). "
+                "It must start with `postgresql://`. Fix `.env`, then restart."
+            )
+        st.stop()
 
 
 @st.cache_data(ttl=300)

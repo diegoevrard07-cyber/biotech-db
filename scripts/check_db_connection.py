@@ -6,19 +6,34 @@ network reachability before running ingestion. Exits non-zero on failure.
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import config
+
 
 def main() -> int:
     """Connect via DATABASE_URL and report the server version. Returns exit code."""
-    load_dotenv()
-    db_url = os.getenv("DATABASE_URL")
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=True)
+    # Re-read after load_dotenv so a just-edited .env is picked up.
+    try:
+        db_url = config.normalize_database_url(__import__("os").getenv("DATABASE_URL", ""))
+    except RuntimeError as exc:
+        print(f"FAIL: {exc}")
+        return 1
+
     if not db_url:
         print("FAIL: DATABASE_URL not found in .env")
+        print("Expected one line like:")
+        print(
+            "  DATABASE_URL=postgresql://postgres.REF:PASSWORD@"
+            "aws-0-REGION.pooler.supabase.com:6543/postgres"
+        )
         return 1
 
     # Never print credentials — show only the host part after '@'.

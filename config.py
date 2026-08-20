@@ -22,10 +22,52 @@ SEEDS_DIR = DATA_DIR / "seeds"
 for _path in (RAW_DIR, CACHE_DIR, LOGS_DIR, SEEDS_DIR):
     _path.mkdir(parents=True, exist_ok=True)
 
+
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+def normalize_database_url(raw: str | None) -> str:
+    """Clean a pasted DATABASE_URL and reject common Supabase copy mistakes.
+
+    Handles surrounding quotes, a duplicated ``DATABASE_URL=`` prefix, and the
+    frequent paste of an ``https://`` dashboard link (which makes libpq try to
+    resolve the hostname ``https``). Returns ``""`` when unset.
+    """
+    if not raw:
+        return ""
+    value = raw.strip().strip("'").strip('"').strip()
+    if value.upper().startswith("DATABASE_URL="):
+        value = value.split("=", 1)[1].strip().strip("'").strip('"').strip()
+    # Accidental: postgresql://user:pass@https://host/...
+    if "@https://" in value:
+        value = value.replace("@https://", "@", 1)
+    if "@http://" in value:
+        value = value.replace("@http://", "@", 1)
+    if not value:
+        return ""
+    if value.startswith("https://") or value.startswith("http://"):
+        raise RuntimeError(
+            "DATABASE_URL looks like a web link (starts with https://). "
+            "It must be a Postgres URI starting with postgresql://. "
+            "In Supabase: Project → Connect → Transaction pooler → URI "
+            "(port 6543). Replace [YOUR-PASSWORD] with your database password."
+        )
+    if not (value.startswith("postgresql://") or value.startswith("postgres://")):
+        raise RuntimeError(
+            "DATABASE_URL must start with postgresql:// "
+            f"(got {value.split(':', 1)[0]!r}:…). "
+            "In Supabase: Project → Connect → Transaction pooler → URI."
+        )
+    return value
+
+
+_DATABASE_URL_RAW = os.getenv("DATABASE_URL", "")
+DATABASE_URL_ERROR: str | None = None
+try:
+    DATABASE_URL = normalize_database_url(_DATABASE_URL_RAW)
+except RuntimeError as _db_url_exc:
+    DATABASE_URL = ""
+    DATABASE_URL_ERROR = str(_db_url_exc)
 
 # ---------------------------------------------------------------------------
 # API endpoints (verified)
@@ -248,6 +290,8 @@ def preflight(*, require_sec: bool = False) -> None:
     Call at the top of every script's main(). Keeps Rung 2 batch jobs from
     failing silently halfway through.
     """
+    if DATABASE_URL_ERROR:
+        raise RuntimeError(DATABASE_URL_ERROR)
     if not DATABASE_URL:
         raise RuntimeError(
             "DATABASE_URL is not set in .env. The pipeline cannot run without a database."
