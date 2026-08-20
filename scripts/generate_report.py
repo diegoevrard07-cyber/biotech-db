@@ -382,7 +382,7 @@ def signal_sentence(edate, ttype: str, base, gap) -> str:
     if gap is not None and gap > 0.05:
         return (
             f"Catalyst {when}. The model's expected move exceeds the "
-            f"options market's by {pp(gap)} — underpriced, so hold through the result."
+            f"options market's by {pp(gap)}. Underpriced, so hold through the result."
         )
     return (
         f"Catalyst {when}. Historical success odds {pct(base, 0)} with "
@@ -448,15 +448,15 @@ def build_html(d: dict) -> str:
     gen = d["generated_at"].strftime("%d %b %Y %H:%M UTC")
     parts: list[str] = [
         "<!DOCTYPE html><html><head><meta charset='utf-8'>",
-        f"<title>Biotech Catalyst Edge Engine — research note — {gen}</title>",
+        f"<title>Biotech Catalyst Edge Engine: research note, {gen}</title>",
         f"<style>{CSS}</style></head><body>",
     ]
 
     # -- masthead ------------------------------------------------------------
     parts.append(
         f"<header><div><h1>Biotech Catalyst Edge Engine</h1>"
-        f"<div class='sub'>Systematic screening of binary biotech catalysts — trial "
-        f"readouts and FDA decisions — scoring each event's model-derived odds against "
+        f"<div class='sub'>Systematic screening of binary biotech catalysts (trial "
+        f"readouts and FDA decisions), scoring each event's model-derived odds against "
         f"the move the options market has priced in, and paper-trading the gap. "
         f"Decision support; no real money.</div></div>"
         f"<div class='meta'>generated {gen}<br>prices through "
@@ -507,19 +507,19 @@ def build_html(d: dict) -> str:
     # -- current signals -------------------------------------------------------
     bs = d.get("book_summary")
     book_line = (
-        f" — {bs['positions']} positions, gross {pct(bs['gross_long'], 0)}, "
+        f": {bs['positions']} positions, gross {pct(bs['gross_long'], 0)}, "
         f"GBM cluster {pct(bs['gbm_pct'], 0)}"
         if bs
         else ""
     )
     parts.append(
-        f"<h2>Current signals <span class='q'>— what the model recommends "
+        f"<h2>Current signals <span class='q'>: what the model recommends "
         f"today{book_line}</span></h2>"
     )
     if d["signals"]:
         first = d["signals"][0]
         parts.append(
-            f"<div class='lead'>Lead idea: <b>{esc(first[0])}</b> — "
+            f"<div class='lead'>Lead idea: <b>{esc(first[0])}</b>. "
             f"{esc(signal_sentence(first[2], first[3], first[4], first[5]))}</div>"
         )
         parts.append(
@@ -547,14 +547,14 @@ def build_html(d: dict) -> str:
         "<div class='fnote'><b>How to read this:</b> <b>Model prob.</b> is the historical "
         "success rate of comparable trials. <b>Model move</b> is the move the model expects "
         "around the event; <b>Market-implied</b> is the move options traders have priced "
-        "in. <b>Edge vs market</b> is the difference, in percentage points — positive means "
+        "in. <b>Edge vs market</b> is the difference, in percentage points. Positive means "
         "the market underprices the event. <b>Weight</b> is the suggested share of the "
         "paper portfolio (Kelly-fractional, capped at 5% per name). Source: edge_scores, "
         "recomputed daily.</div>"
     )
 
     # -- evidence ---------------------------------------------------------------
-    parts.append("<h2>Evidence <span class='q'>— does it work, and how would you know</span></h2>")
+    parts.append("<h2>Evidence <span class='q'>: does it work, and how would you know</span></h2>")
     parts.append("<div class='cols'><div>")
     if cal:
         parts.append(
@@ -565,7 +565,7 @@ def build_html(d: dict) -> str:
             f"<div class='kv'><span class='k'>Calibration runs to date</span>"
             f"<span class='v'>{num(d.get('calibration_runs'))}</span></div>"
             f"<div class='verdict'>Brier <span class='v'>{brier:.3f}</span> on "
-            f"<span class='v'>n={n_pairs}</span> resolved events — far too few to judge. "
+            f"<span class='v'>n={n_pairs}</span> resolved events. Far too few to judge. "
             f"Printed as-is; the number updates as dated catalysts resolve.</div>"
         )
     else:
@@ -586,7 +586,7 @@ def build_html(d: dict) -> str:
         days = len(d["equity"])
         parts.append(
             f"<div class='verdict'><span class='v'>{pct(tot, 1, True)}</span> over "
-            f"<span class='v'>{days}</span> trading days — too short "
+            f"<span class='v'>{days}</span> trading days. Too short "
             f"a window to conclude either way.</div>"
             f"<div class='fnote'>Source: portfolio_performance daily snapshots. "
             f"Paper fills at prior close; no transaction costs modeled.</div>"
@@ -602,10 +602,10 @@ def build_html(d: dict) -> str:
     if len(ev) > 10:
         med = sorted(ev)[len(ev) // 2]
         parts.append(
-            "<h2>What history says <span class='q'>— realized 3-day abnormal moves "
+            "<h2>What history says <span class='q'>: realized 3-day abnormal moves "
             f"around {num(len(ev))} past 8-K events</span></h2>"
             f"{_hist_svg(ev)}"
-            f"<div class='fnote'>Median <b>{pct(med, 1)}</b>; most events are noise — "
+            f"<div class='fnote'>Median <b>{pct(med, 1)}</b>. Most events are noise, "
             f"the edge must come from selecting which events to trade, not predicting "
             f"direction. Source: event_returns (stock return minus the biotech index "
             f"over the same window).</div>"
@@ -615,13 +615,13 @@ def build_html(d: dict) -> str:
     if d["calendar"]:
         parts.append(
             f"<h2>Catalyst calendar <span class='q'>— next 90 days "
-            f"({len(d['calendar'])} dated; tall ticks = PDUFA, the FDA decision deadline)</span></h2>"
+            f"({len(d['calendar'])} dated; tall ticks mark PDUFA, the FDA decision deadline)</span></h2>"
             f"{_calendar_svg(d['calendar'])}"
         )
 
     # -- coverage ------------------------------------------------------------------
     parts.append(
-        "<h2>Coverage &amp; data health <span class='q'>— how much real data is behind "
+        "<h2>Coverage &amp; data health <span class='q'>: how much real data is behind "
         "this</span></h2>"
         "<div class='cols'><div>"
         f"<div class='kv'><span class='k'>Historical trials mined</span>"

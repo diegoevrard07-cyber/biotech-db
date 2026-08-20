@@ -1,7 +1,7 @@
 """Edge Terminal — a living sell-side research note for the biotech catalyst engine.
 
 Design rule: a stranger with zero context must be able to read the landing view
-like a research note and, within 30 seconds, answer four questions — what does
+like a research note and, within 30 seconds, answer four questions: what does
 this system do, what is it recommending right now, does it work (and how would
 you know), and how much real data sits behind it. Every element on the page
 serves one of those answers.
@@ -39,7 +39,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-st.set_page_config(page_title="Edge Engine — Research Note", layout="wide")
+st.set_page_config(page_title="Edge Engine: Research Note", layout="wide")
 
 # ---------------------------------------------------------------------------
 # Design tokens: institutional research note. Warm paper, hairlines, one accent.
@@ -132,6 +132,13 @@ def _inject_css() -> None:
 
           /* streamlit element restyle: flat, hairline, sharp corners */
           [data-testid="stDataFrame"] {{ border: 1px solid {HAIRLINE}; }}
+          /* every number in every table is monospace; column headers stay sans */
+          [data-testid="stDataFrame"] td, [data-testid="stDataFrame"] div[role="gridcell"],
+          [data-testid="stDataFrame"] [data-testid="stTable"] td {{
+            font-family: {MONO}; font-variant-numeric: tabular-nums; }}
+          [data-testid="stDataFrame"] th {{ font-family: {SANS}; }}
+          .stCaption, [data-testid="stCaptionContainer"] {{ font-family: {SANS};
+            color: {MUTED}; }}
           .stTabs [data-baseweb="tab-list"] {{ gap: 18px; border-bottom: 1px solid {HAIRLINE}; }}
           .stTabs [data-baseweb="tab"] {{ font-size: .72rem; font-weight: 600;
             letter-spacing: .12em; text-transform: uppercase; color: {MUTED};
@@ -581,7 +588,7 @@ def signal_sentence(r: pd.Series) -> str:
     if gap is not None and gap > 0.05:
         return (
             f"Catalyst {when}. The model's expected move exceeds the options "
-            f"market's by {f_pp(gap)} — underpriced, so hold through the result."
+            f"market's by {f_pp(gap)}. Underpriced, so hold through the result."
         )
     return (
         f"Catalyst {when}. Historical success odds {f_pct(base, 0)} with "
@@ -605,7 +612,7 @@ def _masthead() -> None:
         )
         st.markdown(
             "<div class='masthead-sub'>Systematic screening of binary biotech "
-            "catalysts — trial readouts and FDA decisions — scoring each event's "
+            "catalysts (trial readouts and FDA decisions) and scoring each event's "
             "model-derived odds against the move the options market has priced in, "
             "and paper-trading the gap. Decision support; no real money.</div>",
             unsafe_allow_html=True,
@@ -668,7 +675,7 @@ def _pipeline_strip(blotter: pd.DataFrame, perf: pd.DataFrame) -> None:
 def _signals_section(blotter: pd.DataFrame, book: dict, equity: float) -> None:
     """CURRENT SIGNALS: the ranked book in human terms, plus per-name drill-down."""
     st.markdown(
-        "<div class='kicker'>Current signals — <span class='q'>what the model "
+        "<div class='kicker'>Current signals: <span class='q'>what the model "
         "is recommending today</span></div>",
         unsafe_allow_html=True,
     )
@@ -700,7 +707,7 @@ def _signals_section(blotter: pd.DataFrame, book: dict, equity: float) -> None:
     top = df.iloc[0]
     top_row = blotter[blotter["ticker"] == top["Ticker"]].sort_values("days_until").iloc[0]
     st.markdown(
-        f"<div class='lead-line'>Lead idea: <b>{top['Ticker']}</b> — "
+        f"<div class='lead-line'>Lead idea: <b>{top['Ticker']}</b>. "
         f"{signal_sentence(top_row)}</div>",
         unsafe_allow_html=True,
     )
@@ -723,7 +730,7 @@ def _signals_section(blotter: pd.DataFrame, book: dict, equity: float) -> None:
         "<div class='fnote'><b>How to read this:</b> <b>Model prob.</b> is the historical "
         "success rate of comparable trials. <b>Model move</b> is the size of move the model "
         "expects around the event; <b>Market-implied</b> is the move options traders have "
-        "priced in. <b>Edge vs market</b> is the difference, in percentage points — positive "
+        "priced in. <b>Edge vs market</b> is the difference, in percentage points. Positive "
         "means the market underprices the event. <b>Weight</b> is the suggested share of the "
         "paper portfolio (Kelly-fractional, capped at 5% per name). "
         f"Book: {book['positions']} positions · gross {f_pct(book['gross_long'], 0)} of "
@@ -734,7 +741,7 @@ def _signals_section(blotter: pd.DataFrame, book: dict, equity: float) -> None:
 
     # -- per-name drill-down: the component scores behind the number --------
     tickers = df["Ticker"].tolist()
-    pick = st.selectbox("Inspect a name — the components behind its score", tickers)
+    pick = st.selectbox("Inspect a name: the components behind its score", tickers)
     if pick:
         s = blotter[blotter["ticker"] == pick].sort_values("days_until").iloc[0]
         c1, c2 = st.columns(2)
@@ -808,7 +815,7 @@ def _runup_quintiles(ev: pd.DataFrame) -> pd.DataFrame | None:
 def _landscape_section(blotter: pd.DataFrame) -> None:
     """THE LANDSCAPE: where the model sees edge, shown graphically."""
     st.markdown(
-        "<div class='kicker'>The landscape — <span class='q'>where the model sees "
+        "<div class='kicker'>The landscape: <span class='q'>where the model sees "
         "edge, and where it sees none</span></div>",
         unsafe_allow_html=True,
     )
@@ -817,7 +824,7 @@ def _landscape_section(blotter: pd.DataFrame) -> None:
         return
 
     # -- 3D signal map: model odds x market-implied move x model move --------
-    st.markdown("**The signal map** — every tracked catalyst in three dimensions")
+    st.markdown("**The signal map**: every tracked catalyst in three dimensions")
     d = blotter.dropna(subset=["base_rate", "implied_move", "expected_move"]).copy()
     if d.empty:
         st.caption("Implied-move coverage too sparse for the 3-D map.")
@@ -956,7 +963,7 @@ def _landscape_section(blotter: pd.DataFrame) -> None:
 def _evidence_section(perf: pd.DataFrame) -> None:
     """DOES IT WORK?: calibration and paper-book vs benchmark, with honest verdicts."""
     st.markdown(
-        "<div class='kicker'>Evidence — <span class='q'>does it work, and how "
+        "<div class='kicker'>Evidence: <span class='q'>does it work, and how "
         "would you know</span></div>",
         unsafe_allow_html=True,
     )
@@ -964,7 +971,7 @@ def _evidence_section(perf: pd.DataFrame) -> None:
     left, right = st.columns(2, gap="large")
 
     with left:
-        st.markdown("**Calibration — are the model's probabilities accurate?**")
+        st.markdown("**Calibration: are the model's probabilities accurate?**")
         cal = load_calibration()
         latest = cal.iloc[-1] if not cal.empty else None
         if latest is None:
@@ -989,7 +996,7 @@ def _evidence_section(perf: pd.DataFrame) -> None:
             st.dataframe(metrics, use_container_width=True, hide_index=True)
             st.markdown(
                 f"<div class='verdict'>Brier <span class='vnum'>{brier:.3f}</span> on "
-                f"<span class='vnum'>n={n_pairs}</span> resolved events — far too few to "
+                f"<span class='vnum'>n={n_pairs}</span> resolved events. Far too few to "
                 f"judge. This updates automatically as dated catalysts resolve; the number "
                 f"is printed as-is rather than hidden.</div>",
                 unsafe_allow_html=True,
@@ -999,13 +1006,13 @@ def _evidence_section(perf: pd.DataFrame) -> None:
             f"trial-success base-rate model scores Brier skill <b>+{BASE_RATE_HOLDOUT['brier_skill']:.3f}</b>, "
             f"AUC <b>{BASE_RATE_HOLDOUT['auc']:.3f}</b> on <b>n={BASE_RATE_HOLDOUT['n']:,}</b> "
             f"held-out trials (temporal split, as of {BASE_RATE_HOLDOUT['date']}). "
-            f"A Brier score measures probability accuracy — 0.25 is the coin-flip "
+            f"A Brier score measures probability accuracy. 0.25 is the coin-flip "
             f"benchmark; skill above zero beats the naive rate.</div>",
             unsafe_allow_html=True,
         )
 
     with right:
-        st.markdown("**Track record — the paper portfolio**")
+        st.markdown("**Track record: the paper portfolio**")
         if perf.empty or len(perf) < 2:
             st.caption("Track record starts when the first daily snapshot lands.")
         else:
@@ -1033,7 +1040,7 @@ def _evidence_section(perf: pd.DataFrame) -> None:
             days = len(perf)
             st.markdown(
                 f"<div class='verdict'><span class='vnum'>{f_pct(tot, 1, True)}</span> over "
-                f"<span class='vnum'>{days}</span> trading days — too short a window "
+                f"<span class='vnum'>{days}</span> trading days. Too short a window "
                 f"to conclude either way.</div>",
                 unsafe_allow_html=True,
             )
@@ -1061,7 +1068,7 @@ def _evidence_section(perf: pd.DataFrame) -> None:
             "reduce exposure. Live: max drawdown "
             f"<b>{f_pct(max_dd, 1)}</b> · annualized vol <b>{f_pct(vol, 1)}</b> · "
             f"Sharpe (rf=0) <b>{f'{sharpe:.2f}' if sharpe is not None else '—'}</b> "
-            f"over {len(perf)} daily snapshots — small sample, shown as-is.</div>",
+            f"over {len(perf)} daily snapshots. Small sample, shown as-is.</div>",
             unsafe_allow_html=True,
         )
 
@@ -1122,7 +1129,7 @@ def _evidence_section(perf: pd.DataFrame) -> None:
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             st.markdown(
                 "<div class='fnote'>Mean 3-day abnormal return by pre-event run-up "
-                "quintile. The middle drifts up; the extremes give back — a weak barbell, "
+                "quintile. The middle drifts up; the extremes give back. A weak barbell, "
                 "which is why the engine does not short run-ups. Source: event_returns.</div>",
                 unsafe_allow_html=True,
             )
@@ -1131,7 +1138,7 @@ def _evidence_section(perf: pd.DataFrame) -> None:
 def _coverage_section() -> None:
     """COVERAGE & DATA HEALTH: how much real data sits behind the note."""
     st.markdown(
-        "<div class='kicker'>Coverage &amp; data health — <span class='q'>how much "
+        "<div class='kicker'>Coverage &amp; data health: <span class='q'>how much "
         "real data is behind this</span></div>",
         unsafe_allow_html=True,
     )
@@ -1371,7 +1378,7 @@ def _trade_forms(open_df: pd.DataFrame, prices: dict[str, float]) -> None:
         "AND expected_date >= CURRENT_DATE ORDER BY expected_date",
         (cid,),
     )
-    cat_map = {"(none — manual exit)": (None, None)}
+    cat_map = {"(none; manual exit)": (None, None)}
     for r in cats.itertuples():
         cat_map[f"{r.catalyst_type} @ {r.expected_date} (#{r.id})"] = (int(r.id), r.expected_date)
     c2 = st.columns([2, 1, 1, 1])
@@ -1450,9 +1457,301 @@ def _trade_forms(open_df: pd.DataFrame, prices: dict[str, float]) -> None:
 # ---------------------------------------------------------------------------
 
 CATALYST_PLAIN = {
-    "phase_readout": "a clinical trial readout — the company reports whether the drug met its endpoint",
-    "pdufa": "a PDUFA date — the FDA's deadline to approve or reject the drug",
-    "advisory_committee": "an FDA advisory-committee vote — a public expert panel that recommends for or against approval",
+    "phase_readout": "a clinical trial readout: the company reports whether the drug met its endpoint",
+    "pdufa": "a PDUFA date: the FDA's deadline to approve or reject the drug",
+    "advisory_committee": "an FDA advisory-committee vote: a public expert panel that recommends for or against approval",
+}
+
+
+def page_thesis() -> None:
+    """A structured, analyst-style thesis for one name, written from live data."""
+    blotter = load_blotter()
+    book = load_action_book(365)
+    if blotter.empty or not book["rows"]:
+        st.caption("No signals to write up.")
+        return
+
+    book_tickers = [r["ticker"] for r in book["rows"]]
+    pick = st.selectbox("Name", book_tickers, index=0)
+    s = blotter[blotter["ticker"] == pick].sort_values("days_until").iloc[0]
+
+    ttype = s["trade_type"]
+    action = TRADE_LABELS.get(ttype, ttype)
+    base = _f(s["base_rate"])
+    exp_mv = _f(s["expected_move"])
+    imp_mv = _f(s["implied_move"])
+    gap = _f(s["edge_gap"])
+    days = s["days_until"]
+    ctype = s["catalyst_type"]
+    book_row = next((r for r in book["rows"] if r["ticker"] == pick), None)
+    w = book_row["weight"] if book_row else None
+
+    prices = latest_prices()
+    open_df = load_holdings("open")
+    acct = get_account()
+    equity = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)["equity"]
+    last_px = prices.get(pick)
+
+    # -- header ----------------------------------------------------------------
+    st.markdown(
+        f"<div class='masthead-title' style='font-size:1.5rem'>{pick} · "
+        f"{action}</div>"
+        f"<div class='masthead-sub'>{s['company']} · "
+        f"{s['indication_category'] or 'uncategorized'}"
+        f"{' · GBM flagship' if s['is_gbm_focused'] else ''} · "
+        f"as of {f_date(date.today())}</div>"
+        f"<hr class='masthead-rule'><hr class='masthead-rule2'>",
+        unsafe_allow_html=True,
+    )
+
+    # -- the call ---------------------------------------------------------------
+    dollars = w * equity if (w and equity) else None
+    shares = (dollars / last_px) if (dollars and last_px) else None
+    if ttype == "buy_the_rumor":
+        call = (
+            f"Buy the rumor into the {f_date(s['expected_date'])} catalyst; exit before the result."
+        )
+    else:
+        call = f"Hold through the {f_date(s['expected_date'])} catalyst."
+    st.markdown(
+        f"<div style='background:#fff; border:1px solid #DDD8CE; border-left:3px solid "
+        f"#8A1F2D; padding:12px 16px; margin:4px 0 6px'>"
+        f"<div style='font-family:{SERIF}; font-size:1.05rem'>{call}</div>"
+        f"<div class='fnote' style='margin-top:6px'>Suggested size "
+        f"<b>{f_pct(w, 1) if w else '—'}</b> of the book"
+        f"{f' = {f_usd(dollars)}' if dollars else ''}"
+        f"{f' ≈ {shares:,.0f} shares at {f_px(last_px)}' if shares else ''}. "
+        f"Sizing is quarter-Kelly of the model edge, capped at 5% per name.</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    # -- the event ---------------------------------------------------------------
+    st.markdown("<div class='kicker'>The event</div>", unsafe_allow_html=True)
+    reliable = (
+        "The date is confirmed by an SEC filing."
+        if s["sec_confirmed"]
+        else "The date is a model estimate, not confirmed by a filing."
+    )
+    st.markdown(
+        f"The catalyst is **{CATALYST_PLAIN.get(ctype, ctype)}**, expected "
+        f"**{f_date(s['expected_date'])}**"
+        f"{f' ({int(days)} days away)' if pd.notna(days) else ''}. {reliable}",
+        unsafe_allow_html=True,
+    )
+
+    # -- the setup (price chart with the catalyst marked) -------------------------
+    px = q(
+        "SELECT date, close FROM price_history WHERE ticker=%s AND close IS NOT NULL "
+        "ORDER BY date DESC LIMIT 130",
+        (pick,),
+    )
+    if not px.empty:
+        px = px.iloc[::-1]
+        fig = go.Figure()
+        fig.add_scatter(
+            x=pd.to_datetime(px["date"]),
+            y=px["close"].astype(float),
+            mode="lines",
+            line=dict(color=INK, width=1.3),
+            showlegend=False,
+        )
+        if pd.notna(s["expected_date"]):
+            cat_ts = pd.Timestamp(s["expected_date"])
+            fig.add_vline(
+                x=cat_ts,
+                line=dict(color=BURGUNDY, width=1.2, dash="dash"),
+            )
+            fig.add_annotation(
+                x=cat_ts,
+                y=float(px["close"].astype(float).max()),
+                text=f"catalyst {f_date(s['expected_date'])}",
+                showarrow=False,
+                yanchor="top",
+                xanchor="left",
+                font=dict(size=9, color=BURGUNDY, family=MONO),
+            )
+        _plotly_note(fig, height=210)
+        fig.update_yaxes(tickformat="$,.2f")
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.markdown(
+            "<div class='fnote'>Last ~6 months of daily closes. The dashed line is the "
+            "expected catalyst date. Source: price_history (end-of-day).</div>",
+            unsafe_allow_html=True,
+        )
+
+    # -- market vs model -----------------------------------------------------------
+    left, right = st.columns(2, gap="large")
+    with left:
+        st.markdown("<div class='kicker'>What the market prices</div>", unsafe_allow_html=True)
+        mkt = pd.DataFrame(
+            {
+                "Measure": [
+                    "Implied move (options market)",
+                    "30-day run-up",
+                    "Short interest (% float)",
+                ],
+                "Value": [
+                    f_pct(imp_mv, 0),
+                    f_pct(_f(s["run_up_30d"]), 1, True),
+                    f_pct(_f(s["short_pct_float"]), 1),
+                ],
+            }
+        )
+        st.dataframe(mkt, use_container_width=True, hide_index=True)
+        st.markdown(
+            "<div class='fnote'>The implied move is what options traders pay for the "
+            "event. The run-up measures how much hope is already in the price.</div>",
+            unsafe_allow_html=True,
+        )
+    with right:
+        st.markdown("<div class='kicker'>What the model sees</div>", unsafe_allow_html=True)
+        mod = pd.DataFrame(
+            {
+                "Measure": [
+                    "Model probability (base rate)",
+                    "Model expected move",
+                    "Edge vs market",
+                    "Composite grade",
+                    "Confidence",
+                ],
+                "Value": [
+                    f_pct(base, 0),
+                    f_pct(exp_mv, 0),
+                    f_pp(gap),
+                    f"{_f(s['composite_score']):.2f}" if pd.notna(s["composite_score"]) else "—",
+                    f"{_f(s['confidence']):.2f}" if pd.notna(s["confidence"]) else "—",
+                ],
+            }
+        )
+        st.dataframe(mod, use_container_width=True, hide_index=True)
+        comp = pd.DataFrame(
+            {
+                "Component": ["Timing", "Base rate", "Financial"],
+                "Score": [
+                    _f(s["catalyst_proximity_score"]),
+                    _f(s["base_rate_score"]),
+                    _f(s["financial_score"]),
+                ],
+            }
+        )
+        fig = go.Figure(
+            go.Bar(
+                y=comp["Component"],
+                x=comp["Score"],
+                orientation="h",
+                marker_color=[BURGUNDY, BURGUNDY, BURGUNDY],
+                text=[f"{v:.2f}" if pd.notna(v) else "—" for v in comp["Score"]],
+                textposition="outside",
+                textfont=dict(size=9, family=MONO, color=INK),
+            )
+        )
+        _plotly_note(fig, height=130)
+        fig.update_xaxes(range=[0, 1.15], showgrid=False, showticklabels=False)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.markdown(
+            "<div class='fnote'>The grade blends timing, historical odds, and "
+            "balance-sheet strength at near-equal weights. Simple by design.</div>",
+            unsafe_allow_html=True,
+        )
+
+    # -- why the model landed here (the decision path) ------------------------------
+    st.markdown("<div class='kicker'>Why this signal</div>", unsafe_allow_html=True)
+    checks = []
+    if base is not None:
+        checks.append(f"Model probability {f_pct(base, 0)} vs the 55% hold-through threshold")
+    if fin_ok := (_f(s["financing_tilt"]) is not None):
+        ft = _f(s["financing_tilt"])
+        checks.append(f"Financing tilt {ft:+.2f} vs the −0.10 floor")
+    if gap is not None:
+        checks.append(f"Edge {f_pp(gap)} (negative 5 pp or worse would read as overpriced)")
+    st.markdown(" · ".join(checks) + ".", unsafe_allow_html=True)
+
+    # -- similar events ---------------------------------------------------------------
+    ev = load_event_returns()
+    if not ev.empty:
+        h3 = ev[ev["hold_days"] == 3]["abnormal_return"].dropna()
+        if len(h3) > 10:
+            st.markdown("<div class='kicker'>What similar events did</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"Across {f_int(len(h3))} past biotech 8-K events, the median 3-day "
+                f"move was {f_pct(h3.median(), 1)} and {(h3.abs() >= 0.10).mean():.0%} "
+                f"moved 10% or more. Plan for variance, not a point estimate.",
+                unsafe_allow_html=True,
+            )
+
+    # -- the risks ---------------------------------------------------------------------
+    st.markdown("<div class='kicker'>The risks</div>", unsafe_allow_html=True)
+    runway = _f(s["runway_months"])
+    fin = _f(s["financing_tilt"])
+    risk_bits = []
+    if runway is not None:
+        risk_bits.append(
+            f"cash runway is **{runway:.0f} months**: "
+            + (
+                "ample into the event"
+                if runway >= 12
+                else (
+                    "tight, so a raise before the catalyst would dilute"
+                    if runway >= 6
+                    else "distressed, so dilution risk is high"
+                )
+            )
+        )
+    if fin is not None and fin < 0:
+        risk_bits.append(f"financing tilt is negative ({fin:+.2f})")
+    risk_bits.append(
+        "single-name event risk is bounded by the 5% position cap and the 15% "
+        "stop-loss; an overnight gap beyond the stop is the residual risk"
+    )
+    st.markdown(" · ".join(risk_bits) + ".", unsafe_allow_html=True)
+
+    # -- what would change the call ------------------------------------------------------
+    st.markdown("<div class='kicker'>What would change the call</div>", unsafe_allow_html=True)
+    if ttype == "buy_the_rumor":
+        inv = (
+            "The date proves unreliable, the run-up extends into mania territory, or "
+            "financing stress emerges. Any of these flips the signal to avoid."
+        )
+    else:
+        inv = (
+            "The market's implied move rises above the model's expected move, a "
+            "financing event hits, or the date slips. Any of these flips the signal "
+            "to avoid."
+        )
+    st.markdown(inv, unsafe_allow_html=True)
+
+    # -- position -------------------------------------------------------------------------
+    held = open_df[open_df["ticker"] == pick] if not open_df.empty else pd.DataFrame()
+    st.markdown("<div class='kicker'>Position</div>", unsafe_allow_html=True)
+    if held.empty:
+        st.markdown("Not currently held in the paper book.", unsafe_allow_html=True)
+    else:
+        h = held.iloc[0]
+        cur = prices.get(pick)
+        pnl = pf.unrealized_pnl(h["side"], float(h["shares"]), float(h["entry_price"]), cur)
+        pnl_pct = pf.unrealized_pnl_pct(h["side"], float(h["entry_price"]), cur)
+        st.markdown(
+            f"Held since {f_date(h['entry_date'])}: {float(h['shares']):,.1f} shares at "
+            f"{f_px(h['entry_price'])}, marked {f_px(cur)}. "
+            f"Unrealized **{f_usd(pnl)} ({f_pct(pnl_pct, 1, True)})**. "
+            f"Planned exit: {f_date(h['planned_exit_date'])}.",
+            unsafe_allow_html=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Trade thesis (analyst-style write-up for one name)
+# ---------------------------------------------------------------------------
+
+CATALYST_PLAIN = {
+    "phase_readout": "a clinical trial readout: the company reports whether the drug met its endpoint",
+    "pdufa": "a PDUFA date: the FDA's deadline to approve or reject the drug",
+    "advisory_committee": "an FDA advisory-committee vote: a public expert panel that recommends for or against approval",
 }
 
 
