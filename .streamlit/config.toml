@@ -1,9 +1,10 @@
+# Locked light theme ("institutional research note") so screenshots are consistent.
 [theme]
-base = "dark"
-primaryColor = "#4ade80"
-backgroundColor = "#0e1117"
-secondaryBackgroundColor = "#1a1f2b"
-textColor = "#e6e6e6"
+base = "light"
+primaryColor = "#8A1F2D"
+backgroundColor = "#FAF8F3"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#17191E"
 font = "sans serif"
 
 [server]

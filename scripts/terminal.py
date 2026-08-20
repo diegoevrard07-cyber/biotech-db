@@ -1,12 +1,15 @@
-"""Edge Terminal — data-first research dashboard for the biotech catalyst engine.
+"""Edge Terminal — a living sell-side research note for the biotech catalyst engine.
 
-Design rule: every pixel shows a number, a comparison, or a label. No decorative
-panels, no filler, no empty states dressed up as features. Three dense views:
+Design rule: a stranger with zero context must be able to read the landing view
+like a research note and, within 30 seconds, answer four questions — what does
+this system do, what is it recommending right now, does it work (and how would
+you know), and how much real data sits behind it. Every element on the page
+serves one of those answers.
 
-  Now          What is the model telling me to do, and should I trust it?
-               (capped action book + validation stats + exits due, one screen)
-  Track record Is the paper book working? (equity vs XBI, holdings, closed trades)
-  Evidence     Why believe the model? (event study, calibration, data coverage)
+  Research note          the note itself: masthead, pipeline strip, current
+                         signals, evidence, coverage (default view)
+  Positions & activity   owner operations: open holdings, closed trades,
+                         manual trade entry
 
 Run with:
     streamlit run scripts/terminal.py
@@ -36,99 +39,136 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-st.set_page_config(page_title="Edge Terminal", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Edge Engine — Research Note", layout="wide")
 
 # ---------------------------------------------------------------------------
-# Style: dark, thin rules, tabular numerals, red/green only for direction.
+# Design tokens: institutional research note. Warm paper, hairlines, one accent.
 # ---------------------------------------------------------------------------
 
-INK = "#d6dae2"  # primary text
-MUTED = "#7d8695"  # labels
-FAINT = "#4a5462"  # hairlines
-ACCENT = "#4c9aff"  # single emphasis color
-GOOD = "#2fbf8f"  # positive direction only
-BAD = "#e5534b"  # negative direction only
-MONO = "'JetBrains Mono', 'SF Mono', 'Consolas', monospace"
+PAPER = "#FAF8F3"
+PANEL = "#FFFFFF"
+HAIRLINE = "#DDD8CE"
+INK = "#17191E"
+MUTED = "#6B6560"
+FAINT = "#9A938A"
+BURGUNDY = "#8A1F2D"  # the single accent: masthead rules, kickers, key figures
+GOOD = "#0E7A4E"  # signed/directional values only
+BAD = "#B3261E"
+SERIF = "'Source Serif 4', Georgia, serif"
+SANS = "'Inter', 'IBM Plex Sans', system-ui, sans-serif"
+MONO = "'IBM Plex Mono', 'SF Mono', 'Consolas', monospace"
 
-# Validated base-rate model holdout (research result, not in DB).
-# Source: docs/AGENT_HANDOFF.md §5, temporal holdout run of 2026-06-21.
-BASE_RATE_HOLDOUT = {"n": 10127, "brier_skill": 0.098, "auc": 0.676, "date": "2026-06-21"}
+# Validated base-rate model holdout (research result computed offline, not in DB).
+# Source: docs/AGENT_HANDOFF.md §5 — temporal holdout run of 2026-06-21.
+BASE_RATE_HOLDOUT = {"n": 10127, "brier_skill": 0.098, "auc": 0.676, "date": "21 Jun 2026"}
+
+TRADE_LABELS = {
+    "buy_the_rumor": "Buy the rumor",
+    "hold_through": "Hold through",
+    "avoid": "Avoid",
+    "manual": "Manual",
+}
 
 
 def _inject_css() -> None:
     st.markdown(
         f"""
         <style>
+          @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
           html, body, [class*="css"] {{
-            font-family: {MONO}; color: {INK}; font-variant-numeric: tabular-nums;
+            font-family: {SANS}; color: {INK}; font-variant-numeric: tabular-nums;
           }}
-          .stApp {{ background: #0b0e12; }}
+          .stApp {{ background: {PAPER}; }}
           header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
-          .block-container {{ padding: 1.4rem 1.2rem 1.5rem; max-width: 1560px; }}
+          .block-container {{ padding: 1.2rem 2rem 2rem; max-width: 1180px; }}
           #MainMenu, footer {{ visibility: hidden; }}
           [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
           [data-testid="collapsedControl"] {{ display: none !important; }}
           [data-testid="stElementContainer"][data-stale="true"] {{ display: none !important; }}
 
-          h1 {{ font-size: 1.0rem; font-weight: 600; letter-spacing: .12em;
-                text-transform: uppercase; margin: 0; }}
-          h2, h3 {{ font-size: .72rem; font-weight: 600; color: {MUTED};
-                    text-transform: uppercase; letter-spacing: .12em;
-                    margin: .9rem 0 .25rem; }}
-          hr {{ margin: .55rem 0; border-color: {FAINT}; opacity: .5; }}
+          /* masthead */
+          .masthead-title {{ font-family: {SERIF}; font-size: 1.9rem; font-weight: 700;
+                             letter-spacing: -0.01em; color: {INK}; line-height: 1.1; }}
+          .masthead-sub {{ font-size: .86rem; color: {MUTED}; margin-top: 4px; max-width: 62ch; }}
+          .masthead-meta {{ text-align: right; font-family: {MONO}; font-size: .68rem;
+                            color: {MUTED}; line-height: 1.7; white-space: nowrap; }}
+          .masthead-rule {{ border: none; border-top: 3px solid {BURGUNDY};
+                            margin: 10px 0 4px; }}
+          .masthead-rule2 {{ border: none; border-top: 1px solid {INK};
+                             margin: 0 0 14px; }}
 
-          /* flat metric strip: label over number, hairline separators, no cards */
-          .strip {{ display: flex; flex-wrap: wrap; gap: 0; border-top: 1px solid {FAINT};
-                    border-bottom: 1px solid {FAINT}; padding: 6px 0; margin: 6px 0; }}
-          .strip .cell {{ padding: 0 14px; border-right: 1px solid {FAINT}; }}
-          .strip .cell:last-child {{ border-right: none; }}
-          .strip .k {{ color: {MUTED}; font-size: .6rem; text-transform: uppercase;
-                       letter-spacing: .1em; }}
-          .strip .v {{ font-size: .95rem; font-weight: 600; }}
-          .up {{ color: {GOOD}; }} .down {{ color: {BAD}; }} .flat {{ color: {MUTED}; }}
+          /* section kickers */
+          .kicker {{ font-size: .68rem; font-weight: 600; letter-spacing: .16em;
+                     text-transform: uppercase; color: {BURGUNDY};
+                     border-bottom: 1px solid {HAIRLINE}; padding-bottom: 4px;
+                     margin: 22px 0 8px; }}
+          .kicker .q {{ color: {INK}; }}
 
-          /* definition rows for trust / coverage blocks */
-          .kv {{ display: flex; justify-content: space-between; padding: 2px 0;
-                 border-bottom: 1px solid #171d26; font-size: .78rem; }}
-          .kv .k {{ color: {MUTED}; }} .kv .v {{ font-weight: 600; }}
+          /* footnote captions under every chart/table */
+          .fnote {{ font-size: .68rem; color: {MUTED}; line-height: 1.55; margin-top: 4px; }}
+          .fnote b {{ color: {INK}; font-weight: 600; }}
 
-          [data-testid="stDataFrame"] {{ border: 1px solid #171d26; }}
-          [data-testid="stMetric"] {{ background: none; border: none; padding: 0; }}
-          [data-testid="stMetricValue"] {{ font-family: {MONO}; font-size: .95rem; }}
-          [data-testid="stMetricLabel"] {{ color: {MUTED}; font-size: .62rem;
-                                           text-transform: uppercase; letter-spacing: .1em; }}
-          .stSelectbox label, .stSlider label, .stMultiSelect label {{
-            font-size: .62rem; text-transform: uppercase; letter-spacing: .1em;
-            color: {MUTED}; }}
-          div[role="tablist"] {{ gap: 2px; }}
-          div[role="tablist"] button {{ font-size: .72rem; text-transform: uppercase;
-            letter-spacing: .1em; }}
+          /* pipeline strip */
+          .pipe {{ display: flex; align-items: stretch; gap: 0; background: {PANEL};
+                   border: 1px solid {HAIRLINE}; }}
+          .pipe .stage {{ flex: 1; padding: 10px 12px; border-right: 1px solid {HAIRLINE}; }}
+          .pipe .stage:last-child {{ border-right: none; }}
+          .pipe .stage .t {{ font-size: .6rem; font-weight: 600; letter-spacing: .12em;
+                             text-transform: uppercase; color: {MUTED}; }}
+          .pipe .stage .n {{ font-family: {MONO}; font-size: 1.05rem; font-weight: 600;
+                             color: {INK}; margin-top: 3px; }}
+          .pipe .stage .s {{ font-size: .64rem; color: {FAINT}; margin-top: 2px; }}
+
+          /* plain-English signal line */
+          .lead-line {{ font-family: {SERIF}; font-size: .95rem; color: {INK};
+                        margin: 2px 0 10px; }}
+          .lead-line b {{ color: {BURGUNDY}; }}
+
+          /* verdict blocks */
+          .verdict {{ font-size: .78rem; color: {INK}; line-height: 1.5; }}
+          .verdict .vnum {{ font-family: {MONO}; font-weight: 600; }}
+
+          /* streamlit element restyle: flat, hairline, sharp corners */
+          [data-testid="stDataFrame"] {{ border: 1px solid {HAIRLINE}; }}
+          .stTabs [data-baseweb="tab-list"] {{ gap: 18px; border-bottom: 1px solid {HAIRLINE}; }}
+          .stTabs [data-baseweb="tab"] {{ font-size: .72rem; font-weight: 600;
+            letter-spacing: .12em; text-transform: uppercase; color: {MUTED};
+            background: none; border: none; padding: 6px 2px; }}
+          .stTabs [aria-selected="true"] {{ color: {BURGUNDY};
+            border-bottom: 2px solid {BURGUNDY}; }}
+          [data-testid="stMetricValue"] {{ font-family: {MONO}; }}
+          div[data-testid="stExpander"] {{ border: 1px solid {HAIRLINE};
+            border-radius: 0; background: {PANEL}; }}
+          .stSelectbox label {{ font-size: .62rem; text-transform: uppercase;
+            letter-spacing: .12em; color: {MUTED}; }}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
-def _plotly_theme(fig: go.Figure, *, height: int = 260) -> go.Figure:
-    """Minimal chart theme: hairline grids, no frame, tabular numerals."""
+def _plotly_note(fig: go.Figure, *, height: int = 240) -> go.Figure:
+    """Research-note chart theme: paper background, hairline grids, no legend box."""
     fig.update_layout(
         height=height,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor=PANEL,
+        plot_bgcolor=PANEL,
         font=dict(family=MONO, color=INK, size=10),
-        margin=dict(l=48, r=12, t=8, b=32),
-        showlegend=True,
-        legend=dict(orientation="h", y=1.08, x=0, font=dict(size=9, color=MUTED)),
-        hoverlabel=dict(bgcolor="#171d26", bordercolor=FAINT, font=dict(color=INK, size=10)),
+        margin=dict(l=46, r=14, t=10, b=30),
+        showlegend=False,
+        hoverlabel=dict(
+            bgcolor=PANEL, bordercolor=HAIRLINE, font=dict(color=INK, size=10, family=MONO)
+        ),
     )
-    fig.update_xaxes(gridcolor="#171d26", zerolinecolor="#171d26", linecolor=FAINT)
-    fig.update_yaxes(gridcolor="#171d26", zerolinecolor=FAINT, linecolor=FAINT)
+    fig.update_xaxes(gridcolor="#ECE7DC", zerolinecolor="#ECE7DC", linecolor=HAIRLINE)
+    fig.update_yaxes(gridcolor="#ECE7DC", zerolinecolor=HAIRLINE, linecolor=HAIRLINE)
     return fig
 
 
 # ---------------------------------------------------------------------------
-# Formatting — consistent everywhere: 0.0% / +x.x% / $x.xk / em dash for missing
+# Formatting — consistent everywhere: 0.0% / +x.x pp / $x.xk / 14 Sep 2026
 # ---------------------------------------------------------------------------
 
 
@@ -137,6 +177,13 @@ def f_pct(v, digits: int = 1, sign: bool = False) -> str:
         return "—"
     s = f"{float(v) * 100:.{digits}f}%"
     return ("+" + s) if sign and float(v) > 0 else s
+
+
+def f_pp(v, digits: int = 1) -> str:
+    """Percentage points with explicit sign — the edge-vs-market unit."""
+    if v is None or pd.isna(v):
+        return "—"
+    return f"{float(v) * 100:+.{digits}f} pp"
 
 
 def f_usd(v) -> str:
@@ -153,6 +200,13 @@ def f_int(v) -> str:
     return "—" if v is None or pd.isna(v) else f"{int(v):,}"
 
 
+def f_date(v) -> str:
+    """Dates as '14 Sep 2026' throughout the note."""
+    if v is None or pd.isna(v):
+        return "—"
+    return pd.Timestamp(v).strftime("%d %b %Y").lstrip("0")
+
+
 def f_px(v) -> str:
     return "—" if v is None or pd.isna(v) else f"${float(v):,.2f}"
 
@@ -162,15 +216,15 @@ def _f(v):
     return None if v is None else float(v)
 
 
-def _dir_cls(v) -> str:
-    """CSS class by direction — the only place red/green is assigned."""
-    if v is None or pd.isna(v):
-        return "flat"
-    return "up" if float(v) > 0 else ("down" if float(v) < 0 else "flat")
+def _sign_color(v) -> str:
+    """Styler callback: institutional green/red strictly by sign."""
+    if not isinstance(v, (int, float)) or pd.isna(v):
+        return ""
+    return f"color: {GOOD}" if v > 0 else (f"color: {BAD}" if v < 0 else "")
 
 
 # ---------------------------------------------------------------------------
-# Data access (read path; cached)
+# Data access (read path; cached) — unchanged from the pipeline's perspective
 # ---------------------------------------------------------------------------
 
 
@@ -339,7 +393,8 @@ def load_blotter() -> pd.DataFrame:
                c.base_rate,
                es.composite_score, es.trade_type, es.suggested_weight, es.edge_gap,
                es.expected_move, es.implied_move, es.financing_tilt, es.insider_tilt,
-               es.confidence,
+               es.confidence, es.catalyst_proximity_score, es.base_rate_score,
+               es.financial_score,
                p.run_up_30d, p.short_pct_float,
                f.runway_months
         FROM edge_scores es
@@ -367,6 +422,9 @@ def load_blotter() -> pd.DataFrame:
         "insider_tilt",
         "base_rate",
         "confidence",
+        "catalyst_proximity_score",
+        "base_rate_score",
+        "financial_score",
     ]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
@@ -374,7 +432,7 @@ def load_blotter() -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def load_action_book(horizon_days: int = 365) -> dict:
-    """The risk-capped book — same computation the autopilot syncs to."""
+    """The risk-capped book — the same computation the paper autopilot syncs to."""
     return compute_book(horizon_days=horizon_days)
 
 
@@ -415,7 +473,7 @@ def load_event_returns() -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def load_calibration() -> pd.DataFrame:
-    """Calibration run history (Brier vs resolved outcomes), newest last."""
+    """Calibration run history (Brier vs resolved outcomes), oldest to newest."""
     df = q("""
         SELECT run_at, n_pairs, brier_score, model_hit_rate, base_rate_hit_rate
         FROM calibration_runs ORDER BY run_at
@@ -500,370 +558,474 @@ def _purge_open_shorts_once() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Small renderers
+# Plain-English signal summaries — written from the row's own numbers
 # ---------------------------------------------------------------------------
 
 
-def strip(cells: list[tuple[str, str]]) -> None:
-    """Render a flat label-over-value metric strip (no cards, hairline separators)."""
-    html_cells = "".join(
-        f"<div class='cell'><div class='k'>{k}</div><div class='v'>{v}</div></div>"
-        for k, v in cells
+def signal_sentence(r: pd.Series) -> str:
+    """One factual sentence about a signal, derived only from its own fields."""
+    days = r.get("days_until")
+    when = (
+        f"expected {f_date(r.get('expected_date'))} ({int(days)} days)"
+        if pd.notna(days)
+        else "date unconfirmed"
     )
-    st.markdown(f"<div class='strip'>{html_cells}</div>", unsafe_allow_html=True)
-
-
-def kv(rows: list[tuple[str, str]]) -> None:
-    """Render label/value rows for trust and coverage blocks."""
-    body = "".join(
-        f"<div class='kv'><span class='k'>{k}</span><span class='v'>{v}</span></div>"
-        for k, v in rows
-    )
-    st.markdown(body, unsafe_allow_html=True)
-
-
-def _color_signed(v) -> str:
-    """Styler callback: red/green strictly by sign."""
+    base = _f(r.get("base_rate"))
+    gap = _f(r.get("edge_gap"))
+    ttype = r.get("trade_type")
+    if ttype == "buy_the_rumor":
+        return (
+            f"Catalyst {when}. Historical success odds {f_pct(base, 0)}; "
+            f"the plan is to ride the pre-event run-up and exit before the result."
+        )
+    if gap is not None and gap > 0.05:
+        return (
+            f"Catalyst {when}. The model's expected move exceeds the options "
+            f"market's by {f_pp(gap)} — underpriced, so hold through the result."
+        )
     return (
-        f"color: {GOOD}"
-        if isinstance(v, (int, float)) and v > 0
-        else (f"color: {BAD}" if isinstance(v, (int, float)) and v < 0 else "")
+        f"Catalyst {when}. Historical success odds {f_pct(base, 0)} with "
+        f"acceptable financing; hold through the result."
     )
 
 
 # ---------------------------------------------------------------------------
-# Page: Now — the book, the trust metrics, the exits. One screen.
+# The note
 # ---------------------------------------------------------------------------
 
 
-def page_now() -> None:
-    """Landing view: what to do right now, and whether the model is trustworthy."""
-    _purge_open_shorts_once()
-    ensure_account()
-    acct = get_account()
-    prices = latest_prices()
-    open_df = load_holdings("open")
-    summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
-    perf = load_performance()
-    blotter = load_blotter()
-    book = load_action_book(365)
-
-    # -- header strip: account + freshness, all comparisons inline ----------
-    xbi_ret = _f(perf.iloc[-1]["xbi_return_pct"]) if not perf.empty else None
-    tot_ret = _f(perf.iloc[-1]["total_return_pct"]) if not perf.empty else None
+def _masthead() -> None:
+    """Masthead: serif title, plain-English subtitle, as-of/freshness, burgundy rule."""
     px_date = q("SELECT MAX(date) AS d FROM price_history").iloc[0]["d"]
     sc_date = q("SELECT MAX(computed_at) AS d FROM edge_scores").iloc[0]["d"]
-    st.markdown("# EDGE TERMINAL")
-    strip(
-        [
-            ("equity", f_usd(summ["equity"])),
-            ("cash", f_usd(summ["cash"])),
-            ("open", str(summ["positions"])),
-            ("gross long", f_pct(summ["gross_long_pct"], 0)),
-            ("book vs XBI", f"{f_pct(tot_ret, 1, True)} / {f_pct(xbi_ret, 1, True)}"),
-            ("prices", str(px_date or "—")),
-            ("scores", str(sc_date)[:10] if sc_date is not None else "—"),
-        ]
+    left, right = st.columns([7, 3])
+    with left:
+        st.markdown(
+            "<div class='masthead-title'>Biotech Catalyst Edge Engine</div>", unsafe_allow_html=True
+        )
+        st.markdown(
+            "<div class='masthead-sub'>Systematic screening of binary biotech "
+            "catalysts — trial readouts and FDA decisions — scoring each event's "
+            "model-derived odds against the move the options market has priced in, "
+            "and paper-trading the gap. Decision support; no real money.</div>",
+            unsafe_allow_html=True,
+        )
+    with right:
+        st.markdown(
+            f"<div class='masthead-meta'>as of {f_date(date.today())}<br>"
+            f"prices through {f_date(px_date)}<br>"
+            f"scores computed {f_date(sc_date)}</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown("<hr class='masthead-rule'><hr class='masthead-rule2'>", unsafe_allow_html=True)
+
+
+def _pipeline_strip(blotter: pd.DataFrame, perf: pd.DataFrame) -> None:
+    """Orientation device: the pipeline flow with live counts under each stage."""
+    cov = load_coverage()["counts"]
+    upcoming = q("SELECT COUNT(*) AS n FROM catalysts WHERE expected_date >= CURRENT_DATE").iloc[0][
+        "n"
+    ]
+    soon = q(
+        "SELECT COUNT(*) AS n FROM catalysts WHERE expected_date >= CURRENT_DATE "
+        "AND expected_date <= CURRENT_DATE + 90"
+    ).iloc[0]["n"]
+    outcomes = cov.get("catalyst_outcomes", 0)
+    cal = load_calibration()
+    latest_cal = cal.iloc[-1] if not cal.empty else None
+    brier = _f(latest_cal["brier_score"]) if latest_cal is not None else None
+    n_pairs = int(latest_cal["n_pairs"]) if latest_cal is not None else 0
+    tot = _f(perf.iloc[-1]["total_return_pct"]) if not perf.empty else None
+    xbi = _f(perf.iloc[-1]["xbi_return_pct"]) if not perf.empty else None
+
+    stages = [
+        ("Universe", f_int(cov.get("companies")), "small-cap oncology/CNS companies"),
+        ("Catalysts tracked", f_int(upcoming), f"{f_int(soon)} dated within 90 days"),
+        ("Scored signals", f_int(cov.get("edge_scores")), "every catalyst graded daily"),
+        ("Resolved outcomes", f_int(outcomes), "labeled hits/misses so far"),
+        (
+            "Calibration",
+            f"{brier:.3f}" if brier is not None else "—",
+            f"Brier score, n={n_pairs} (small)",
+        ),
+        ("Paper book", f_pct(tot, 1, True), f"vs XBI {f_pct(xbi, 1, True)}"),
+    ]
+    cells = "".join(
+        f"<div class='stage'><div class='t'>{t}</div><div class='n'>{n}</div>"
+        f"<div class='s'>{s}</div></div>"
+        for t, n, s in stages
+    )
+    st.markdown(f"<div class='pipe'>{cells}</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='fnote'>The pipeline, left to right: a fixed universe of companies → "
+        "their dated clinical/FDA events → each event scored → events that have already "
+        "happened get labeled → those labels test the model → the paper portfolio's "
+        "record against XBI, the biotech index benchmark.</div>",
+        unsafe_allow_html=True,
     )
 
-    left, right = st.columns([7, 3], gap="medium")
 
-    with left:
-        st.markdown("## Action book — risk-capped, long-only")
-        rows = book["rows"]
-        if not rows:
-            st.caption("Book is empty: no signal passed the decision rules today.")
-        else:
-            extra = blotter.set_index("catalyst_id") if not blotter.empty else pd.DataFrame()
-            table = []
-            for r in rows:
-                b = extra.loc[r["catalyst_id"]] if r["catalyst_id"] in extra.index else None
-                table.append(
-                    {
-                        "ticker": r["ticker"],
-                        "catalyst": r["catalyst_type"],
-                        "date": r["expected_date"],
-                        "d→": (r["expected_date"] - book["today"]).days,
-                        "type": r["trade_type"],
-                        "base": _f(r["base_rate"]),
-                        "expΔ": _f(b["expected_move"]) if b is not None else None,
-                        "implΔ": _f(b["implied_move"]) if b is not None else None,
-                        "gap": _f(r["edge_gap"]),
-                        "wt": r["weight"],
-                        "$": round(r["weight"] * summ["equity"], 0) if summ["equity"] else None,
-                    }
-                )
-            df = pd.DataFrame(table)
-            styled = df.style.map(_color_signed, subset=["gap"]).format(
-                {
-                    "base": "{:.0%}",
-                    "expΔ": "{:.0%}",
-                    "implΔ": "{:.0%}",
-                    "gap": "{:+.1%}",
-                    "wt": "{:.1%}",
-                    "$": "${:,.0f}",
-                },
-                na_rep="—",
-            )
-            st.dataframe(
-                styled,
-                use_container_width=True,
-                hide_index=True,
-                height=min(560, 38 + 35 * len(df)),
-            )
-            st.caption(
-                f"{book['positions']} positions · gross {f_pct(book['gross_long'], 0)} of "
-                f"{f_pct(config.MAX_GROSS_LONG, 0)} cap · GBM {f_pct(book['gbm_pct'], 0)} of "
-                f"{f_pct(config.MAX_GBM_WEIGHT, 0)} cap · horizon 365d"
-            )
+def _signals_section(blotter: pd.DataFrame, book: dict, equity: float) -> None:
+    """CURRENT SIGNALS: the ranked book in human terms, plus per-name drill-down."""
+    st.markdown(
+        "<div class='kicker'>Current signals — <span class='q'>what the model "
+        "is recommending today</span></div>",
+        unsafe_allow_html=True,
+    )
+    rows = book["rows"]
+    if not rows:
+        st.caption("No signal passed the decision rules today.")
+        return
 
-        # -- catalyst calendar: next 90 days, dense -------------------------
-        st.markdown("## Catalyst calendar — next 90 days")
-        cal = (
-            blotter[(blotter["days_until"] >= 0) & (blotter["days_until"] <= 90)].sort_values(
-                "days_until"
-            )
-            if not blotter.empty
-            else pd.DataFrame()
+    extra = blotter.set_index("catalyst_id") if not blotter.empty else pd.DataFrame()
+    table = []
+    for r in rows:
+        b = extra.loc[r["catalyst_id"]] if r["catalyst_id"] in extra.index else None
+        table.append(
+            {
+                "Ticker": r["ticker"],
+                "Catalyst": (r["catalyst_type"] or "").replace("_", " "),
+                "Date": f_date(r["expected_date"]),
+                "Model prob.": _f(r["base_rate"]),
+                "Model move": _f(b["expected_move"]) if b is not None else None,
+                "Market-implied": _f(b["implied_move"]) if b is not None else None,
+                "Edge vs market": _f(r["edge_gap"]),
+                "Action": TRADE_LABELS.get(r["trade_type"], r["trade_type"]),
+                "Weight": r["weight"],
+                "$ size": round(r["weight"] * equity, 0) if equity else None,
+            }
         )
-        if cal.empty:
-            st.caption("No dated catalysts in the next 90 days.")
-        else:
-            cal_view = pd.DataFrame(
+    df = pd.DataFrame(table)
+
+    top = df.iloc[0]
+    top_row = blotter[blotter["ticker"] == top["Ticker"]].sort_values("days_until").iloc[0]
+    st.markdown(
+        f"<div class='lead-line'>Lead idea: <b>{top['Ticker']}</b> — "
+        f"{signal_sentence(top_row)}</div>",
+        unsafe_allow_html=True,
+    )
+
+    styled = df.style.map(_sign_color, subset=["Edge vs market"]).format(
+        {
+            "Model prob.": "{:.0%}",
+            "Model move": "{:.0%}",
+            "Market-implied": "{:.0%}",
+            "Edge vs market": "{:+.1%}",
+            "Weight": "{:.1%}",
+            "$ size": "${:,.0f}",
+        },
+        na_rep="—",
+    )
+    st.dataframe(
+        styled, use_container_width=True, hide_index=True, height=min(460, 38 + 35 * len(df))
+    )
+    st.markdown(
+        "<div class='fnote'><b>How to read this:</b> <b>Model prob.</b> is the historical "
+        "success rate of comparable trials. <b>Model move</b> is the size of move the model "
+        "expects around the event; <b>Market-implied</b> is the move options traders have "
+        "priced in. <b>Edge vs market</b> is the difference, in percentage points — positive "
+        "means the market underprices the event. <b>Weight</b> is the suggested share of the "
+        "paper portfolio (Kelly-fractional, capped at 5% per name). "
+        f"Book: {book['positions']} positions · gross {f_pct(book['gross_long'], 0)} of "
+        f"{f_pct(config.MAX_GROSS_LONG, 0)} cap · GBM cluster {f_pct(book['gbm_pct'], 0)} of "
+        f"{f_pct(config.MAX_GBM_WEIGHT, 0)} cap. Source: edge_scores, recomputed daily.</div>",
+        unsafe_allow_html=True,
+    )
+
+    # -- per-name drill-down: the component scores behind the number --------
+    tickers = df["Ticker"].tolist()
+    pick = st.selectbox("Inspect a name — the components behind its score", tickers)
+    if pick:
+        s = blotter[blotter["ticker"] == pick].sort_values("days_until").iloc[0]
+        c1, c2 = st.columns(2)
+        with c1:
+            comp = pd.DataFrame(
                 {
-                    "date": cal["expected_date"].dt.date,
-                    "ticker": cal["ticker"],
-                    "catalyst": cal["catalyst_type"],
-                    "type": cal["trade_type"],
-                    "base": cal["base_rate"],
-                    "gap": cal["edge_gap"],
+                    "Component": [
+                        "Catalyst proximity (timing)",
+                        "Base rate (historical odds)",
+                        "Financial survivability",
+                        "Composite grade",
+                        "Confidence",
+                    ],
+                    "Value": [
+                        _f(s["catalyst_proximity_score"]),
+                        _f(s["base_rate_score"]),
+                        _f(s["financial_score"]),
+                        _f(s["composite_score"]),
+                        _f(s["confidence"]),
+                    ],
                 }
             )
             st.dataframe(
-                cal_view.style.map(_color_signed, subset=["gap"]).format(
-                    {"base": "{:.0%}", "gap": "{:+.1%}"}, na_rep="—"
-                ),
+                comp.style.format({"Value": "{:.2f}"}, na_rep="—"),
                 use_container_width=True,
                 hide_index=True,
-                height=min(320, 38 + 35 * len(cal_view)),
             )
+        with c2:
+            ctx = pd.DataFrame(
+                {
+                    "Context": [
+                        "30-day run-up",
+                        "Short interest (% float)",
+                        "Cash runway",
+                        "Financing tilt",
+                        "Insider tilt",
+                    ],
+                    "Value": [
+                        f_pct(_f(s["run_up_30d"]), 1, True),
+                        f_pct(_f(s["short_pct_float"]), 1),
+                        (
+                            f"{_f(s['runway_months']):.0f} months"
+                            if pd.notna(s["runway_months"])
+                            else "—"
+                        ),
+                        f"{_f(s['financing_tilt']):+.2f}" if pd.notna(s["financing_tilt"]) else "—",
+                        f"{_f(s['insider_tilt']):+.2f}" if pd.notna(s["insider_tilt"]) else "—",
+                    ],
+                }
+            )
+            st.dataframe(ctx, use_container_width=True, hide_index=True)
+        st.markdown(
+            "<div class='fnote'>The grade blends timing, historical odds, and balance-sheet "
+            "strength (near-equal weights, by design). Run-up measures how much hope is "
+            "already priced in; financing tilt marks dilution risk; insider tilt flags "
+            "open-market buying by executives.</div>",
+            unsafe_allow_html=True,
+        )
+
+
+def _evidence_section(perf: pd.DataFrame) -> None:
+    """DOES IT WORK?: calibration and paper-book vs benchmark, with honest verdicts."""
+    st.markdown(
+        "<div class='kicker'>Evidence — <span class='q'>does it work, and how "
+        "would you know</span></div>",
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns(2, gap="large")
+
+    with left:
+        st.markdown("**Calibration — are the model's probabilities accurate?**")
+        cal = load_calibration()
+        latest = cal.iloc[-1] if not cal.empty else None
+        if latest is None:
+            st.caption("No calibration runs yet.")
+        else:
+            brier = _f(latest["brier_score"])
+            n_pairs = int(latest["n_pairs"])
+            metrics = pd.DataFrame(
+                {
+                    "Measure": [
+                        "Brier score (probability accuracy; lower = better)",
+                        "Resolved outcomes in the test",
+                        "Calibration runs to date",
+                    ],
+                    "Value": [
+                        f"{brier:.3f}" if brier is not None else "—",
+                        f_int(n_pairs),
+                        f_int(len(cal)),
+                    ],
+                }
+            )
+            st.dataframe(metrics, use_container_width=True, hide_index=True)
+            st.markdown(
+                f"<div class='verdict'>Brier <span class='vnum'>{brier:.3f}</span> on "
+                f"<span class='vnum'>n={n_pairs}</span> resolved events — far too few to "
+                f"judge. This updates automatically as dated catalysts resolve; the number "
+                f"is printed as-is rather than hidden.</div>",
+                unsafe_allow_html=True,
+            )
+        st.markdown(
+            f"<div class='fnote'>The validated foundation sits one layer down: the "
+            f"trial-success base-rate model scores Brier skill <b>+{BASE_RATE_HOLDOUT['brier_skill']:.3f}</b>, "
+            f"AUC <b>{BASE_RATE_HOLDOUT['auc']:.3f}</b> on <b>n={BASE_RATE_HOLDOUT['n']:,}</b> "
+            f"held-out trials (temporal split, as of {BASE_RATE_HOLDOUT['date']}). "
+            f"A Brier score measures probability accuracy — 0.25 is the coin-flip "
+            f"benchmark; skill above zero beats the naive rate.</div>",
+            unsafe_allow_html=True,
+        )
 
     with right:
-        st.markdown("## Should you trust it")
-        cal_hist = load_calibration()
-        latest_cal = cal_hist.iloc[-1] if not cal_hist.empty else None
-        outcomes = q("SELECT outcome_label, COUNT(*) AS n FROM catalyst_outcomes GROUP BY 1")
-        oc = (
-            {r.outcome_label: int(r.n) for r in outcomes.itertuples()} if not outcomes.empty else {}
-        )
-        trust_rows = [
-            (
-                "base-rate model holdout",
-                f"Brier +{BASE_RATE_HOLDOUT['brier_skill']:.3f} · AUC {BASE_RATE_HOLDOUT['auc']:.3f}",
-            ),
-            (
-                "holdout sample",
-                f"n = {BASE_RATE_HOLDOUT['n']:,} (as of {BASE_RATE_HOLDOUT['date']})",
-            ),
-            (
-                "resolved outcomes",
-                f"{sum(oc.values())} ({oc.get('hit', 0)} hit / "
-                f"{oc.get('miss', 0)} miss / {oc.get('ambiguous', 0)} ambig)",
-            ),
-        ]
-        if latest_cal is not None:
-            trust_rows += [
-                ("calibration n", f_int(latest_cal["n_pairs"])),
-                (
-                    "calibration Brier",
-                    (
-                        f"{float(latest_cal['brier_score']):.3f}"
-                        if pd.notna(latest_cal["brier_score"])
-                        else "—"
-                    ),
-                ),
-            ]
-        trust_rows.append(("signals scored", f_int(len(blotter))))
-        kv(trust_rows)
-        st.caption(
-            "Calibration vs resolved outcomes is nearly empty — ongoing "
-            "validation, not proof of alpha."
-        )
-
-        st.markdown("## Exits due")
-        alerts = pf.exit_alerts(_holding_dicts(open_df), date.today(), soon_days=7)
-        if not alerts:
-            st.caption("None overdue or due within 7 days.")
+        st.markdown("**Track record — the paper portfolio vs the benchmark**")
+        if perf.empty or len(perf) < 2:
+            st.caption("Track record starts when the first daily snapshot lands.")
         else:
-            kv(
-                [
-                    (
-                        f"{a['ticker']} · {a['action']}",
-                        f"{a['days']}d" if a["days"] > 0 else "overdue",
-                    )
-                    for a in alerts
-                ]
-            )
-
-        st.markdown("## Universe")
-        cov = load_coverage()["counts"]
-        kv(
-            [
-                ("companies", f_int(cov.get("companies"))),
-                (
-                    "upcoming catalysts",
-                    f_int(
-                        q(
-                            "SELECT COUNT(*) AS n FROM catalysts "
-                            "WHERE expected_date >= CURRENT_DATE"
-                        ).iloc[0]["n"]
-                    ),
-                ),
-                ("historical trials", f_int(cov.get("historical_trials"))),
-                ("8-K events studied", f_int(cov.get("event_returns"))),
-            ]
-        )
-
-        # -- ticker drill-down ----------------------------------------------
-        st.markdown("## Ticker")
-        tickers = sorted(blotter["ticker"].unique()) if not blotter.empty else []
-        if tickers:
-            pick = st.selectbox("ticker", tickers, index=0, label_visibility="collapsed")
-            _dossier_compact(pick, blotter)
-
-
-def _dossier_compact(ticker: str, blotter: pd.DataFrame) -> None:
-    """Dense per-ticker drill-down: latest signal, price path, catalysts, insiders."""
-    sig = blotter[blotter["ticker"] == ticker].sort_values("days_until")
-    if not sig.empty:
-        s = sig.iloc[0]
-        kv(
-            [
-                ("type / weight", f"{s['trade_type']} · {f_pct(_f(s['suggested_weight']), 1)}"),
-                (
-                    "base rate vs gap",
-                    f"{f_pct(_f(s['base_rate']), 0)} · {f_pct(_f(s['edge_gap']), 1, True)}",
-                ),
-                ("run-up 30d", f_pct(_f(s["run_up_30d"]), 1, True)),
-                ("short % float", f_pct(_f(s["short_pct_float"]), 1)),
-                (
-                    "runway",
-                    f"{_f(s['runway_months']):.0f} mo" if pd.notna(s["runway_months"]) else "—",
-                ),
-            ]
-        )
-    px = q(
-        "SELECT date, close FROM price_history WHERE ticker=%s AND close IS NOT NULL "
-        "ORDER BY date DESC LIMIT 120",
-        (ticker,),
-    )
-    if not px.empty:
-        px = px.iloc[::-1]
-        fig = go.Figure(
-            go.Scatter(
-                x=pd.to_datetime(px["date"]),
-                y=px["close"].astype(float),
+            fig = go.Figure()
+            fig.add_scatter(
+                x=perf["snapshot_date"],
+                y=perf["equity"],
                 mode="lines",
-                line=dict(color=ACCENT, width=1.2),
-                showlegend=False,
+                line=dict(color=BURGUNDY, width=1.6),
             )
-        )
-        _plotly_theme(fig, height=140)
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    ins = q(
-        "SELECT transaction_date, insider_name, value_usd, is_purchase "
-        "FROM insider_transactions i JOIN companies co ON co.id = i.company_id "
-        "WHERE co.ticker=%s ORDER BY transaction_date DESC LIMIT 5",
-        (ticker,),
-    )
-    if not ins.empty:
-        kv(
-            [
-                (
-                    f"{'buy' if r.is_purchase else 'sell'} · {str(r.transaction_date)}",
-                    f_usd(_f(r.value_usd)),
+            if perf["benchmark_equity"].notna().any():
+                fig.add_scatter(
+                    x=perf["snapshot_date"],
+                    y=perf["benchmark_equity"],
+                    mode="lines",
+                    line=dict(color=FAINT, width=1.2, dash="dot"),
                 )
-                for r in ins.itertuples()
-            ]
+            # direct labeling at line ends instead of a legend
+            fig.add_annotation(
+                x=perf["snapshot_date"].iloc[-1],
+                y=perf["equity"].iloc[-1],
+                text="paper book",
+                showarrow=False,
+                xanchor="left",
+                yanchor="bottom",
+                font=dict(size=9, color=BURGUNDY, family=MONO),
+            )
+            if perf["benchmark_equity"].notna().any():
+                fig.add_annotation(
+                    x=perf["snapshot_date"].iloc[-1],
+                    y=perf["benchmark_equity"].dropna().iloc[-1],
+                    text="XBI",
+                    showarrow=False,
+                    xanchor="left",
+                    yanchor="top",
+                    font=dict(size=9, color=MUTED, family=MONO),
+                )
+            _plotly_note(fig, height=230)
+            fig.update_yaxes(tickformat="$,.0f")
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            tot = _f(perf.iloc[-1]["total_return_pct"])
+            xbi = _f(perf.iloc[-1]["xbi_return_pct"])
+            days = len(perf)
+            ahead = tot is not None and xbi is not None and tot > xbi
+            st.markdown(
+                f"<div class='verdict'><span class='vnum'>{f_pct(tot, 1, True)}</span> vs "
+                f"XBI <span class='vnum'>{f_pct(xbi, 1, True)}</span> over "
+                f"<span class='vnum'>{days}</span> trading days — "
+                f"{'ahead of' if ahead else 'behind'} the benchmark; too short a window "
+                f"to conclude either way.</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                "<div class='fnote'>Source: portfolio_performance daily snapshots; "
+                "benchmark is XBI (SPDR biotech ETF) normalized to the same start. "
+                "Paper fills at prior close; no transaction costs modeled.</div>",
+                unsafe_allow_html=True,
+            )
+
+    # -- event study: what history says about these events -------------------
+    ev = load_event_returns()
+    if not ev.empty:
+        h3 = ev[ev["hold_days"] == 3]["abnormal_return"].dropna()
+        n_events = ev.groupby(["ticker", "filing_date"]).ngroups
+        med = h3.median() if len(h3) else None
+        sd = h3.std() if len(h3) else None
+        big = (h3.abs() >= 0.10).mean() if len(h3) else None
+        st.markdown(
+            f"<div class='fnote' style='margin-top:10px'><b>What history says:</b> across "
+            f"<b>{f_int(n_events)}</b> past biotech 8-K events, the median 3-day abnormal "
+            f"move is <b>{f_pct(med, 1)}</b> with a typical spread of <b>±{f_pct(sd, 0)}</b>; "
+            f"<b>{f_pct(big, 0)}</b> of events move 10% or more. Direction is close to a coin "
+            f"flip — the edge must come from selecting which events to trade, not predicting "
+            f"outcomes. Source: event_returns (stock minus XBI over the window).</div>",
+            unsafe_allow_html=True,
         )
 
 
-# ---------------------------------------------------------------------------
-# Page: Track record — is the paper book working?
-# ---------------------------------------------------------------------------
+def _coverage_section() -> None:
+    """COVERAGE & DATA HEALTH: how much real data sits behind the note."""
+    st.markdown(
+        "<div class='kicker'>Coverage &amp; data health — <span class='q'>how much "
+        "real data is behind this</span></div>",
+        unsafe_allow_html=True,
+    )
+    cov = load_coverage()
+    c = cov["counts"]
+    fr = cov["freshness"]
+    left, right = st.columns(2, gap="large")
+    with left:
+        tbl = pd.DataFrame(
+            {
+                "Dataset": [
+                    "Historical trials mined",
+                    "…with success labels",
+                    "Base-rate slices",
+                    "8-K events studied",
+                    "SEC filings parsed",
+                    "Insider transactions",
+                ],
+                "Rows": [
+                    c.get("historical_trials"),
+                    None,
+                    c.get("base_rates"),
+                    c.get("event_returns"),
+                    c.get("sec_filings"),
+                    c.get("insider_transactions"),
+                ],
+            }
+        )
+        labeled = q(
+            "SELECT COUNT(*) AS n FROM historical_trials " "WHERE primary_outcome_met IS NOT NULL"
+        ).iloc[0]["n"]
+        tbl.loc[tbl["Dataset"] == "…with success labels", "Rows"] = int(labeled)
+        st.dataframe(
+            tbl.style.format({"Rows": "{:,}"}, na_rep="—"),
+            use_container_width=True,
+            hide_index=True,
+        )
+    with right:
+        fresh_rows = []
+        for label, tbl_name in [
+            ("Prices", "price_history"),
+            ("Positioning", "positioning"),
+            ("Signals", "edge_scores"),
+            ("Insider filings", "insider_transactions"),
+            ("SEC filings", "sec_filings"),
+        ]:
+            ts = fr.get(tbl_name)
+            fresh_rows.append({"Feed": label, "Latest data": f_date(ts)})
+        st.dataframe(pd.DataFrame(fresh_rows), use_container_width=True, hide_index=True)
+    st.markdown(
+        "<div class='fnote'>All sources are public: ClinicalTrials.gov, SEC EDGAR, and "
+        "end-of-day market data. The pipeline refreshes daily; stale feeds would show "
+        "their age here.</div>",
+        unsafe_allow_html=True,
+    )
 
 
-def _risk_stats(perf: pd.DataFrame) -> dict:
-    """Daily-snapshot risk stats: total/XBI return, alpha, max DD, vol, Sharpe."""
-    if perf.empty or len(perf) < 2:
-        return {}
-    eq = perf["equity"].astype(float)
-    rets = eq.pct_change().dropna()
-    out = {
-        "days": len(perf),
-        "total": _f(perf.iloc[-1]["total_return_pct"]),
-        "xbi": _f(perf.iloc[-1]["xbi_return_pct"]),
-        "max_dd": float((eq / eq.cummax() - 1).min()),
-    }
-    if out["total"] is not None and out["xbi"] is not None:
-        out["alpha"] = out["total"] - out["xbi"]
-    if len(rets) > 1 and rets.std() > 0:
-        out["vol"] = float(rets.std() * (252**0.5))
-        out["sharpe"] = float(rets.mean() / rets.std() * (252**0.5))
-    return out
-
-
-def page_track_record() -> None:
-    """Paper-book performance vs benchmark, open holdings, closed trades."""
+def page_note() -> None:
+    """The landing view: a complete research note, top to bottom."""
+    _purge_open_shorts_once()
+    ensure_account()
+    acct = get_account()
+    blotter = load_blotter()
+    book = load_action_book(365)
     perf = load_performance()
+    open_df = load_holdings("open")
+    prices = latest_prices()
+    summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
+
+    _masthead()
+    _pipeline_strip(blotter, perf)
+    _signals_section(blotter, book, summ["equity"])
+    _evidence_section(perf)
+    _coverage_section()
+
+    st.markdown(
+        "<div class='fnote' style='margin-top:18px; border-top: 1px solid #DDD8CE; "
+        "padding-top: 8px'>Personal research project. Decision support only; every "
+        "position shown is a paper trade. Not investment advice.</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Positions & activity (owner operations)
+# ---------------------------------------------------------------------------
+
+
+def page_positions() -> None:
+    """Owner operations: open holdings, closed trades, manual entry."""
     acct = get_account()
     prices = latest_prices()
     open_df = load_holdings("open")
     summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
-    stats = _risk_stats(perf)
 
-    st.markdown("# TRACK RECORD")
-    if stats:
-        strip(
-            [
-                ("total return", f_pct(stats.get("total"), 1, True)),
-                ("XBI same window", f_pct(stats.get("xbi"), 1, True)),
-                ("alpha", f_pct(stats.get("alpha"), 1, True)),
-                ("max drawdown", f_pct(stats.get("max_dd"), 1)),
-                ("ann. vol", f_pct(stats.get("vol"), 1)),
-                (
-                    "Sharpe (rf=0)",
-                    f"{stats['sharpe']:.2f}" if stats.get("sharpe") is not None else "—",
-                ),
-                ("days", str(stats.get("days", 0))),
-            ]
-        )
-    else:
-        st.caption("Track record starts when the first daily snapshot lands.")
-
-    if not perf.empty:
-        fig = go.Figure()
-        fig.add_scatter(
-            x=perf["snapshot_date"],
-            y=perf["equity"],
-            mode="lines",
-            name="paper book",
-            line=dict(color=ACCENT, width=1.4),
-        )
-        if perf["benchmark_equity"].notna().any():
-            fig.add_scatter(
-                x=perf["snapshot_date"],
-                y=perf["benchmark_equity"],
-                mode="lines",
-                name="XBI",
-                line=dict(color=MUTED, width=1.1, dash="dot"),
-            )
-        _plotly_theme(fig, height=280)
-        fig.update_yaxes(tickformat="$,.0f")
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-    # -- open holdings ------------------------------------------------------
-    st.markdown("## Open positions")
+    st.markdown("<div class='kicker'>Open positions</div>", unsafe_allow_html=True)
     if open_df.empty:
         st.caption("None.")
     else:
@@ -875,26 +1037,26 @@ def page_track_record() -> None:
             mv = pf.market_value(r.side, float(r.shares), cur)
             rows.append(
                 {
-                    "ticker": r.ticker,
-                    "type": r.trade_type,
-                    "entry": r.entry_date,
-                    "shares": float(r.shares),
-                    "entry $": float(r.entry_price),
-                    "last $": cur,
-                    "wt": (abs(mv) / summ["equity"] if mv and summ["equity"] else None),
+                    "Ticker": r.ticker,
+                    "Type": TRADE_LABELS.get(r.trade_type, r.trade_type),
+                    "Entered": f_date(r.entry_date),
+                    "Shares": float(r.shares),
+                    "Entry": float(r.entry_price),
+                    "Last": cur,
+                    "Weight": (abs(mv) / summ["equity"] if mv and summ["equity"] else None),
                     "P&L $": pnl,
                     "P&L %": pnl_pct,
-                    "exit by": r.planned_exit_date,
+                    "Exit by": f_date(r.planned_exit_date),
                 }
             )
         hv = pd.DataFrame(rows).sort_values("P&L $", ascending=False)
         st.dataframe(
-            hv.style.map(_color_signed, subset=["P&L $", "P&L %"]).format(
+            hv.style.map(_sign_color, subset=["P&L $", "P&L %"]).format(
                 {
-                    "shares": "{:,.1f}",
-                    "entry $": "${:,.2f}",
-                    "last $": "${:,.2f}",
-                    "wt": "{:.1%}",
+                    "Shares": "{:,.1f}",
+                    "Entry": "${:,.2f}",
+                    "Last": "${:,.2f}",
+                    "Weight": "{:.1%}",
                     "P&L $": "${:+,.0f}",
                     "P&L %": "{:+.1%}",
                 },
@@ -904,44 +1066,45 @@ def page_track_record() -> None:
             hide_index=True,
             height=min(480, 38 + 35 * len(hv)),
         )
-        upnl = summ["unrealized_pnl_usd"]
-        st.caption(
-            f"unrealized {f_usd(upnl)} · cash {f_usd(summ['cash'])} · "
-            f"invested {f_usd(summ['invested_usd'])}"
+        st.markdown(
+            f"<div class='fnote'>Unrealized <b>{f_usd(summ['unrealized_pnl_usd'])}</b> · "
+            f"cash <b>{f_usd(summ['cash'])}</b> · invested <b>{f_usd(summ['invested_usd'])}</b>. "
+            f"Marks are prior close, end-of-day.</div>",
+            unsafe_allow_html=True,
         )
 
-    # -- closed trades ------------------------------------------------------
-    st.markdown("## Closed trades")
+    st.markdown("<div class='kicker'>Closed trades</div>", unsafe_allow_html=True)
     closed = load_holdings("closed")
     if closed.empty:
         st.caption("None yet.")
     else:
         cv = pd.DataFrame(
             {
-                "ticker": closed["ticker"],
-                "type": closed["trade_type"],
-                "entry": closed["entry_date"],
-                "exit": closed["exit_date"],
-                "entry $": pd.to_numeric(closed["entry_price"]),
-                "exit $": pd.to_numeric(closed["exit_price"]),
-                "realized $": pd.to_numeric(closed["realized_pnl_usd"]),
+                "Ticker": closed["ticker"],
+                "Type": closed["trade_type"].map(lambda t: TRADE_LABELS.get(t, t)),
+                "Entry": closed["entry_date"].map(f_date),
+                "Exit": closed["exit_date"].map(f_date),
+                "Entry $": pd.to_numeric(closed["entry_price"]),
+                "Exit $": pd.to_numeric(closed["exit_price"]),
+                "Realized $": pd.to_numeric(closed["realized_pnl_usd"]),
             }
-        ).sort_values("exit", ascending=False)
+        ).sort_values("Exit", ascending=False)
         st.dataframe(
-            cv.style.map(_color_signed, subset=["realized $"]).format(
-                {"entry $": "${:,.2f}", "exit $": "${:,.2f}", "realized $": "${:+,.0f}"}, na_rep="—"
+            cv.style.map(_sign_color, subset=["Realized $"]).format(
+                {"Entry $": "${:,.2f}", "Exit $": "${:,.2f}", "Realized $": "${:+,.0f}"}, na_rep="—"
             ),
             use_container_width=True,
             hide_index=True,
             height=min(360, 38 + 35 * len(cv)),
         )
-        realized = float(cv["realized $"].sum())
-        wins = int((cv["realized $"] > 0).sum())
-        st.caption(
-            f"realized {f_usd(realized)} across {len(cv)} trades · " f"win rate {wins}/{len(cv)}"
+        realized = float(cv["Realized $"].sum())
+        wins = int((cv["Realized $"] > 0).sum())
+        st.markdown(
+            f"<div class='fnote'>Realized <b>{f_usd(realized)}</b> across {len(cv)} "
+            f"trades · win rate {wins}/{len(cv)}.</div>",
+            unsafe_allow_html=True,
         )
 
-    # -- manual entry (functional, collapsed) -------------------------------
     with st.expander("Log / close a trade"):
         _trade_forms(open_df, prices)
 
@@ -1039,133 +1202,18 @@ def _trade_forms(open_df: pd.DataFrame, prices: dict[str, float]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Page: Evidence — why believe the model?
+# Main
 # ---------------------------------------------------------------------------
-
-
-def page_evidence() -> None:
-    """Validation evidence: event study, calibration history, data coverage."""
-    st.markdown("# EVIDENCE")
-
-    ev = load_event_returns()
-    st.markdown("## Event study — realized abnormal returns around 8-K catalysts")
-    if ev.empty:
-        st.caption("No event returns built yet (scripts/build_event_returns.py).")
-    else:
-        rows = []
-        for hold, grp in ev.groupby("hold_days"):
-            abn = grp["abnormal_return"].dropna()
-            rows.append(
-                {
-                    "hold": f"{int(hold)}d",
-                    "n": len(abn),
-                    "mean": abn.mean(),
-                    "median": abn.median(),
-                    "std": abn.std(),
-                    "|move| ≥ 10%": (abn.abs() >= 0.10).mean(),
-                    "corr(run-up, fwd)": (
-                        grp[["run_up_30d", "abnormal_return"]].dropna().corr().iloc[0, 1]
-                        if len(grp.dropna(subset=["run_up_30d", "abnormal_return"])) > 2
-                        else None
-                    ),
-                }
-            )
-        st.dataframe(
-            pd.DataFrame(rows).style.format(
-                {
-                    "mean": "{:+.1%}",
-                    "median": "{:+.1%}",
-                    "std": "{:.1%}",
-                    "|move| ≥ 10%": "{:.0%}",
-                    "corr(run-up, fwd)": "{:+.3f}",
-                },
-                na_rep="—",
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
-        st.caption(
-            "Direction is a coin flip (median ≈ 0, run-up correlation ≈ 0); "
-            "magnitude is the exploitable quantity — it drives the sizing haircut."
-        )
-
-        h3 = ev[ev["hold_days"] == 3]["abnormal_return"].dropna()
-        if len(h3) > 10:
-            fig = go.Figure(
-                go.Histogram(x=h3, nbinsx=60, marker_color=ACCENT, opacity=0.85, showlegend=False)
-            )
-            _plotly_theme(fig, height=180)
-            fig.update_xaxes(tickformat=".0%", title="3-day abnormal return")
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-    # -- calibration history -------------------------------------------------
-    st.markdown("## Calibration vs resolved outcomes")
-    cal = load_calibration()
-    if cal.empty:
-        st.caption("No calibration runs yet.")
-    else:
-        cv = cal.copy()
-        cv["run_at"] = pd.to_datetime(cv["run_at"]).dt.date
-        st.dataframe(
-            cv.tail(12)
-            .iloc[::-1]
-            .style.format(
-                {
-                    "n_pairs": "{:.0f}",
-                    "brier_score": "{:.3f}",
-                    "model_hit_rate": "{:.0%}",
-                    "base_rate_hit_rate": "{:.0%}",
-                },
-                na_rep="—",
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
-        st.caption(
-            "n_pairs is tiny because few forward catalysts have resolved — "
-            "this table is the honest state of validation, updated daily."
-        )
-
-    # -- base-rate model ------------------------------------------------------
-    st.markdown("## Base-rate model (the validated input)")
-    kv(
-        [
-            (
-                "temporal holdout",
-                f"Brier skill +{BASE_RATE_HOLDOUT['brier_skill']:.3f} · "
-                f"AUC {BASE_RATE_HOLDOUT['auc']:.3f}",
-            ),
-            ("holdout sample", f"n = {BASE_RATE_HOLDOUT['n']:,} labeled trials"),
-            ("as of", BASE_RATE_HOLDOUT["date"]),
-            ("historical trials mined", f_int(load_coverage()["counts"].get("historical_trials"))),
-            ("base-rate slices", f_int(load_coverage()["counts"].get("base_rates"))),
-        ]
-    )
-
-    # -- coverage -------------------------------------------------------------
-    st.markdown("## Data coverage & freshness")
-    cov = load_coverage()
-    rows = []
-    for tbl, n in cov["counts"].items():
-        ts = cov["freshness"].get(tbl)
-        rows.append({"table": tbl, "rows": n, "latest": str(ts)[:10] if ts is not None else "—"})
-    st.dataframe(
-        pd.DataFrame(rows).style.format({"rows": "{:,}"}), use_container_width=True, hide_index=True
-    )
-
-
-# ---------------------------------------------------------------------------
-# Nav + main
-# ---------------------------------------------------------------------------
-
-PAGES = {"Now": page_now, "Track record": page_track_record, "Evidence": page_evidence}
 
 
 def main() -> None:
-    """Render the selected page (top tab nav; no sidebar)."""
+    """Render the research note (default) and the positions appendix."""
     _inject_css()
-    page = st.radio("page", list(PAGES.keys()), horizontal=True, label_visibility="collapsed")
-    PAGES[page]()
+    tab_note, tab_positions = st.tabs(["Research note", "Positions & activity"])
+    with tab_note:
+        page_note()
+    with tab_positions:
+        page_positions()
 
 
 main()
