@@ -7,7 +7,14 @@ A prediction `pair` is (predicted_probability, actual_outcome) where actual is
 
 from __future__ import annotations
 
+import json
 from typing import Any
+
+# A reliability (calibration) curve is only worth drawing once several
+# probability buckets each have real outcomes. One resolved catalyst is a point,
+# not a curve - the dashboard hides the plot below these floors.
+MIN_RELIABILITY_BUCKETS = 3
+MIN_RELIABILITY_N = 20
 
 
 def brier_score(pairs: list[tuple[float, int]]) -> float | None:
@@ -50,3 +57,49 @@ def hit_rate(actuals: list[int]) -> float | None:
     if not actuals:
         return None
     return round(sum(actuals) / len(actuals), 4)
+
+
+def parse_reliability(rel: Any) -> list[dict[str, Any]]:
+    """Normalize calibration_runs.reliability_json to a list of bucket dicts."""
+    if rel is None:
+        return []
+    if isinstance(rel, str):
+        try:
+            rel = json.loads(rel)
+        except json.JSONDecodeError:
+            return []
+    if isinstance(rel, dict):
+        rel = list(rel.values())
+    if not isinstance(rel, list):
+        return []
+    return [row for row in rel if isinstance(row, dict)]
+
+
+def reliability_n(table: list[dict[str, Any]]) -> int:
+    """Total outcomes sitting in the reliability buckets."""
+    total = 0
+    for row in table:
+        try:
+            total += int(row.get("n") or 0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def reliability_curve_ready(
+    table: list[dict[str, Any]],
+    *,
+    n_pairs: int | None = None,
+    min_buckets: int = MIN_RELIABILITY_BUCKETS,
+    min_n: int = MIN_RELIABILITY_N,
+) -> bool:
+    """True only when a predicted-vs-observed plot would have more than one point."""
+    if len(table) < min_buckets:
+        return False
+    n = reliability_n(table)
+    if n_pairs is not None:
+        try:
+            n = max(n, int(n_pairs))
+        except (TypeError, ValueError):
+            pass
+    return n >= min_n

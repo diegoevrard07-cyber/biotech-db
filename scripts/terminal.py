@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 
 import config
 from layers.composite import scorer
+from layers.composite.calibration import parse_reliability, reliability_curve_ready, reliability_n
 from layers.marketdata.yf_client import fetch_history
 from layers.portfolio import projection as pj
 from layers.portfolio import stats as pstats
@@ -98,11 +99,24 @@ def _inject_css() -> None:
           @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
           html, body, [class*="css"] {{ font-family: {t['font']}; color: {t['text']}; }}
           .stApp {{ background: {t['bg']}; }}
-          header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
-          [data-testid="stToolbar"] {{ right: 1rem; }}
+          /* Streamlit chrome sits on top of the logo/nav if the header is only
+             height:0 - hide it outright. */
+          header[data-testid="stHeader"],
+          [data-testid="stToolbar"],
+          [data-testid="stDecoration"],
+          [data-testid="stStatusWidget"],
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
-          .block-container {{ padding: 2.6rem 1.6rem 2rem; max-width: 1500px; }}
+          .block-container {{ padding: 1.15rem 1.5rem 2rem; max-width: 1440px; }}
           #MainMenu, footer {{ visibility: hidden; }}
+          /* columns default to min-content width, so Plotly legends/pills spill
+             into the neighboring card. Allow them to shrink. */
+          [data-testid="stHorizontalBlock"] > div {{ min-width: 0 !important; }}
+          [data-testid="column"] {{ min-width: 0 !important; }}
+          .stPlotlyChart, .js-plotly-plot, .plot-container {{
+             max-width: 100% !important; overflow: hidden;
+          }}
+          /* hover toolbar covers dataframe column headers */
+          div[data-testid="stElementToolbar"] {{ display: none !important; }}
           /* single-page: no left nav bar */
           [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
           [data-testid="collapsedControl"] {{ display: none !important; }}
@@ -162,9 +176,9 @@ def _inject_css() -> None:
                       color: {t['text']}; padding: 6px 12px; border-radius: 10px;
                       background: {t['card']}; border: 1px solid {t['border']}; }}
           .pf-chip .k {{ color: {t['muted']}; }}
-          .pf-header {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }}
+          .pf-header {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }}
           .pf-header .spacer {{ flex: 1; }}
-          .pf-big {{ font-size: 2.1rem; font-weight: 800; letter-spacing: -.03em; font-family: {t['mono']}; }}
+          .pf-big {{ font-size: 1.7rem; font-weight: 800; letter-spacing: -.03em; font-family: {t['mono']}; line-height: 1.15; }}
 
           /* ---- native metrics fallback ---- */
           [data-testid="stMetric"] {{ background: {t['card']}; border: 1px solid {t['border']};
@@ -195,8 +209,11 @@ def _inject_css() -> None:
           .stTextInput input::placeholder {{ color: {t['faint']}; }}
 
           /* ---- segmented control (timeframe pills) ---- */
+          [data-testid="stSegmentedControl"] {{ overflow-x: auto; }}
           [data-testid="stSegmentedControl"] button {{ background: transparent; border: none;
-                                                        color: {t['muted']}; border-radius: 8px; }}
+                                                        color: {t['muted']}; border-radius: 8px;
+                                                        padding: 2px 9px; font-size: .72rem;
+                                                        white-space: nowrap; }}
           [data-testid="stSegmentedControl"] button[aria-checked="true"],
           [data-testid="stSegmentedControl"] button[aria-selected="true"] {{
              background: {t['card2']}; color: {t['text']}; }}
@@ -204,13 +221,16 @@ def _inject_css() -> None:
              border: 1px solid {t['border']}; border-radius: 10px; padding: 3px; }}
 
           /* ---- tabs ---- */
-          .stTabs [data-baseweb="tab-list"] {{ gap: 4px; border-bottom: 1px solid {t['border_soft']}; }}
+          .stTabs [data-baseweb="tab-list"] {{ gap: 4px; margin-bottom: .3rem;
+             border-bottom: 1px solid {t['border_soft']}; }}
           .stTabs [data-baseweb="tab"] {{ background: transparent; color: {t['muted']};
-             border-radius: 8px 8px 0 0; padding: 8px 14px; font-weight: 600; font-size: .82rem; }}
+             border-radius: 8px 8px 0 0; padding: 6px 12px; font-weight: 600; font-size: .82rem; }}
           .stTabs [aria-selected="true"] {{ background: {t['card']}; color: {t['text']}; }}
 
           /* ---- dataframe ---- */
-          div[data-testid="stDataFrame"] {{ font-size: .8rem; border-radius: 12px; }}
+          div[data-testid="stDataFrame"] {{ font-size: .78rem; border-radius: 12px; }}
+          div[data-testid="stDataFrame"] thead th {{ white-space: nowrap; }}
+          div[data-testid="stTextInput"] {{ margin-bottom: .2rem; }}
           [data-testid="stExpander"] {{ background: {t['card']}; border: 1px solid {t['border']};
                                         border-radius: 12px; }}
           .stAlert {{ border-radius: 12px; }}
@@ -293,12 +313,16 @@ def _bucket_donut(
         )
     )
     fig.update_layout(
-        height=230,
+        height=210,
         showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=8, r=8, t=34, b=8),
-        title=dict(text=title, font=dict(size=12, color=THEME["muted"]), x=0.5, xanchor="center"),
+        margin=dict(l=8, r=8, t=28 if title else 8, b=8),
+        title=(
+            dict(text=title, font=dict(size=12, color=THEME["muted"]), x=0.5, xanchor="center")
+            if title
+            else None
+        ),
         annotations=[
             dict(
                 text=f'<span style="color:{THEME["muted"]};font-size:11px">{center_top}</span>'
@@ -698,13 +722,13 @@ def _plotly_theme(fig: go.Figure, *, height: int = 340, title: str | None = None
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family=THEME["font"], color=THEME["text"], size=11),
-        margin=dict(l=52, r=28, t=48 if title else 20, b=40),
+        margin=dict(l=48, r=16, t=36 if title else 16, b=36),
         legend=dict(
-            orientation="v",
-            yanchor="middle",
-            y=0.5,
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
             xanchor="left",
-            x=1.02,
+            x=0,
             bgcolor="rgba(0,0,0,0)",
             font=dict(size=10),
         ),
@@ -734,7 +758,7 @@ def _plotly_theme(fig: go.Figure, *, height: int = 340, title: str | None = None
 def _pnl_bar_chart(hv: pd.DataFrame) -> go.Figure:
     pnl_df = hv.dropna(subset=["pnl_usd"]).sort_values("pnl_usd")
     colors = [THEME["green"] if v >= 0 else THEME["red"] for v in pnl_df["pnl_usd"]]
-    h = max(280, min(720, 28 * len(pnl_df) + 80))
+    h = max(220, min(420, 26 * len(pnl_df) + 48))
     fig = go.Figure(
         go.Bar(
             x=pnl_df["pnl_usd"],
@@ -742,59 +766,13 @@ def _pnl_bar_chart(hv: pd.DataFrame) -> go.Figure:
             orientation="h",
             marker_color=colors,
             text=[f"${v:+,.0f}" for v in pnl_df["pnl_usd"]],
-            textposition="outside",
+            textposition="auto",
             cliponaxis=False,
         )
     )
-    _plotly_theme(fig, height=h, title="Unrealized P&L by position")
-    fig.update_layout(margin=dict(l=56, r=80, t=52, b=48))
+    _plotly_theme(fig, height=h)
+    fig.update_layout(margin=dict(l=56, r=56, t=8, b=28), title=None)
     fig.update_xaxes(tickformat="$,.0f")
-    return fig
-
-
-def _alloc_pie_chart(hv: pd.DataFrame) -> go.Figure:
-    alloc = hv.dropna(subset=["mkt_value"]).copy()
-    alloc["mkt_abs"] = alloc["mkt_value"].abs()
-    alloc = alloc.sort_values("mkt_abs", ascending=False)
-    top_n = 12
-    if len(alloc) > top_n:
-        top = alloc.head(top_n)
-        other = alloc.iloc[top_n:]["mkt_abs"].sum()
-        pie_df = pd.concat(
-            [
-                top,
-                pd.DataFrame(
-                    [
-                        {
-                            "ticker": f"Other ({len(alloc) - top_n})",
-                            "mkt_abs": other,
-                        }
-                    ]
-                ),
-            ],
-            ignore_index=True,
-        )
-    else:
-        pie_df = alloc
-    palette = (ALLOC_PALETTE + px.colors.qualitative.Set3)[: len(pie_df)]
-    fig = go.Figure(
-        go.Pie(
-            labels=pie_df["ticker"],
-            values=pie_df["mkt_abs"],
-            hole=0.6,
-            marker=dict(colors=palette, line=dict(color=THEME["card"], width=2)),
-            textinfo="percent",
-            textposition="inside",
-            insidetextorientation="horizontal",
-            hovertemplate="%{label}<br>$%{value:,.0f}<br>%{percent}<extra></extra>",
-        )
-    )
-    _plotly_theme(fig, height=420, title="Portfolio allocation (|market value|)")
-    fig.update_layout(
-        showlegend=True,
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.01),
-        margin=dict(l=24, r=140, t=52, b=24),
-    )
     return fig
 
 
@@ -1060,18 +1038,21 @@ def _holding_dicts(df: pd.DataFrame) -> list[dict]:
 
 def render_action_center(open_df: pd.DataFrame) -> None:
     """Render pressing exit alerts (overdue or due within 7 days) for open positions."""
-    st.subheader("Action center")
-    if open_df.empty:
-        st.caption("No open positions.")
-        return
-    alerts = pf.exit_alerts(_holding_dicts(open_df), date.today(), soon_days=7)
-    if not alerts:
-        st.caption("No exits due within 7 days.")
-        return
-    for a in alerts:
-        when = "TODAY / overdue" if a["days"] <= 0 else f"in {a['days']} day(s) ({a['exit_date']})"
-        line = f"**{a['action']} {a['ticker']}** — {when}. {a['reason']}"
-        (st.error if a["level"] == "now" else st.warning)(line)
+    with st.container(border=True):
+        st.markdown('<div class="pf-stat-label">Action center</div>', unsafe_allow_html=True)
+        if open_df.empty:
+            st.caption("No open positions.")
+            return
+        alerts = pf.exit_alerts(_holding_dicts(open_df), date.today(), soon_days=7)
+        if not alerts:
+            st.caption("No exits due within 7 days.")
+            return
+        for a in alerts:
+            when = (
+                "TODAY / overdue" if a["days"] <= 0 else f"in {a['days']} day(s) ({a['exit_date']})"
+            )
+            line = f"**{a['action']} {a['ticker']}** — {when}. {a['reason']}"
+            (st.error if a["level"] == "now" else st.warning)(line)
 
 
 def _purge_open_shorts_once() -> None:
@@ -1564,22 +1545,25 @@ def page_home() -> None:
 
     with left:
         with st.container(border=True):
-            head = st.columns([2, 1.3, 2])
-            head[0].markdown(
-                f'<div class="pf-stat-label">Current balance</div>'
+            hdr = st.columns([1.4, 1.15, 2.1], vertical_alignment="center")
+            hdr[0].markdown(
+                '<div class="pf-stat-label">Current balance</div>',
+                unsafe_allow_html=True,
+            )
+            metric = hdr[1].selectbox(
+                "Series",
+                ["Portfolio value", "Total return %", "Cash", "Unrealized P&L"],
+                label_visibility="collapsed",
+                key="bal_metric",
+            )
+            with hdr[2]:
+                tf = _timeframe_control("bal_tf")
+            st.markdown(
                 f'<div class="pf-big">{fmt_usd(equity)}</div>'
                 f'<span class="pf-delta {_dir(tot_ret_usd)}">'
                 f'{fmt_usd(tot_ret_usd) if tot_ret_usd is not None else "—"}</span>',
                 unsafe_allow_html=True,
             )
-            metric = head[1].selectbox(
-                "Metric",
-                ["Portfolio value", "Total return %", "Cash", "Unrealized P&L"],
-                label_visibility="collapsed",
-                key="bal_metric",
-            )
-            with head[2]:
-                tf = _timeframe_control("bal_tf")
 
             # build plot frame (history + live point)
             if perf.empty:
@@ -1654,9 +1638,7 @@ def page_home() -> None:
                 for t, v in g.items():
                     now_buckets[label_map.get(t, str(t))] = float(v)
             st.plotly_chart(
-                _bucket_donut(
-                    now_buckets, center_top="Deployed", center_bot=fmt_usd(equity), title=""
-                ),
+                _bucket_donut(now_buckets, center_top="Book", center_bot=fmt_usd(equity), title=""),
                 use_container_width=True,
                 config={"displayModeBar": False},
             )
@@ -1690,30 +1672,20 @@ def page_home() -> None:
                     height=46 + 34 * len(show),
                 )
 
-    # ---------- kept charts: position breakdown + portfolio allocation ----------
+    # ---------- unrealized P&L (ticker pie removed: allocation donut already covers mix) ----------
     if not hv.empty and hv["pnl_usd"].notna().any():
-        pcol = st.columns(2, gap="medium")
-        with pcol[0]:
-            with st.container(border=True):
-                st.markdown(
-                    '<div class="pf-stat-label">Position breakdown</div>', unsafe_allow_html=True
-                )
-                st.plotly_chart(
-                    _pnl_bar_chart(hv), use_container_width=True, config={"displayModeBar": False}
-                )
-        with pcol[1]:
-            with st.container(border=True):
-                st.markdown(
-                    '<div class="pf-stat-label">Portfolio allocation</div>', unsafe_allow_html=True
-                )
-                st.plotly_chart(
-                    _alloc_pie_chart(hv), use_container_width=True, config={"displayModeBar": False}
-                )
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Unrealized P&L by name</div>', unsafe_allow_html=True
+            )
+            st.plotly_chart(
+                _pnl_bar_chart(hv), use_container_width=True, config={"displayModeBar": False}
+            )
 
     # ---------- actions / holdings table ----------
     with st.container(border=True):
-        htop = st.columns([3, 2])
-        htop[0].markdown('<div class="pf-stat-label">Actions</div>', unsafe_allow_html=True)
+        htop = st.columns([2.4, 2], vertical_alignment="center")
+        htop[0].markdown('<div class="pf-stat-label">Positions</div>', unsafe_allow_html=True)
         search = htop[1].text_input(
             "Search",
             placeholder="Filter ticker…",
@@ -1721,7 +1693,7 @@ def page_home() -> None:
             key="cockpit_search",
         )
         tab_open, tab_book, tab_closed, tab_manage = st.tabs(
-            ["Open positions", "Trade book", "Closed", "Manage"]
+            ["Open", "Trade book", "Closed", "Manage"]
         )
 
         with tab_open:
@@ -1747,29 +1719,29 @@ def page_home() -> None:
                     ]
                 ].rename(
                     columns={
-                        "type": "trade",
-                        "entry": "entry $",
-                        "now": "last $",
-                        "cost_basis": "cost $",
-                        "mkt_value": "mkt $",
-                        "pct_book": "% book",
-                        "pnl_usd": "P&L $",
+                        "type": "type",
+                        "entry": "entry",
+                        "now": "last",
+                        "cost_basis": "cost",
+                        "mkt_value": "mkt",
+                        "pct_book": "book %",
+                        "pnl_usd": "P&L",
                         "pnl_pct": "P&L %",
-                        "exit_by": "exit date",
-                        "days_to_exit": "days left",
+                        "exit_by": "exit",
+                        "days_to_exit": "days",
                     }
                 )
                 st.dataframe(
                     show.style.format(
                         {
-                            "entry $": "{:.2f}",
-                            "last $": "{:.2f}",
-                            "cost $": "${:,.0f}",
-                            "mkt $": "${:,.0f}",
-                            "% book": "{:.1%}",
-                            "P&L $": "${:+,.0f}",
+                            "entry": "{:.2f}",
+                            "last": "{:.2f}",
+                            "cost": "${:,.0f}",
+                            "mkt": "${:,.0f}",
+                            "book %": "{:.1%}",
+                            "P&L": "${:+,.0f}",
                             "P&L %": "{:+.1%}",
-                            "days left": "{:.0f}",
+                            "days": "{:.0f}",
                         },
                         na_rep="—",
                     ).map(
@@ -1778,7 +1750,7 @@ def page_home() -> None:
                             if isinstance(v, (int, float))
                             else ""
                         ),
-                        subset=["P&L $", "P&L %"],
+                        subset=["P&L", "P&L %"],
                     ),
                     use_container_width=True,
                     hide_index=True,
@@ -1809,23 +1781,23 @@ def page_home() -> None:
                     ]
                 ].rename(
                     columns={
-                        "trade_type": "trade",
+                        "trade_type": "type",
                         "entry_date": "entry",
                         "exit_date": "exit",
-                        "entry_price": "entry $",
-                        "exit_price": "exit $",
-                        "realized_pnl_usd": "realized $",
+                        "entry_price": "entry px",
+                        "exit_price": "exit px",
+                        "realized_pnl_usd": "realized",
                     }
                 )
-                for c in ("entry $", "exit $", "realized $", "shares"):
+                for c in ("entry px", "exit px", "realized", "shares"):
                     cd[c] = pd.to_numeric(cd[c], errors="coerce")
                 st.dataframe(
                     cd.style.format(
                         {
                             "shares": "{:.0f}",
-                            "entry $": "{:.2f}",
-                            "exit $": "{:.2f}",
-                            "realized $": "${:+,.0f}",
+                            "entry px": "{:.2f}",
+                            "exit px": "{:.2f}",
+                            "realized": "${:+,.0f}",
                         },
                         na_rep="—",
                     ).map(
@@ -1834,7 +1806,7 @@ def page_home() -> None:
                             if isinstance(v, (int, float))
                             else ""
                         ),
-                        subset=["realized $"],
+                        subset=["realized"],
                     ),
                     use_container_width=True,
                     hide_index=True,
@@ -2154,10 +2126,9 @@ def render_ticker_dossier(ticker: str, *, blotter: pd.DataFrame | None = None) -
                         marker=dict(color=THEME["green"], size=8, symbol="triangle-up"),
                     )
                 )
-            _plotly_theme(
-                fig, height=360, title=f"{ticker} — amber = catalyst, green = insider buy"
-            )
+            _plotly_theme(fig, height=360)
             st.plotly_chart(fig, use_container_width=True)
+            st.caption("Amber dotted line = catalyst date. Green triangle = insider buy.")
 
     with tab_cat:
         st.dataframe(
@@ -2236,11 +2207,11 @@ def render_trade_book_panel(
     """Interactive trade book: pick a row to expand full company dossier."""
     sized = _book_sized_table(book, equity, prices)
     if sized.empty:
-        st.info("No capped positions in the action book.")
+        st.caption("No capped positions in the action book.")
         return
     act = sized[sized["days_until"] <= act_days].sort_values("days_until")
     if act.empty:
-        st.info(f"No trades within {act_days} days.")
+        st.caption(f"No trades within {act_days} days.")
         return
 
     summary = act[
@@ -2479,7 +2450,7 @@ def _render_catalyst_calendar() -> None:
         & (cal["expected_date"] <= today + pd.Timedelta(days=365))
     ]
     if cal.empty:
-        st.info("No catalysts in window.")
+        st.caption("No catalysts in the next 12 months.")
         return
     cal["size_val"] = cal["suggested_weight"].abs().fillna(0.005).clip(lower=0.005)
     fig = px.scatter(
@@ -2498,7 +2469,8 @@ def _render_catalyst_calendar() -> None:
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color=THEME["text"]),
-        margin=dict(l=48, r=24, t=40, b=48),
+        margin=dict(l=64, r=16, t=16, b=64),
+        legend=dict(orientation="h", yanchor="top", y=-0.12, x=0),
         legend_title_text="",
         xaxis_title="",
         yaxis_title="",
@@ -2627,89 +2599,108 @@ def page_validation(*, embedded: bool = False) -> None:
     st.divider()
 
     # --- Event-study evidence: the REAL returns dataset (8-K reactions) ---
-    st.subheader("Event-study evidence: abnormal returns around 8-K announcements")
-    st.caption(
-        "Abnormal return = name − XBI over the hold. "
-        "Build/refresh: `python scripts/build_event_returns.py`"
-    )
-    hold = st.radio(
-        "Hold window (trading days)", [1, 3, 5], index=1, horizontal=True, key="evt_hold"
-    )
-    er = q(
-        "SELECT abnormal_return, run_up_30d, event_type FROM event_returns "
-        "WHERE hold_days = %(h)s AND abnormal_return IS NOT NULL",
-        {"h": int(hold)},
-    )
-    if er.empty:
-        st.info("No event_returns yet. Run: python scripts/build_event_returns.py")
+    st.subheader("Event-study evidence")
+    st.caption("Abnormal return = name − XBI over the hold window.")
+    er_any = q("SELECT 1 FROM event_returns LIMIT 1")
+    if er_any.empty:
+        st.caption("No event_returns rows yet.")
     else:
-        er["abnormal_return"] = pd.to_numeric(er["abnormal_return"], errors="coerce")
-        er["run_up_30d"] = pd.to_numeric(er["run_up_30d"], errors="coerce")
-        ar = er["abnormal_return"]
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Events", f"{len(ar):,}")
-        m2.metric("Median abnormal", f"{ar.median():+.1%}")
-        m3.metric("Std (dispersion)", f"{ar.std():.1%}")
-        m4.metric("|move| ≥ 25%", f"{(ar.abs() >= 0.25).mean():.0%}")
+        hold = st.radio(
+            "Hold window (trading days)", [1, 3, 5], index=1, horizontal=True, key="evt_hold"
+        )
+        er = q(
+            "SELECT abnormal_return, run_up_30d, event_type FROM event_returns "
+            "WHERE hold_days = %(h)s AND abnormal_return IS NOT NULL",
+            {"h": int(hold)},
+        )
+        if er.empty:
+            st.caption(f"No rows for a {hold}-day hold.")
+        else:
+            er["abnormal_return"] = pd.to_numeric(er["abnormal_return"], errors="coerce")
+            er["run_up_30d"] = pd.to_numeric(er["run_up_30d"], errors="coerce")
+            ar = er["abnormal_return"]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Events", f"{len(ar):,}")
+            m2.metric("Median abnormal", f"{ar.median():+.1%}")
+            m3.metric("Std (dispersion)", f"{ar.std():.1%}")
+            m4.metric("|move| ≥ 25%", f"{(ar.abs() >= 0.25).mean():.0%}")
 
-        paired = er.dropna(subset=["run_up_30d"]).copy()
-        if len(paired) >= 25:
-            paired["run_up_30d"] = paired["run_up_30d"].astype(float)
-            paired["q"] = pd.qcut(
-                paired["run_up_30d"],
-                5,
-                labels=["Q1 crashed", "Q2", "Q3", "Q4", "Q5 mooned"],
-                duplicates="drop",
-            )
-            grp = paired.groupby("q", observed=True)["abnormal_return"].mean().reset_index()
-            fig = px.bar(
-                grp,
-                x="q",
-                y="abnormal_return",
-                color="abnormal_return",
-                color_continuous_scale=[THEME["red"], THEME["muted"], THEME["green"]],
-                title="Forward abnormal return by pre-event run-up quintile",
-            )
-            fig.update_layout(
-                height=320,
-                showlegend=False,
-                coloraxis_showscale=False,
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font_color=THEME["text"],
-                yaxis_tickformat=".1%",
-                xaxis_title="",
-                yaxis_title="avg forward abnormal",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            corr = paired["run_up_30d"].corr(paired["abnormal_return"])
-            st.caption(f"corr(run-up, forward abnormal) = {corr:+.3f}")
+            paired = er.dropna(subset=["run_up_30d"]).copy()
+            if len(paired) >= 25:
+                paired["run_up_30d"] = paired["run_up_30d"].astype(float)
+                paired["q"] = pd.qcut(
+                    paired["run_up_30d"],
+                    5,
+                    labels=["Q1 crashed", "Q2", "Q3", "Q4", "Q5 mooned"],
+                    duplicates="drop",
+                )
+                grp = paired.groupby("q", observed=True)["abnormal_return"].mean().reset_index()
+                fig = px.bar(
+                    grp,
+                    x="q",
+                    y="abnormal_return",
+                    color="abnormal_return",
+                    color_continuous_scale=[THEME["red"], THEME["muted"], THEME["green"]],
+                    title="Forward abnormal return by pre-event run-up quintile",
+                )
+                fig.update_layout(
+                    height=320,
+                    showlegend=False,
+                    coloraxis_showscale=False,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color=THEME["text"],
+                    yaxis_tickformat=".1%",
+                    xaxis_title="",
+                    yaxis_title="avg forward abnormal",
+                    margin=dict(l=48, r=16, t=48, b=32),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                corr = paired["run_up_30d"].corr(paired["abnormal_return"])
+                st.caption(f"corr(run-up, forward abnormal) = {corr:+.3f}")
 
-        bytype = er.dropna(subset=["event_type"])
-        if not bytype.empty:
-            tt = (
-                bytype.groupby("event_type")["abnormal_return"]
-                .agg(["mean", "median", "count"])
-                .reset_index()
-                .sort_values("mean")
-            )
-            tt["mean"] = (tt["mean"] * 100).round(2).astype(str) + "%"
-            tt["median"] = (tt["median"] * 100).round(2).astype(str) + "%"
-            st.markdown("**Abnormal return by event type**")
-            st.dataframe(tt, use_container_width=True, hide_index=True)
+            bytype = er.dropna(subset=["event_type"])
+            if not bytype.empty:
+                tt = (
+                    bytype.groupby("event_type")["abnormal_return"]
+                    .agg(["mean", "median", "count"])
+                    .reset_index()
+                    .sort_values("mean")
+                )
+                tt["mean"] = (tt["mean"] * 100).round(2).astype(str) + "%"
+                tt["median"] = (tt["median"] * 100).round(2).astype(str) + "%"
+                st.markdown("**Abnormal return by event type**")
+                st.dataframe(tt, use_container_width=True, hide_index=True)
 
     st.divider()
+    st.subheader("Forward calibration")
+    st.caption(
+        "A reliability curve plots predicted probability (x) against realized hit rate (y). "
+        "The 45° diagonal is perfect calibration. Empty until enough catalysts resolve."
+    )
     runs = q("SELECT * FROM calibration_runs ORDER BY run_at DESC LIMIT 1")
     outcomes = q("SELECT outcome_label, COUNT(*) n FROM catalyst_outcomes GROUP BY outcome_label")
 
-    c1, c2, c3 = st.columns(3)
-    if runs.empty:
-        c1.metric("Brier score", "—")
-        c2.metric("Model hit rate", "—")
-        c3.metric("Base-rate hit rate", "—")
-        st.info("No calibration run yet. Run scripts/calibrate.py after resolve_outcomes.py.")
+    rel_table: list[dict] = []
+    n_pairs = 0
+    if not runs.empty:
+        r = runs.iloc[0]
+        try:
+            n_pairs = int(r["n_pairs"] or 0) if pd.notna(r.get("n_pairs")) else 0
+        except (TypeError, ValueError):
+            n_pairs = 0
+        rel_table = parse_reliability(r.get("reliability_json"))
+        n_pairs = max(n_pairs, reliability_n(rel_table))
+
+    if runs.empty or not reliability_curve_ready(rel_table, n_pairs=n_pairs):
+        st.caption(
+            f"n = {n_pairs} resolved hit/miss pair(s) across {len(rel_table)} probability "
+            "bucket(s). Need ≥20 outcomes in ≥3 buckets before Brier, hit rate, or the "
+            "diagonal chart mean anything."
+        )
     else:
         r = runs.iloc[0]
+        c1, c2, c3 = st.columns(3)
         c1.metric(
             "Brier score", f"{float(r['brier_score']):.3f}" if pd.notna(r["brier_score"]) else "—"
         )
@@ -2721,37 +2712,30 @@ def page_validation(*, embedded: bool = False) -> None:
             "Base-rate hit rate",
             f"{float(r['base_rate_hit_rate']):.0%}" if pd.notna(r["base_rate_hit_rate"]) else "—",
         )
-        rel = r.get("reliability_json")
-        if rel:
-            try:
-                rel_df = pd.DataFrame(rel if isinstance(rel, list) else pd.read_json(rel))
-                if not rel_df.empty:
-                    fig = px.line(
-                        rel_df,
-                        x="mean_predicted",
-                        y="observed_hit_rate",
-                        markers=True,
-                        range_x=[0, 1],
-                        range_y=[0, 1],
-                    )
-                    fig.add_shape(
-                        type="line", x0=0, y0=0, x1=1, y1=1, line=dict(dash="dash", color="#666")
-                    )
-                    fig.update_layout(
-                        height=340,
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        font_color=THEME["text"],
-                        title="Reliability (diagonal = perfect)",
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-            except Exception:
-                st.caption("Reliability data unavailable.")
+        rel_df = pd.DataFrame(rel_table)
+        fig = px.line(
+            rel_df,
+            x="mean_predicted",
+            y="observed_hit_rate",
+            markers=True,
+            range_x=[0, 1],
+            range_y=[0, 1],
+        )
+        fig.add_shape(type="line", x0=0, y0=0, x1=1, y1=1, line=dict(dash="dash", color="#666"))
+        fig.update_layout(
+            height=340,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color=THEME["text"],
+            title="Reliability (diagonal = perfect calibration)",
+            xaxis_title="Mean predicted P",
+            yaxis_title="Observed hit rate",
+            margin=dict(l=48, r=16, t=48, b=40),
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Resolved outcome distribution")
-    if outcomes.empty:
-        st.caption("No resolved outcomes. Run scripts/resolve_outcomes.py.")
-    else:
+    if not outcomes.empty:
+        st.subheader("Resolved outcome distribution")
         fig = px.bar(
             outcomes,
             x="outcome_label",
@@ -2764,20 +2748,19 @@ def page_validation(*, embedded: bool = False) -> None:
             },
         )
         fig.update_layout(
-            height=280,
+            height=240,
             showlegend=False,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             font_color=THEME["text"],
+            margin=dict(l=32, r=16, t=16, b=32),
         )
         st.plotly_chart(fig, use_container_width=True)
 
     bt = PROJECT_ROOT / "data" / "raw" / "backtest_trades.csv"
-    st.subheader("Backtest trades")
     if bt.exists():
+        st.subheader("Backtest trades")
         st.dataframe(pd.read_csv(bt), use_container_width=True, hide_index=True, height=300)
-    else:
-        st.caption("Run: python scripts/backtest.py --csv data/raw/backtest_trades.csv")
 
 
 # ===========================================================================
@@ -3146,10 +3129,10 @@ def page_risk_lab(*, embedded: bool = False) -> None:
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                     font_color=THEME["text"],
-                    margin=dict(l=10, r=10, t=10, b=10),
+                    margin=dict(l=10, r=10, t=8, b=48),
                     xaxis_title="trading days ahead",
                     yaxis_title="",
-                    legend=dict(orientation="h", y=1.05),
+                    legend=dict(orientation="h", yanchor="top", y=-0.18, x=0, font=dict(size=10)),
                 )
                 fig.update_xaxes(gridcolor=THEME["border_soft"])
                 fig.update_yaxes(gridcolor=THEME["border_soft"], tickprefix="$")
@@ -3174,26 +3157,6 @@ def page_risk_lab(*, embedded: bool = False) -> None:
             sc["XBI move"] = sc["shock"].map(lambda s: f"{s:+.0%}")
             sc["Book %"] = sc["book_pct"]
             sc["Book $"] = sc["book_usd"]
-            fig = px.bar(
-                sc,
-                x="XBI move",
-                y="book_usd",
-                color="book_usd",
-                color_continuous_scale=[THEME["red"], THEME["muted"], THEME["green"]],
-            )
-            fig.update_layout(
-                height=230,
-                showlegend=False,
-                coloraxis_showscale=False,
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font_color=THEME["text"],
-                margin=dict(l=8, r=8, t=8, b=8),
-                xaxis_title="",
-                yaxis_title="",
-            )
-            fig.update_yaxes(gridcolor=THEME["border_soft"], tickprefix="$")
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             st.dataframe(
                 sc[["XBI move", "Book %", "Book $"]].style.format(
                     {"Book %": "{:+.1%}", "Book $": "${:+,.0f}"}
@@ -3249,8 +3212,8 @@ def page_risk_lab(*, embedded: bool = False) -> None:
                     paper_bgcolor="rgba(0,0,0,0)",
                     scene=_scene_axes("days to catalyst", "trial odds", "implied move"),
                     scene_camera=dict(eye=dict(x=1.7, y=-1.6, z=0.75)),
-                    margin=dict(l=0, r=0, t=6, b=0),
-                    legend=dict(orientation="h", y=0.99),
+                    margin=dict(l=0, r=0, t=8, b=48),
+                    legend=dict(orientation="h", yanchor="top", y=-0.08, x=0, font=dict(size=10)),
                     font_color=THEME["text"],
                 )
                 st.plotly_chart(fig, use_container_width=True)
@@ -3337,16 +3300,13 @@ def page_risk_lab(*, embedded: bool = False) -> None:
                         y=-abs(tier_dd),
                         line_dash="dot",
                         line_color=THEME["amber"],
-                        annotation_text=f"de-risk ×{factor:.2f}",
-                        annotation_font_color=THEME["muted"],
-                        annotation_position="right",
                     )
                 fig.update_layout(
                     height=280,
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                     font_color=THEME["text"],
-                    margin=dict(l=10, r=10, t=10, b=10),
+                    margin=dict(l=10, r=16, t=10, b=10),
                     yaxis_tickformat=".0%",
                     xaxis_title="",
                     yaxis_title="",
@@ -3389,6 +3349,10 @@ def page_risk_lab(*, embedded: bool = False) -> None:
                         y=[name],
                         orientation="h",
                         marker=dict(color="rgba(95,107,124,.12)"),
+                        text=f"{used:.0%} / {cap:.0%}",
+                        textposition="inside",
+                        insidetextanchor="end",
+                        textfont=dict(color=THEME["text"], size=11),
                         hoverinfo="skip",
                         showlegend=False,
                     )
@@ -3399,21 +3363,18 @@ def page_risk_lab(*, embedded: bool = False) -> None:
                         y=[name],
                         orientation="h",
                         marker=dict(color=color),
-                        text=f"{used:.0%} / {cap:.0%}",
-                        textposition="outside",
-                        textfont=dict(color=THEME["text"]),
                         showlegend=False,
                     )
                 )
             fig.update_layout(
-                height=280,
+                height=200,
                 barmode="overlay",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 font_color=THEME["text"],
-                margin=dict(l=10, r=30, t=10, b=10),
+                margin=dict(l=88, r=16, t=8, b=24),
                 xaxis_tickformat=".0%",
-                xaxis_range=[0, max(c for _, _, c in caps) * 1.25],
+                xaxis_range=[0, max(c for _, _, c in caps) * 1.15],
             )
             fig.update_xaxes(gridcolor=THEME["border_soft"])
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -3429,7 +3390,7 @@ PAGES: dict[str, callable] = {
 def _top_nav() -> callable:
     """Single-page top navigation bar (replaces the sidebar)."""
     names = list(PAGES.keys())
-    bar = st.columns([1.4, 4, 1.1], gap="small", vertical_alignment="center")
+    bar = st.columns([0.9, 3.6, 0.95], gap="small", vertical_alignment="center")
     with bar[0]:
         st.markdown(
             '<div class="pf-logo"><span class="mark">◆</span>EDGE</div>',
