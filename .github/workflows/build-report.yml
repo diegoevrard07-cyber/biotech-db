@@ -1,8 +1,8 @@
 name: Data Inventory & Sample Report
 
-# Runs the read-only DB inventory (prints to the log) and generates the static
-# research report from live data, uploading HTML + PDF as artifacts. Exists so
-# presentation work can be grounded in real numbers without local DB access.
+# Runs the read-only DB inventory (prints to the log), generates the static
+# research note from live data, and screenshots the live dashboard — so
+# presentation work is grounded in real numbers without local DB access.
 
 on:
   push:
@@ -10,12 +10,14 @@ on:
       - ".github/workflows/build-report.yml"
       - "scripts/db_inventory.py"
       - "scripts/generate_report.py"
+      - "scripts/terminal.py"
+      - ".streamlit/config.toml"
   workflow_dispatch:
 
 jobs:
   report:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       TZ: UTC
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -44,6 +46,18 @@ jobs:
             --print-to-pdf=docs/report_sample.pdf \
             --no-pdf-header-footer docs/report_sample.html
 
+      - name: Screenshot the live research note (headless)
+        run: |
+          mkdir -p docs/img
+          streamlit run scripts/terminal.py --server.port 8530 --server.headless true &
+          sleep 20
+          google-chrome --headless --disable-gpu --no-sandbox \
+            --window-size=1440,900 --virtual-time-budget=45000 \
+            --screenshot=docs/img/terminal.png http://localhost:8530
+          google-chrome --headless --disable-gpu --no-sandbox \
+            --window-size=1440,3200 --virtual-time-budget=45000 \
+            --screenshot=docs/img/note_full.png http://localhost:8530
+
       - name: Upload report artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -51,4 +65,7 @@ jobs:
           path: |
             docs/report_sample.html
             docs/report_sample.pdf
+            docs/img/terminal.png
+            docs/img/note_full.png
+          if-no-files-found: warn
           retention-days: 30
