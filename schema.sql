@@ -1,4 +1,4 @@
--- GBM Edge Engine schema (idempotent)
+-- Biotech Catalyst Edge Engine schema (idempotent)
 
 CREATE TABLE IF NOT EXISTS companies (
     id SERIAL PRIMARY KEY,

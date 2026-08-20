@@ -1,5 +1,5 @@
 [project]
-name = "gbm-edge-engine"
+name = "biotech-edge-engine"
 version = "0.2.0"
 description = "Decision-support engine for small-cap biotech catalyst trading (GBM/oncology-CNS)"
 requires-python = ">=3.12"

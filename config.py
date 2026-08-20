@@ -1,4 +1,4 @@
-"""Central configuration for the GBM edge engine."""
+"""Central configuration for the Biotech Catalyst Edge Engine."""
 
 from __future__ import annotations
 
@@ -22,10 +22,64 @@ SEEDS_DIR = DATA_DIR / "seeds"
 for _path in (RAW_DIR, CACHE_DIR, LOGS_DIR, SEEDS_DIR):
     _path.mkdir(parents=True, exist_ok=True)
 
+
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+def normalize_database_url(raw: str | None) -> str:
+    """Clean a pasted DATABASE_URL and reject common Supabase copy mistakes.
+
+    Handles surrounding quotes, a duplicated ``DATABASE_URL=`` prefix, and the
+    frequent paste of an ``https://`` dashboard link (which makes libpq try to
+    resolve the hostname ``https``). For Supabase pooler hosts, forces
+    ``sslmode=require`` and prefers session-mode port ``5432`` over transaction
+    pooler ``6543`` (psycopg2 often fails 6543 with "server didn't return client
+    encoding"). Returns ``""`` when unset.
+    """
+    if not raw:
+        return ""
+    value = raw.strip().strip("'").strip('"').strip()
+    if value.upper().startswith("DATABASE_URL="):
+        value = value.split("=", 1)[1].strip().strip("'").strip('"').strip()
+    # Accidental: postgresql://user:pass@https://host/...
+    if "@https://" in value:
+        value = value.replace("@https://", "@", 1)
+    if "@http://" in value:
+        value = value.replace("@http://", "@", 1)
+    if not value:
+        return ""
+    if value.startswith("https://") or value.startswith("http://"):
+        raise RuntimeError(
+            "DATABASE_URL looks like a web link (starts with https://). "
+            "It must be a Postgres URI starting with postgresql://. "
+            "In Supabase: Project → Connect → Session pooler → URI "
+            "(port 5432). Replace [YOUR-PASSWORD] with your database password."
+        )
+    if not (value.startswith("postgresql://") or value.startswith("postgres://")):
+        raise RuntimeError(
+            "DATABASE_URL must start with postgresql:// "
+            f"(got {value.split(':', 1)[0]!r}:…). "
+            "In Supabase: Project → Connect → Session pooler → URI."
+        )
+
+    # Supabase: psycopg2 + transaction pooler (6543) often fails handshake.
+    # Prefer session pooler (5432) on the same host, and always require SSL.
+    if "supabase.com" in value:
+        if ".pooler.supabase.com:6543/" in value:
+            value = value.replace(".pooler.supabase.com:6543/", ".pooler.supabase.com:5432/", 1)
+        if "sslmode=" not in value:
+            value = value + ("&" if "?" in value else "?") + "sslmode=require"
+
+    return value
+
+
+_DATABASE_URL_RAW = os.getenv("DATABASE_URL", "")
+DATABASE_URL_ERROR: str | None = None
+try:
+    DATABASE_URL = normalize_database_url(_DATABASE_URL_RAW)
+except RuntimeError as _db_url_exc:
+    DATABASE_URL = ""
+    DATABASE_URL_ERROR = str(_db_url_exc)
 
 # ---------------------------------------------------------------------------
 # API endpoints (verified)
@@ -36,8 +90,8 @@ SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 SEC_XBRL_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 POE_API_BASE_URL = "https://api.poe.com/v1"
 
-SEC_USER_AGENT_PLACEHOLDER = "GBM-Edge-Engine user@example.com"
-# TODO: Replace with your real name and email — SEC requires a descriptive User-Agent.
+SEC_USER_AGENT_PLACEHOLDER = "Biotech-Edge-Engine user@example.com"
+# TODO: Replace with your real name and email; SEC requires a descriptive User-Agent.
 SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", SEC_USER_AGENT_PLACEHOLDER)
 
 
@@ -166,7 +220,7 @@ STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", "0.15"))  # -15% from entry
 
 # Market-regime filter: when the benchmark (XBI) closes below its N-day simple
 # moving average, scale ALL target sizes down. Participate fully in an up-tape,
-# run lighter gross in a down-tape — the main lever for risk-adjusted return
+# run lighter gross in a down-tape: the main lever for risk-adjusted return
 # vs a long-only index.
 REGIME_FILTER_ENABLED = os.getenv("REGIME_FILTER_ENABLED", "1") not in ("0", "false", "False")
 REGIME_SMA_DAYS = int(os.getenv("REGIME_SMA_DAYS", "20"))
@@ -186,7 +240,7 @@ PROFIT_LOCK_LOOKBACK_DAYS = int(os.getenv("PROFIT_LOCK_LOOKBACK_DAYS", "20"))  #
 PROFIT_LOCK_MIN_DAYS_TO_CATALYST = int(os.getenv("PROFIT_LOCK_MIN_DAYS_TO_CATALYST", "3"))
 
 # Risk haircut (size DOWN violent names). Grounded in the event-return regression
-# (returns_regression.py): direction is unpredictable, but MAGNITUDE is — and the
+# (returns_regression.py): direction is unpredictable, but MAGNITUDE is, and the
 # strongest driver is small market cap (smaller => bigger blowups). So we shrink
 # positions on tiny-cap names. This can ONLY reduce exposure (raises cash buffer),
 # never increase it. Tiers: (market_cap_ceiling_usd, multiplier).
@@ -248,6 +302,8 @@ def preflight(*, require_sec: bool = False) -> None:
     Call at the top of every script's main(). Keeps Rung 2 batch jobs from
     failing silently halfway through.
     """
+    if DATABASE_URL_ERROR:
+        raise RuntimeError(DATABASE_URL_ERROR)
     if not DATABASE_URL:
         raise RuntimeError(
             "DATABASE_URL is not set in .env. The pipeline cannot run without a database."

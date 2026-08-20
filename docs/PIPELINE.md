@@ -1,7 +1,7 @@
 # Pipeline reference
 
 The full script-by-script run order. Most readers want the
-[README quickstart](../README.md#quickstart) instead — this is the complete version.
+[README quickstart](../README.md#quickstart) instead; this is the complete version.
 
 ## Prerequisites
 
@@ -65,7 +65,7 @@ refresh stage.
 
 ```
 Layer 1 (Catalysts)  → companies, trials, catalysts
-Layer 2 (Science)    → council_judgments, trial_scores  [Poe API — scaffolded, not wired]
+Layer 2 (Science)    → council_judgments, trial_scores  [Poe API; scaffolded, not wired]
 Layer 3 (Base Rates) → historical_trials, base_rates
 Layer 4 (Financials) → sec_filings, financials          [SEC EDGAR]
 Market data          → price_history, positioning        [yfinance]

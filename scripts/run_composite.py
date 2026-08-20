@@ -27,7 +27,7 @@ def _f(value) -> float | None:
 # Bulk upsert via execute_values: per-row executemany round-trips through the
 # connection pooler one statement at a time (minutes for a few hundred rows).
 # Commit on the RAW connection — SQLAlchemy's conn.commit() does not cover raw
-# cursor writes and would let them roll back on close. (See AGENT_HANDOFF.md.)
+# cursor writes and would let them roll back on close. (See docs/HANDBOOK.md.)
 _EDGE_SQL = """
     INSERT INTO edge_scores (
         company_id, catalyst_id,

@@ -2,13 +2,13 @@
 
 ## Data sources
 
-All data is pulled from **public sources at runtime** — no restricted datasets are
+All data is pulled from **public sources at runtime**; no restricted datasets are
 committed (see `data/README.md` for the committed seeds):
 
-- **ClinicalTrials.gov API v2** — trial registry, catalyst dates, historical outcomes
-- **SEC EDGAR** — 8-K filings, XBRL company facts (cash/burn), Form 4 insider trades
+- **ClinicalTrials.gov API v2**: trial registry, catalyst dates, historical outcomes
+- **SEC EDGAR**: 8-K filings, XBRL company facts (cash/burn), Form 4 insider trades
   (requires a descriptive `SEC_USER_AGENT`; free, no key)
-- **yfinance** — daily OHLCV, short interest, options-implied move (unofficial API;
+- **yfinance**: daily OHLCV, short interest, options-implied move (unofficial API;
   the client is rate-limited and timeout-wrapped)
 
 ## Data directories
@@ -51,7 +51,7 @@ unavailable at the time:
 |---------|--------|--------------|--------|
 | pandas | 2.3.3 | 2.2.3 | cp314 wheel + Streamlit requires pandas<3 |
 | pydantic | 2.13.4 | 2.10.3 | pydantic-core needs prebuilt wheel |
-| lxml | 6.1.1 | 5.3.0 | No cp314 wheel (now optional — not imported) |
+| lxml | 6.1.1 | 5.3.0 | No cp314 wheel (now optional, not imported) |
 | rapidfuzz | 3.14.5 | 3.10.1 | No cp314 wheel |
 
 Python 3.12 is the recommended baseline if a future library lacks 3.14 wheels.

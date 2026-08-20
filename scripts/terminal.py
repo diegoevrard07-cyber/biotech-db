@@ -1,17 +1,9 @@
 """
-GBM/Onc-CNS Edge Engine - Bloomberg-style terminal.
+Biotech Catalyst Edge Engine terminal.
 
-Run with:
     streamlit run scripts/terminal.py
 
-Dark, dense, multi-panel cockpit for the Rung 2 decision-support engine. Portfolio
-data is cached briefly (30s); reference/research queries cache for 5 min. No
-hardcoded credentials (DATABASE_URL from .env).
-
-Nav:
-    Trade Desk : Cockpit · Portfolio · Action Desk
-    Research   : Strategy · Market & Models (dossier, calendar, validation,
-                 data health, glossary)
+Two pages: Portfolio (book, P&L, trades) and Research (risk, evidence, spec).
 """
 
 from __future__ import annotations
@@ -24,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # project root (layers.*)
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ (action_sheet)
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -35,34 +28,44 @@ from dotenv import load_dotenv
 import config
 from layers.composite import scorer
 from layers.marketdata.yf_client import fetch_history
+from layers.portfolio import projection as pj
+from layers.portfolio import stats as pstats
 from layers.portfolio import tracker as pf
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(PROJECT_ROOT / ".env")
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+load_dotenv(PROJECT_ROOT / ".env", override=True)
+# Re-normalize after loading .env so a just-edited file is picked up.
+try:
+    DATABASE_URL = config.normalize_database_url(os.getenv("DATABASE_URL", ""))
+    config.DATABASE_URL = DATABASE_URL
+    config.DATABASE_URL_ERROR = None
+except RuntimeError as exc:
+    DATABASE_URL = ""
+    config.DATABASE_URL = ""
+    config.DATABASE_URL_ERROR = str(exc)
 
 st.set_page_config(
     page_title="Edge Terminal", layout="wide", page_icon="◆", initial_sidebar_state="collapsed"
 )
 
-# ---- Design tokens (Projection-Finance-style dark UI) ----
+# ---- Design tokens (light, institutional research look) ----
 THEME = {
-    "bg": "#0a0d13",
-    "bg2": "#0e121a",
-    "card": "#12161f",
-    "card2": "#161b26",
-    "border": "#222a38",
-    "border_soft": "#1a212e",
-    "text": "#e8ebf2",
-    "muted": "#8b95a7",
-    "faint": "#596474",
-    "accent": "#6c8cff",
-    "green": "#2fd39a",
-    "red": "#f76a83",
-    "amber": "#f4b740",
-    "purple": "#8b7bff",
-    "font": "'Inter', 'Segoe UI', system-ui, sans-serif",
-    "mono": "'JetBrains Mono', 'SF Mono', 'Consolas', monospace",
+    "bg": "#f5f6f8",
+    "bg2": "#eef0f3",
+    "card": "#ffffff",
+    "card2": "#ffffff",
+    "border": "#d8dde5",
+    "border_soft": "#e7eaef",
+    "text": "#1c2536",
+    "muted": "#5f6b7c",
+    "faint": "#939dab",
+    "accent": "#1f4e79",
+    "green": "#1a7f4e",
+    "red": "#b23a2f",
+    "amber": "#a06b1c",
+    "purple": "#54568f",
+    "font": "'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif",
+    "mono": "'IBM Plex Mono', 'SF Mono', 'Consolas', monospace",
 }
 
 TRADE_COLORS = {
@@ -74,16 +77,16 @@ TRADE_COLORS = {
 
 # Ordered palette for allocation donuts / categorical charts.
 ALLOC_PALETTE = [
-    "#2fd39a",
-    "#6c8cff",
-    "#f76a83",
-    "#f4b740",
-    "#8b7bff",
-    "#39c0d3",
-    "#e77ac6",
-    "#9aa7bd",
-    "#5b8def",
-    "#57d9a3",
+    "#1f4e79",
+    "#1a7f4e",
+    "#b23a2f",
+    "#a06b1c",
+    "#54568f",
+    "#2e7f8f",
+    "#8a4f7d",
+    "#5f6b7c",
+    "#3f6db4",
+    "#4f9d7a",
 ]
 
 
@@ -92,14 +95,9 @@ def _inject_css() -> None:
     st.markdown(
         f"""
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
           html, body, [class*="css"] {{ font-family: {t['font']}; color: {t['text']}; }}
-          .stApp {{
-            background:
-              radial-gradient(1200px 600px at 15% -10%, #141b2b 0%, rgba(20,27,43,0) 55%),
-              radial-gradient(1000px 500px at 100% 0%, #17131f 0%, rgba(23,19,31,0) 50%),
-              {t['bg']};
-          }}
+          .stApp {{ background: {t['bg']}; }}
           header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
           [data-testid="stToolbar"] {{ right: 1rem; }}
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
@@ -116,10 +114,10 @@ def _inject_css() -> None:
           .pf-topbar {{ display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }}
           .pf-logo {{ display: flex; align-items: center; gap: 10px; font-weight: 800;
                       letter-spacing: .1em; font-size: .9rem; white-space: nowrap; }}
-          .pf-logo .mark {{ width: 26px; height: 26px; border-radius: 8px;
-                            background: linear-gradient(135deg,{t['accent']},{t['purple']});
+          .pf-logo .mark {{ width: 26px; height: 26px; border-radius: 6px;
+                            background: {t['accent']};
                             display: inline-flex; align-items: center; justify-content: center;
-                            color: #0a0d13; }}
+                            color: #ffffff; }}
 
           h1 {{ font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 .1rem; }}
           h2, h3 {{ font-size: .95rem; font-weight: 600; color: {t['text']}; margin: .3rem 0 .4rem; }}
@@ -128,38 +126,38 @@ def _inject_css() -> None:
 
           /* ---- cards (bordered containers) ---- */
           [data-testid="stVerticalBlockBorderWrapper"] {{
-            background: linear-gradient(180deg, {t['card2']} 0%, {t['card']} 100%);
-            border: 1px solid {t['border']}; border-radius: 16px;
-            padding: 2px 4px; box-shadow: 0 1px 0 rgba(255,255,255,.02) inset, 0 8px 24px rgba(0,0,0,.28);
+            background: {t['card']};
+            border: 1px solid {t['border']}; border-radius: 10px;
+            padding: 2px 4px; box-shadow: 0 1px 2px rgba(16,24,40,.05);
           }}
 
           /* ---- KPI stat grid (custom HTML) ---- */
           .pf-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                      gap: 14px; margin: .2rem 0 .3rem; }}
-          .pf-card {{ background: linear-gradient(180deg, {t['card2']} 0%, {t['card']} 100%);
-                      border: 1px solid {t['border']}; border-radius: 16px; padding: 16px 18px;
-                      box-shadow: 0 8px 24px rgba(0,0,0,.28); }}
+                      gap: 12px; margin: .2rem 0 .3rem; }}
+          .pf-card {{ background: {t['card']};
+                      border: 1px solid {t['border']}; border-radius: 10px; padding: 14px 16px;
+                      box-shadow: 0 1px 2px rgba(16,24,40,.05); }}
           .pf-stat-label {{ color: {t['muted']}; font-size: .66rem; text-transform: uppercase;
                             letter-spacing: .09em; font-weight: 600; margin-bottom: 10px; }}
           .pf-stat-row {{ display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }}
-          .pf-stat-val {{ font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em;
-                          font-family: {t['mono']}; }}
+          .pf-stat-val {{ font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em;
+                          font-family: {t['mono']}; font-variant-numeric: tabular-nums; }}
           .pf-stat-sub {{ color: {t['muted']}; font-size: .72rem; margin-top: 7px; }}
           .pf-arrow {{ color: {t['muted']}; font-weight: 600; }}
           .pf-delta {{ font-size: .74rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }}
-          .pf-delta.up {{ color: {t['green']}; background: rgba(47,211,154,.12); }}
-          .pf-delta.down {{ color: {t['red']}; background: rgba(247,106,131,.12); }}
-          .pf-delta.flat {{ color: {t['muted']}; background: rgba(139,148,167,.12); }}
+          .pf-delta.up {{ color: {t['green']}; background: rgba(26,127,78,.09); }}
+          .pf-delta.down {{ color: {t['red']}; background: rgba(178,58,47,.09); }}
+          .pf-delta.flat {{ color: {t['muted']}; background: rgba(95,107,124,.09); }}
 
           /* ---- badges / chips ---- */
           .pf-badge {{ display: inline-flex; align-items: center; gap: 6px; font-size: .7rem;
                        font-weight: 600; padding: 3px 10px; border-radius: 20px;
-                       background: rgba(108,140,255,.14); color: {t['accent']};
-                       border: 1px solid rgba(108,140,255,.25); }}
-          .pf-badge.green {{ background: rgba(47,211,154,.12); color: {t['green']};
-                             border-color: rgba(47,211,154,.25); }}
-          .pf-badge.amber {{ background: rgba(244,183,64,.12); color: {t['amber']};
-                             border-color: rgba(244,183,64,.25); }}
+                       background: rgba(31,78,121,.08); color: {t['accent']};
+                       border: 1px solid rgba(31,78,121,.22); }}
+          .pf-badge.green {{ background: rgba(26,127,78,.09); color: {t['green']};
+                             border-color: rgba(26,127,78,.22); }}
+          .pf-badge.amber {{ background: rgba(160,107,28,.09); color: {t['amber']};
+                             border-color: rgba(160,107,28,.22); }}
           .pf-chip {{ display: inline-flex; align-items: center; gap: 7px; font-size: .76rem;
                       color: {t['text']}; padding: 6px 12px; border-radius: 10px;
                       background: {t['card']}; border: 1px solid {t['border']}; }}
@@ -183,10 +181,10 @@ def _inject_css() -> None:
           /* ---- buttons ---- */
           .stButton > button {{ border-radius: 10px; border: 1px solid {t['border']};
                                 background: {t['card2']}; color: {t['text']}; font-weight: 600; }}
-          .stButton > button:hover {{ border-color: {t['accent']}; color: #fff; }}
+          .stButton > button:hover {{ border-color: {t['accent']}; color: {t['accent']}; }}
           .stButton > button[kind="primary"] {{ background: {t['accent']}; border-color: {t['accent']};
-                                                 color: #0a0d13; }}
-          .stButton > button[kind="primary"]:hover {{ background: #85a0ff; color: #0a0d13; }}
+                                                 color: #ffffff; }}
+          .stButton > button[kind="primary"]:hover {{ background: #2a629a; color: #ffffff; }}
           .stDownloadButton > button {{ border-radius: 10px; background: {t['card2']};
                                         border: 1px solid {t['border']}; color: {t['text']}; }}
 
@@ -320,7 +318,7 @@ def _timeframe_cutoff(label: str) -> int | None:
 def _style_trade_col(df: pd.DataFrame, col: str = "trade") -> pd.io.formats.style.Styler:
     def color_trade(val):
         """CSS style coloring a trade-type cell by its TRADE_COLORS entry."""
-        return f"color: {TRADE_COLORS.get(val, '#cfd3dc')}; font-weight:700"
+        return f"color: {TRADE_COLORS.get(val, '#5f6b7c')}; font-weight:700"
 
     return df.style.map(color_trade, subset=[col])
 
@@ -393,10 +391,34 @@ def _book_sized_table(book: dict, equity: float, prices: dict[str, float]) -> pd
 
 def get_conn():
     """Return a fresh psycopg2 connection from DATABASE_URL (stops the app if unset)."""
-    if not DATABASE_URL:
-        st.error("DATABASE_URL not set in .env")
+    env_path = PROJECT_ROOT / ".env"
+    if config.DATABASE_URL_ERROR:
+        st.error(config.DATABASE_URL_ERROR)
+        st.info(
+            f"Edit `{env_path}` so the only DATABASE_URL line looks like:\n\n"
+            "`DATABASE_URL=postgresql://postgres.xxxxx:PASSWORD@aws-0-xxxxx.pooler.supabase.com:6543/postgres`\n\n"
+            "Must start with `postgresql://`, never `https://`. Then restart Streamlit."
+        )
         st.stop()
-    return psycopg2.connect(DATABASE_URL)
+    url = config.DATABASE_URL or DATABASE_URL
+    if not url:
+        st.error("DATABASE_URL not set in .env")
+        st.info(
+            f"Create `{env_path}` with one line:\n\n"
+            "`DATABASE_URL=postgresql://…` from Supabase → Connect → Transaction pooler → URI."
+        )
+        st.stop()
+    try:
+        return psycopg2.connect(url)
+    except Exception as exc:
+        msg = str(exc)
+        st.error(f"Could not connect to the database: {msg}")
+        if "https" in msg.lower() or "could not translate host name" in msg.lower():
+            st.info(
+                f"Your DATABASE_URL in `{env_path}` is malformed (often an `https://` paste). "
+                "It must start with `postgresql://`. Fix `.env`, then restart."
+            )
+        st.stop()
 
 
 @st.cache_data(ttl=300)
@@ -1084,115 +1106,174 @@ def _purge_open_shorts_once() -> None:
         st.error(f"Failed to cover shorts: {exc}")
 
 
-def page_portfolio() -> None:
-    """Render the Portfolio page: account setup, open positions, action center, history."""
-    st.title("Portfolio")
-    ensure_account()
-    _purge_open_shorts_once()
-    acct = get_account()
-    prices = latest_prices()
-    open_df = load_holdings("open")
+def _closed_trade_record(closed_df: pd.DataFrame) -> tuple[dict | None, float, list[float]]:
+    """Realized-trade stats for closed longs with a cost basis.
 
-    # ---- account setup ----
-    needs_setup = acct["starting_capital"] is None and acct["cash"] == 0 and open_df.empty
-    with st.expander("⚙️ Account / cash", expanded=needs_setup):
-        cash = st.number_input(
-            "Cash balance ($)", value=float(acct["cash"]), step=100.0, format="%.2f"
+    Returns (stats dict, total realized P&L $, per-trade returns).
+    """
+    if closed_df.empty:
+        return None, 0.0, []
+    cl = closed_df.copy()
+    cl["realized_pnl_usd"] = pd.to_numeric(cl["realized_pnl_usd"], errors="coerce")
+    cl["cost_basis_usd"] = pd.to_numeric(cl["cost_basis_usd"], errors="coerce")
+    cl = cl[(cl["side"] == "long") & (cl["cost_basis_usd"] > 0) & cl["realized_pnl_usd"].notna()]
+    if cl.empty:
+        return None, 0.0, []
+    rets = (cl["realized_pnl_usd"] / cl["cost_basis_usd"]).tolist()
+    return pstats.closed_trade_stats(rets), float(cl["realized_pnl_usd"].sum()), rets
+
+
+def render_trading_record(closed_df: pd.DataFrame) -> None:
+    """Compact realized-record strip: closed trades, win rate, expectancy, payoff, P&L."""
+    record, realized_total, _ = _closed_trade_record(closed_df)
+    if not record:
+        return
+    payoff_txt = "∞" if record["payoff"] == float("inf") else f"{record['payoff']:.2f}"
+    with st.container(border=True):
+        st.markdown(
+            '<div class="pf-stat-label">Trading record · realized</div>', unsafe_allow_html=True
         )
-        start_cap = st.number_input(
-            "Starting capital ($) — for total-return tracking",
-            value=float(acct["starting_capital"] or 0.0),
-            step=100.0,
-            format="%.2f",
+        render_kpi_row(
+            [
+                _stat_card("Closed trades", f"{record['n']}"),
+                _stat_card("Win rate", f"{record['win_rate']:.0%}"),
+                _stat_card(
+                    "Expectancy / trade",
+                    f"{record['expectancy']:+.1%}",
+                    delta_dir=_dir(record["expectancy"]),
+                ),
+                _stat_card(
+                    "Payoff ratio",
+                    payoff_txt,
+                    sub=f"avg win {record['avg_win']:+.1%} · avg loss {record['avg_loss']:+.1%}",
+                ),
+                _stat_card(
+                    "Realized P&L",
+                    f"${realized_total:+,.0f}",
+                    delta_dir=_dir(realized_total),
+                ),
+            ]
         )
+        if record["n"] < 30:
+            st.caption(f"Small sample (n={record['n']}); treat every stat as provisional.")
+
+
+def _render_performance_risk() -> None:
+    """Equity-curve stats, closed-trade distribution, and the XBI yardstick.
+
+    Same math as scripts/risk_report.py via layers/portfolio/stats.py.
+    """
+    perf = load_performance_history()
+    closed_df = load_holdings("closed")
+    bench_df = load_benchmark_closes()
+
+    curve = None
+    if not perf.empty and perf["equity"].notna().any():
+        rows = perf.dropna(subset=["equity"])
+        curve = pstats.equity_curve_stats(
+            [float(e) for e in rows["equity"]],
+            benchmark=[float(x) if pd.notna(x) else None for x in rows["xbi_close"]],
+        )
+    record, _, rets = _closed_trade_record(closed_df)
+    ref = None
+    if not bench_df.empty:
+        ref = pstats.benchmark_reference_stats([float(c) for c in bench_df["close"]])
+
+    with st.expander("Performance & risk", expanded=bool(curve or record)):
+        c1, c2, c3 = st.columns(3, gap="medium")
+
+        with c1:
+            st.markdown(
+                '<div class="pf-stat-label">Paper equity curve</div>', unsafe_allow_html=True
+            )
+            if curve:
+                st.metric("Period return", f"{curve['period_return']:+.1%}")
+                bits = []
+                if curve["ann_vol"] is not None:
+                    bits.append(f"ann. vol {curve['ann_vol']:.1%}")
+                if curve["sharpe"] is not None:
+                    bits.append(f"Sharpe {curve['sharpe']:.2f}")
+                bits.append(f"max DD {curve['max_drawdown']:.1%}")
+                if curve["beta"] is not None:
+                    bits.append(
+                        f"beta vs {config.BENCHMARK_TICKER} {curve['beta']:+.2f} "
+                        f"({curve['beta_days']}d)"
+                    )
+                st.caption(" · ".join(bits))
+                if curve["n"] < 60:
+                    st.caption(f"n={curve['n']} daily snapshots; too small to trust.")
+            else:
+                st.caption("Not enough snapshots yet.")
+
+        with c2:
+            st.markdown('<div class="pf-stat-label">Closed trades</div>', unsafe_allow_html=True)
+            if record:
+                st.metric("Expectancy / trade", f"{record['expectancy']:+.1%}")
+                payoff_txt = "∞" if record["payoff"] == float("inf") else f"{record['payoff']:.2f}"
+                st.caption(
+                    f"n={record['n']} · win rate {record['win_rate']:.0%} · "
+                    f"payoff {payoff_txt}"
+                    + (
+                        f" · per-trade Sharpe {record['per_trade_sharpe']:.2f}"
+                        if record["per_trade_sharpe"] is not None
+                        else ""
+                    )
+                )
+                fig = px.histogram(pd.DataFrame({"ret": rets}), x="ret", nbins=15)
+                fig.update_layout(
+                    height=180,
+                    showlegend=False,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color=THEME["text"],
+                    xaxis_tickformat=".0%",
+                    xaxis_title="",
+                    yaxis_title="",
+                    margin=dict(l=8, r=8, t=8, b=8),
+                )
+                fig.update_traces(marker_color=THEME["accent"])
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.caption("No closed trades yet.")
+
+        with c3:
+            st.markdown(
+                f'<div class="pf-stat-label">{config.BENCHMARK_TICKER} reference</div>',
+                unsafe_allow_html=True,
+            )
+            if ref:
+                st.metric("Ann. return", f"{ref['ann_return']:+.1%}")
+                st.caption(
+                    f"{ref['n']} days · vol {ref['ann_vol']:.1%} · "
+                    f"Sharpe {ref['sharpe']:.2f} · max DD {ref['max_drawdown']:.1%}"
+                )
+                st.caption("Long-run risk bar the book has to beat.")
+            else:
+                st.caption("Insufficient benchmark history.")
+
+
+def _manage_tab(acct: dict, prices: dict, open_df: pd.DataFrame) -> None:
+    """Account settings, trade entry, and position close."""
+    st.markdown('<div class="pf-stat-label">Account</div>', unsafe_allow_html=True)
+    ac = st.columns([1, 1, 1])
+    cash = ac[0].number_input(
+        "Cash balance ($)", value=float(acct["cash"]), step=100.0, format="%.2f"
+    )
+    start_cap = ac[1].number_input(
+        "Starting capital ($)",
+        value=float(acct["starting_capital"] or 0.0),
+        step=100.0,
+        format="%.2f",
+    )
+    with ac[2]:
+        st.write("")
         if st.button("Save account"):
             set_account(cash, start_cap or None)
             st.cache_data.clear()
             st.rerun()
 
-    # ---- account summary ----
-    summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
-    if config.LONG_ONLY:
-        m = st.columns(5)
-        m[0].metric("Account value", fmt_usd(summ["equity"]))
-        m[1].metric("Cash", fmt_usd(summ["cash"]))
-        m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
-        m[3].metric(
-            "Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"])
-        )
-        cash_pct = (summ["cash"] / summ["equity"]) if summ["equity"] else 0.0
-        m[4].metric("Cash %", f"{cash_pct:.0%}")
-    else:
-        m = st.columns(6)
-        m[0].metric("Account value", fmt_usd(summ["equity"]))
-        m[1].metric("Cash", fmt_usd(summ["cash"]))
-        m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
-        m[3].metric(
-            "Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"])
-        )
-        m[4].metric(
-            "Gross short", f"{summ['gross_short_pct']:.0%}", help=fmt_usd(summ["gross_short_usd"])
-        )
-        m[5].metric("Net", f"{summ['net_pct']:+.0%}", help=fmt_usd(summ["net_usd"]))
-    if acct["starting_capital"]:
-        tot = summ["equity"] - float(acct["starting_capital"])
-        st.caption(
-            f"Total return since start: **{fmt_usd(tot)}** "
-            f"({tot/float(acct['starting_capital']):+.1%})"
-        )
-    freshness_caption()
-
     st.divider()
-    render_action_center(open_df)
-
-    # ---- holdings table ----
-    st.divider()
-    st.subheader("📂 Open positions")
-    if open_df.empty:
-        st.caption("None yet.")
-    else:
-        rows = []
-        for r in open_df.itertuples():
-            cur = prices.get(r.ticker)
-            mv = pf.market_value(r.side, float(r.shares), cur)
-            pnl = pf.unrealized_pnl(r.side, float(r.shares), float(r.entry_price), cur)
-            pnl_pct = pf.unrealized_pnl_pct(r.side, float(r.entry_price), cur)
-            rows.append(
-                {
-                    "ticker": r.ticker,
-                    "side": r.side,
-                    "type": r.trade_type,
-                    "shares": float(r.shares),
-                    "entry": float(r.entry_price),
-                    "now": cur,
-                    "mkt_value": abs(mv) if mv is not None else None,
-                    "% book": (
-                        abs(mv) / summ["equity"] if mv is not None and summ["equity"] else None
-                    ),
-                    "P&L $": pnl,
-                    "P&L %": pnl_pct,
-                    "exit_by": r.planned_exit_date,
-                    "rule": pf.format_exit_rule(r.planned_exit_rule),
-                }
-            )
-        hv = pd.DataFrame(rows)
-        sty = hv.style.format(
-            {
-                "entry": "{:.2f}",
-                "now": "{:.2f}",
-                "mkt_value": "${:,.0f}",
-                "% book": "{:.1%}",
-                "P&L $": "${:,.0f}",
-                "P&L %": "{:+.1%}",
-                "shares": "{:.0f}",
-            },
-            na_rep="—",
-        )
-        st.dataframe(sty, use_container_width=True, hide_index=True, height=280)
-
-    # ---- add trade ----
-    st.divider()
-    st.subheader("➕ Log a trade")
+    st.markdown('<div class="pf-stat-label">Log a trade</div>', unsafe_allow_html=True)
     companies = q("SELECT id, ticker FROM companies WHERE ticker IS NOT NULL ORDER BY ticker")
     if companies.empty:
         st.caption("No companies in DB.")
@@ -1218,7 +1299,7 @@ def page_portfolio() -> None:
             "AND expected_date >= CURRENT_DATE ORDER BY expected_date",
             (cid,),
         )
-        cat_map = {"(none — manual exit)": (None, None)}
+        cat_map = {"(none / manual exit)": (None, None)}
         for r in cats.itertuples():
             cat_map[f"{r.catalyst_type} @ {r.expected_date} (#{r.id})"] = (
                 int(r.id),
@@ -1276,7 +1357,7 @@ def page_portfolio() -> None:
     # ---- close trade ----
     if not open_df.empty:
         st.divider()
-        st.subheader("✅ Close a position")
+        st.markdown('<div class="pf-stat-label">Close a position</div>', unsafe_allow_html=True)
         lbl_map = {
             f"{r.ticker} {r.side} {float(r.shares):.0f}@{float(r.entry_price):.2f} (#{r.id})": r
             for r in open_df.itertuples()
@@ -1397,8 +1478,9 @@ def _rgba(hex_color: str, alpha: float) -> str:
 
 
 def page_home() -> None:
-    """Render the Home cockpit: equity curve vs XBI, KPIs, allocation, and risk posture."""
+    """Portfolio page: equity vs XBI, KPIs, allocation, positions, trade management."""
     ensure_account()
+    _purge_open_shorts_once()
     acct = get_account()
     prices = latest_prices()
     open_df = load_holdings("open")
@@ -1444,7 +1526,7 @@ def page_home() -> None:
     chips.append(("Positions", str(summ["positions"])))
     if last_eod:
         chips.append(("Last EOD", str(last_eod)))
-    render_page_header("Cockpit", badges=badges, chips=chips)
+    render_page_header("Portfolio", badges=badges, chips=chips)
 
     # ---------- KPI cards ----------
     render_kpi_row(
@@ -1580,6 +1662,34 @@ def page_home() -> None:
             )
             st.markdown(_alloc_legend_html(now_buckets, equity), unsafe_allow_html=True)
 
+        with st.container(border=True):
+            st.markdown('<div class="pf-stat-label">Next catalysts</div>', unsafe_allow_html=True)
+            blot = load_blotter()
+            upcoming = pd.DataFrame()
+            if not blot.empty:
+                upcoming = blot.dropna(subset=["expected_date"])
+                upcoming = upcoming[(upcoming["days_until"] >= 0) & (upcoming["days_until"] <= 60)]
+                upcoming = upcoming.sort_values("days_until").drop_duplicates("ticker").head(5)
+            if upcoming.empty:
+                st.caption("No catalysts in the next 60 days.")
+            else:
+                show = upcoming[
+                    ["ticker", "catalyst_type", "days_until", "trade_type", "suggested_weight"]
+                ].rename(
+                    columns={
+                        "catalyst_type": "event",
+                        "days_until": "in (d)",
+                        "trade_type": "signal",
+                        "suggested_weight": "wt",
+                    }
+                )
+                st.dataframe(
+                    show.style.format({"in (d)": "{:.0f}", "wt": "{:.1%}"}, na_rep="—"),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=46 + 34 * len(show),
+                )
+
     # ---------- kept charts: position breakdown + portfolio allocation ----------
     if not hv.empty and hv["pnl_usd"].notna().any():
         pcol = st.columns(2, gap="medium")
@@ -1610,7 +1720,9 @@ def page_home() -> None:
             label_visibility="collapsed",
             key="cockpit_search",
         )
-        tab_open, tab_book, tab_closed = st.tabs(["Open positions", "Trade book", "Closed"])
+        tab_open, tab_book, tab_closed, tab_manage = st.tabs(
+            ["Open positions", "Trade book", "Closed", "Manage"]
+        )
 
         with tab_open:
             if hv.empty:
@@ -1729,7 +1841,14 @@ def page_home() -> None:
                     height=min(420, 46 + 34 * len(cd)),
                 )
 
+        with tab_manage:
+            _manage_tab(acct, prices, open_df)
+
+    render_trading_record(closed_df)
+
     render_action_center(open_df)
+
+    _render_performance_risk()
 
 
 # ===========================================================================
@@ -2435,34 +2554,80 @@ def _render_data_health() -> None:
 
 
 def page_research() -> None:
-    """Single research surface: dossiers, calendar, validation, data health, glossary.
-
-    Merges the former 'Market Intel' and 'Models & Data' pages into one tabbed view.
-    """
-    st.title("Market & models")
-    tab_dossier, tab_cal, tab_val, tab_health, tab_gloss = st.tabs(
-        ["Company dossier", "Catalyst calendar", "Validation", "Data health", "Glossary"]
+    """Research page: risk, evidence, calendar, names, spec."""
+    tab_risk, tab_ev, tab_cal, tab_names, tab_spec = st.tabs(
+        ["Risk", "Evidence", "Calendar", "Names", "Spec"]
     )
-    with tab_dossier:
-        _intel_dossier_tab()
+    with tab_risk:
+        page_risk_lab(embedded=True)
+    with tab_ev:
+        page_validation(embedded=True)
+        with st.expander("Data health"):
+            _render_data_health()
     with tab_cal:
         _render_catalyst_calendar()
-    with tab_val:
-        page_validation(embedded=True)
-    with tab_health:
-        _render_data_health()
-    with tab_gloss:
-        page_glossary(embedded=True)
+    with tab_names:
+        _intel_dossier_tab()
+    with tab_spec:
+        page_strategy(embedded=True)
+        with st.expander("Glossary"):
+            page_glossary(embedded=True)
 
 
 # ===========================================================================
 def page_validation(*, embedded: bool = False) -> None:
-    """Render the Validation page: event-study evidence, calibration, and backtest results."""
+    """Render the Validation page: research findings, event-study evidence, calibration, backtest."""
     if not embedded:
         st.title("Validation")
 
+    # --- Headline research findings (dated, reproducible) ---
+    st.subheader("Findings")
+    st.caption("As of 2026-06-21. Scripts in Reproduce column.")
+    findings = pd.DataFrame(
+        [
+            {
+                "Question": "Can trial success be predicted?",
+                "Result": "Yes: Brier skill +0.098 over prior, AUC 0.676, well calibrated",
+                "Sample": "n=10,127, temporal holdout (train <2019, test ≥2019)",
+                "Verdict": "VALIDATED",
+                "Reproduce": "validate_base_rates.py",
+            },
+            {
+                "Question": "What do 8-K reactions look like?",
+                "Result": "Median −1%, std 22%; ~30% of events move ≥10%",
+                "Sample": "n=2,028 events, 3-day hold, vs XBI",
+                "Verdict": "MEASURED",
+                "Reproduce": "build_event_returns.py",
+            },
+            {
+                "Question": "Does price action predict reaction direction?",
+                "Result": "No: OOS R² −0.001, hit rate 47.6% (below coin flip)",
+                "Sample": "n=609 OOS events, temporal split",
+                "Verdict": "NO EDGE (not wired)",
+                "Reproduce": "returns_regression.py",
+            },
+            {
+                "Question": "Does price action predict reaction magnitude?",
+                "Result": "Weakly: OOS R² +0.019; predicted-big realized 13.9% vs 7.8%",
+                "Sample": "n=609 OOS events, temporal split",
+                "Verdict": "USED FOR SIZING ONLY",
+                "Reproduce": "returns_regression.py",
+            },
+            {
+                "Question": "Does a logistic regression beat the base-rate lookup?",
+                "Result": "No: AUC 0.655 vs 0.672; lookup also better calibrated",
+                "Sample": "n=10,127, same temporal holdout",
+                "Verdict": "LOOKUP KEPT",
+                "Reproduce": "train_success_model.py",
+            },
+        ]
+    )
+    st.dataframe(findings, use_container_width=True, hide_index=True)
+
+    st.divider()
+
     # --- Event-study evidence: the REAL returns dataset (8-K reactions) ---
-    st.subheader("Event-study evidence — abnormal returns around 8-K announcements")
+    st.subheader("Event-study evidence: abnormal returns around 8-K announcements")
     st.caption(
         "Abnormal return = name − XBI over the hold. "
         "Build/refresh: `python scripts/build_event_returns.py`"
@@ -2502,7 +2667,7 @@ def page_validation(*, embedded: bool = False) -> None:
                 x="q",
                 y="abnormal_return",
                 color="abnormal_return",
-                color_continuous_scale=["#ff5c5c", "#6b7280", "#29d391"],
+                color_continuous_scale=[THEME["red"], THEME["muted"], THEME["green"]],
                 title="Forward abnormal return by pre-event run-up quintile",
             )
             fig.update_layout(
@@ -2511,7 +2676,7 @@ def page_validation(*, embedded: bool = False) -> None:
                 coloraxis_showscale=False,
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#cfd3dc",
+                font_color=THEME["text"],
                 yaxis_tickformat=".1%",
                 xaxis_title="",
                 yaxis_title="avg forward abnormal",
@@ -2576,7 +2741,7 @@ def page_validation(*, embedded: bool = False) -> None:
                         height=340,
                         paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
-                        font_color="#cfd3dc",
+                        font_color=THEME["text"],
                         title="Reliability (diagonal = perfect)",
                     )
                     st.plotly_chart(fig, use_container_width=True)
@@ -2592,14 +2757,18 @@ def page_validation(*, embedded: bool = False) -> None:
             x="outcome_label",
             y="n",
             color="outcome_label",
-            color_discrete_map={"hit": "#29d391", "miss": "#ff5c5c", "ambiguous": "#6b7280"},
+            color_discrete_map={
+                "hit": THEME["green"],
+                "miss": THEME["red"],
+                "ambiguous": THEME["muted"],
+            },
         )
         fig.update_layout(
             height=280,
             showlegend=False,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#cfd3dc",
+            font_color=THEME["text"],
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -2612,7 +2781,7 @@ def page_validation(*, embedded: bool = False) -> None:
 
 
 # ===========================================================================
-def page_strategy() -> None:
+def page_strategy(*, embedded: bool = False) -> None:
     """Quant-grade specification of the engine: how a signal becomes a sized position.
 
     Reads live values from `config` and `layers.composite.scorer` so the page can
@@ -2622,13 +2791,9 @@ def page_strategy() -> None:
     tiers = config.RISK_HAIRCUT_TIERS
 
     mode = "LONG-ONLY" if config.LONG_ONLY else "LONG/SHORT"
-    st.title("Strategy specification")
-    st.caption(
-        "Decision-support engine for catalyst-driven small-cap onc/CNS biotech "
-        "(GBM flagship subset). End-of-day data; one rebalance per day. "
-        f"Mode: **{mode}**. "
-        "Parameters below are read live from config — they reflect what is actually running."
-    )
+    if not embedded:
+        st.title("Strategy specification")
+    st.caption(f"EOD, daily rebalance, **{mode}**. Live config.")
 
     # ---- 1. Thesis ----
     st.subheader("1 · Thesis")
@@ -2833,22 +2998,441 @@ def page_strategy() -> None:
     )
 
 
+# ===========================================================================
+def _scene_axes(title_x: str, title_y: str, title_z: str) -> dict:
+    """Shared dark styling for 3D scenes."""
+    ax = dict(
+        gridcolor=THEME["border"],
+        zerolinecolor=THEME["border"],
+        showbackground=True,
+        backgroundcolor="rgba(245,246,248,.7)",
+        color=THEME["muted"],
+    )
+    return dict(
+        xaxis={**ax, "title": title_x},
+        yaxis={**ax, "title": title_y},
+        zaxis={**ax, "title": title_z},
+    )
+
+
+def _book_daily_returns(perf: pd.DataFrame, bench_df: pd.DataFrame, beta: float | None):
+    """Daily returns to bootstrap from: the book's own history when long enough,
+    otherwise XBI daily returns scaled by beta (labeled as a proxy).
+
+    Returns (returns list, source label).
+    """
+    if not perf.empty and perf["equity"].notna().sum() >= 21:
+        eq = [float(x) for x in perf["equity"].dropna()]
+        return pstats.simple_returns(eq), "book history"
+    if not bench_df.empty and len(bench_df) >= 40:
+        closes = [float(c) for c in bench_df["close"]]
+        b = beta if beta is not None else 1.0
+        rets = [b * r for r in pstats.simple_returns(closes)]
+        return rets, f"XBI proxy × beta {b:+.2f} (book history too short)"
+    return [], ""
+
+
+def page_risk_lab(*, embedded: bool = False) -> None:
+    """Monte Carlo projection, index scenarios, 3D landscape, Kelly surface, drawdown, caps."""
+    perf = load_performance_history()
+    closed_df = load_holdings("closed")
+    open_df = load_holdings("open")
+    bench_df = load_benchmark_closes()
+    acct = get_account()
+    prices = latest_prices()
+    summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
+    equity = float(summ["equity"] or 0.0)
+    gross = float(summ.get("gross_long_pct") or 0.0)
+
+    curve = None
+    if not perf.empty and perf["equity"].notna().any():
+        rows = perf.dropna(subset=["equity"])
+        curve = pstats.equity_curve_stats(
+            [float(e) for e in rows["equity"]],
+            benchmark=[float(x) if pd.notna(x) else None for x in rows["xbi_close"]],
+        )
+    beta = curve["beta"] if curve and curve["beta"] is not None else None
+    record, _, trade_rets = _closed_trade_record(closed_df)
+
+    badges = ['<span class="pf-badge">● SIMULATION</span>']
+    chips = [("Equity", fmt_usd(equity)), ("Gross long", f"{gross:.0%}")]
+    if beta is not None:
+        chips.append(("Beta vs XBI", f"{beta:+.2f}"))
+    if not embedded:
+        render_page_header("Risk Lab", badges=badges, chips=chips)
+
+    # ---------- headline risk stats ----------
+    rets, ret_src = _book_daily_returns(perf, bench_df, beta)
+    var95 = None
+    if len(rets) >= 20:
+        var95 = float(np.percentile(np.asarray(rets), 5)) * equity
+    render_kpi_row(
+        [
+            _stat_card(
+                "Ann. volatility",
+                f"{curve['ann_vol']:.1%}" if curve and curve["ann_vol"] is not None else "—",
+                sub=f"n={curve['n']} snapshots" if curve else "needs history",
+            ),
+            _stat_card(
+                "Max drawdown",
+                f"{curve['max_drawdown']:.1%}" if curve else "—",
+                delta_dir="down" if curve and curve["max_drawdown"] < 0 else "flat",
+            ),
+            _stat_card(
+                "Beta vs XBI",
+                f"{beta:+.2f}" if beta is not None else "—",
+                sub=f"{curve['beta_days']}d overlap" if curve and beta is not None else None,
+            ),
+            _stat_card(
+                "1-day VaR (95%)",
+                f"${abs(var95):,.0f}" if var95 is not None else "—",
+                sub=f"from {ret_src}" if var95 is not None else "needs 20+ returns",
+            ),
+            _stat_card(
+                "Deployed",
+                f"{gross:.0%}",
+                sub=f"cash {1 - gross:.0%} · cap {config.MAX_GROSS_LONG:.0%}",
+            ),
+        ]
+    )
+
+    # ---------- Monte Carlo projection ----------
+    left, right = st.columns([3, 2], gap="medium")
+    with left:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">6-month Monte Carlo · 2,000 paths</div>',
+                unsafe_allow_html=True,
+            )
+            if len(rets) >= 5 and equity > 0:
+                paths = pj.bootstrap_equity_paths(rets, equity, days=126, n_paths=2000)
+                qs = pj.path_quantiles(paths)
+                summ_p = pj.projection_summary(paths)
+                x = list(range(paths.shape[1]))
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=x + x[::-1],
+                        y=list(qs[95]) + list(qs[5])[::-1],
+                        fill="toself",
+                        fillcolor="rgba(31,78,121,.10)",
+                        line=dict(width=0),
+                        name="P5–P95",
+                        hoverinfo="skip",
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=x + x[::-1],
+                        y=list(qs[75]) + list(qs[25])[::-1],
+                        fill="toself",
+                        fillcolor="rgba(31,78,121,.20)",
+                        line=dict(width=0),
+                        name="P25–P75",
+                        hoverinfo="skip",
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=x,
+                        y=qs[50],
+                        line=dict(color=THEME["accent"], width=2.4),
+                        name="Median",
+                    )
+                )
+                fig.add_hline(y=equity, line_dash="dot", line_color=THEME["muted"])
+                fig.update_layout(
+                    height=360,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color=THEME["text"],
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    xaxis_title="trading days ahead",
+                    yaxis_title="",
+                    legend=dict(orientation="h", y=1.05),
+                )
+                fig.update_xaxes(gridcolor=THEME["border_soft"])
+                fig.update_yaxes(gridcolor=THEME["border_soft"], tickprefix="$")
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.caption(
+                    f"{ret_src}. P5 {fmt_usd(summ_p['p05'])} · "
+                    f"median {fmt_usd(summ_p['p50'])} · P95 {fmt_usd(summ_p['p95'])} · "
+                    f"P(loss) {summ_p['prob_loss']:.0%} · P(−10%) {summ_p['prob_down_10']:.0%}."
+                )
+            else:
+                st.caption("Needs price/return history. Run the pipeline first.")
+
+    with right:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Index shocks · beta approximation</div>',
+                unsafe_allow_html=True,
+            )
+            b_used = beta if beta is not None else 1.0
+            rows = pj.scenario_impacts(b_used, gross, equity)
+            sc = pd.DataFrame(rows)
+            sc["XBI move"] = sc["shock"].map(lambda s: f"{s:+.0%}")
+            sc["Book %"] = sc["book_pct"]
+            sc["Book $"] = sc["book_usd"]
+            fig = px.bar(
+                sc,
+                x="XBI move",
+                y="book_usd",
+                color="book_usd",
+                color_continuous_scale=[THEME["red"], THEME["muted"], THEME["green"]],
+            )
+            fig.update_layout(
+                height=230,
+                showlegend=False,
+                coloraxis_showscale=False,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color=THEME["text"],
+                margin=dict(l=8, r=8, t=8, b=8),
+                xaxis_title="",
+                yaxis_title="",
+            )
+            fig.update_yaxes(gridcolor=THEME["border_soft"], tickprefix="$")
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.dataframe(
+                sc[["XBI move", "Book %", "Book $"]].style.format(
+                    {"Book %": "{:+.1%}", "Book $": "${:+,.0f}"}
+                ),
+                use_container_width=True,
+                hide_index=True,
+                height=46 + 34 * len(sc),
+            )
+            note = "measured beta" if beta is not None else "beta assumed 1.0 (history too short)"
+            st.caption(f"Impact = β × shock × gross. {note}.")
+
+    # ---------- 3D catalyst landscape + Kelly surface ----------
+    c3d1, c3d2 = st.columns(2, gap="medium")
+    with c3d1:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Catalyst landscape</div>',
+                unsafe_allow_html=True,
+            )
+            blot = load_blotter()
+            land = pd.DataFrame()
+            if not blot.empty:
+                land = blot.dropna(subset=["days_until", "base_rate", "implied_move"]).copy()
+                land = land[(land["days_until"] >= 0) & (land["days_until"] <= 365)]
+            if land.empty:
+                st.caption("Needs catalysts with base rates and implied moves.")
+            else:
+                land["w"] = land["suggested_weight"].abs().fillna(0.005).clip(0.004, 0.06)
+                fig = go.Figure()
+                for tt, grp in land.groupby("trade_type"):
+                    fig.add_trace(
+                        go.Scatter3d(
+                            x=grp["days_until"],
+                            y=grp["base_rate"],
+                            z=grp["implied_move"],
+                            mode="markers",
+                            name=str(tt),
+                            text=grp["ticker"],
+                            hovertemplate=(
+                                "<b>%{text}</b><br>in %{x:.0f}d · "
+                                "P(win) %{y:.0%} · implied ±%{z:.0%}<extra></extra>"
+                            ),
+                            marker=dict(
+                                size=(grp["w"] * 220).clip(4, 14),
+                                color=TRADE_COLORS.get(str(tt), THEME["muted"]),
+                                opacity=0.85,
+                                line=dict(width=0),
+                            ),
+                        )
+                    )
+                fig.update_layout(
+                    height=430,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    scene=_scene_axes("days to catalyst", "trial odds", "implied move"),
+                    scene_camera=dict(eye=dict(x=1.7, y=-1.6, z=0.75)),
+                    margin=dict(l=0, r=0, t=6, b=0),
+                    legend=dict(orientation="h", y=0.99),
+                    font_color=THEME["text"],
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption("Size = suggested weight. Drag to rotate.")
+
+    with c3d2:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Kelly surface</div>',
+                unsafe_allow_html=True,
+            )
+            wp, po, surf = pj.kelly_surface()
+            fig = go.Figure(
+                go.Surface(
+                    x=wp,
+                    y=po,
+                    z=surf,
+                    colorscale=[
+                        [0.0, "#eef2f7"],
+                        [0.35, "#9db8d4"],
+                        [0.7, "#1f4e79"],
+                        [1.0, "#1a7f4e"],
+                    ],
+                    opacity=0.96,
+                    showscale=False,
+                    contours=dict(z=dict(show=True, usecolormap=True, project_z=True, width=1)),
+                )
+            )
+            if record and record["payoff"] not in (0, float("inf")):
+                fig.add_trace(
+                    go.Scatter3d(
+                        x=[record["win_rate"]],
+                        y=[min(record["payoff"], 3.0)],
+                        z=[pj.kelly_fraction(record["win_rate"], record["payoff"])],
+                        mode="markers+text",
+                        text=["book"],
+                        textposition="top center",
+                        textfont=dict(color=THEME["text"]),
+                        marker=dict(size=7, color=THEME["red"]),
+                        name="current book",
+                    )
+                )
+            fig.update_layout(
+                height=430,
+                paper_bgcolor="rgba(0,0,0,0)",
+                scene=_scene_axes("win probability", "payoff ratio", "full-Kelly f*"),
+                scene_camera=dict(eye=dict(x=-1.7, y=-1.5, z=0.8)),
+                margin=dict(l=0, r=0, t=6, b=0),
+                showlegend=False,
+                font_color=THEME["text"],
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            cap = "Quarter-Kelly, 5% name cap."
+            if record and record["payoff"] not in (0, float("inf")):
+                cap += (
+                    f" Book operating point: win rate {record['win_rate']:.0%}, "
+                    f"payoff {record['payoff']:.2f}."
+                )
+            st.caption(cap)
+
+    # ---------- drawdown profile + cap utilization ----------
+    d1, d2 = st.columns([3, 2], gap="medium")
+    with d1:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Drawdown vs peak</div>',
+                unsafe_allow_html=True,
+            )
+            if not perf.empty and perf["equity"].notna().sum() >= 3:
+                dd_df = perf.dropna(subset=["equity"]).copy()
+                peak = dd_df["equity"].cummax()
+                dd_df["dd"] = dd_df["equity"] / peak - 1.0
+                fig = go.Figure(
+                    go.Scatter(
+                        x=dd_df["date"],
+                        y=dd_df["dd"],
+                        fill="tozeroy",
+                        line=dict(color=THEME["red"], width=1.6),
+                        fillcolor="rgba(178,58,47,.14)",
+                    )
+                )
+                for tier_dd, factor in sorted(config.DRAWDOWN_TIERS, reverse=True):
+                    fig.add_hline(
+                        y=-abs(tier_dd),
+                        line_dash="dot",
+                        line_color=THEME["amber"],
+                        annotation_text=f"de-risk ×{factor:.2f}",
+                        annotation_font_color=THEME["muted"],
+                        annotation_position="right",
+                    )
+                fig.update_layout(
+                    height=280,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font_color=THEME["text"],
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    yaxis_tickformat=".0%",
+                    xaxis_title="",
+                    yaxis_title="",
+                )
+                fig.update_xaxes(gridcolor=THEME["border_soft"])
+                fig.update_yaxes(gridcolor=THEME["border_soft"])
+                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.caption("Dotted lines: live de-risk tiers.")
+            else:
+                st.caption("Needs equity history.")
+
+    with d2:
+        with st.container(border=True):
+            st.markdown(
+                '<div class="pf-stat-label">Cap utilization</div>',
+                unsafe_allow_html=True,
+            )
+            book = load_action_book(90)
+            caps = [
+                ("Gross long", gross, config.MAX_GROSS_LONG),
+                ("GBM cluster", float(book.get("gbm_pct") or 0.0), config.MAX_GBM_WEIGHT),
+                (
+                    "Largest name",
+                    float(
+                        max(
+                            (h.get("weight") or 0.0 for h in book.get("rows", [])),
+                            default=0.0,
+                        )
+                    ),
+                    config.MAX_SINGLE_NAME_WEIGHT,
+                ),
+            ]
+            fig = go.Figure()
+            for name, used, cap in reversed(caps):
+                frac = min(used / cap, 1.0) if cap else 0.0
+                color = THEME["green"] if frac < 0.8 else THEME["amber"]
+                fig.add_trace(
+                    go.Bar(
+                        x=[cap],
+                        y=[name],
+                        orientation="h",
+                        marker=dict(color="rgba(95,107,124,.12)"),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
+                fig.add_trace(
+                    go.Bar(
+                        x=[used],
+                        y=[name],
+                        orientation="h",
+                        marker=dict(color=color),
+                        text=f"{used:.0%} / {cap:.0%}",
+                        textposition="outside",
+                        textfont=dict(color=THEME["text"]),
+                        showlegend=False,
+                    )
+                )
+            fig.update_layout(
+                height=280,
+                barmode="overlay",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font_color=THEME["text"],
+                margin=dict(l=10, r=30, t=10, b=10),
+                xaxis_tickformat=".0%",
+                xaxis_range=[0, max(c for _, _, c in caps) * 1.25],
+            )
+            fig.update_xaxes(gridcolor=THEME["border_soft"])
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.caption("Gross long, GBM cluster, largest name vs hard caps.")
+
+
 PAGES: dict[str, callable] = {
-    "Cockpit": page_home,
-    "Portfolio": page_portfolio,
-    "Action Desk": page_action_desk,
-    "Strategy": page_strategy,
-    "Market & Models": page_research,
+    "Portfolio": page_home,
+    "Research": page_research,
 }
 
 
 def _top_nav() -> callable:
     """Single-page top navigation bar (replaces the sidebar)."""
     names = list(PAGES.keys())
-    bar = st.columns([2.2, 6, 1.2], gap="small", vertical_alignment="center")
+    bar = st.columns([1.4, 4, 1.1], gap="small", vertical_alignment="center")
     with bar[0]:
         st.markdown(
-            '<div class="pf-logo"><span class="mark">◆</span>EDGE TERMINAL</div>',
+            '<div class="pf-logo"><span class="mark">◆</span>EDGE</div>',
             unsafe_allow_html=True,
         )
     with bar[1]:

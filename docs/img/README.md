@@ -1,19 +1,12 @@
 # Images
 
-`README.md` references two screenshots of the Edge Terminal (the most visually
-impressive artifacts of the project). They are intentionally not committed by
-automation — they must reflect the live dashboard.
+Screenshots of the two-page terminal (light theme). Replace with shots of
+the live paper book when you want the README to show current numbers.
 
-To capture them:
-
-```bash
-streamlit run scripts/terminal.py --server.port 8520
-# open http://localhost:8520
-```
-
-1. **`docs/img/terminal.png`** — the **Cockpit** page (landing view): KPI cards,
-   equity curve with the XBI benchmark overlay, allocation panels.
-2. **`docs/img/dashboard.png`** — the **Action Desk** page: the ranked trade blotter
-   (ticker, trade type, weight, timing) — the Bloomberg-style table.
-
-Full-window screenshots at 1440px+ width read best on GitHub.
+| File | Page |
+|------|------|
+| `terminal.png` | Portfolio (KPIs, equity vs XBI, allocation) |
+| `cockpit-record.png` | Portfolio (positions and trading record) |
+| `risk-lab.png` | Research / Risk (Monte Carlo + shocks) |
+| `dashboard.png` | Research / Risk (3D landscape + Kelly) |
+| `portfolio-risk.png` | Research / Evidence |

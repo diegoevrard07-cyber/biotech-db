@@ -2,20 +2,19 @@
 Quantitative risk/reward report for the paper book, vs XBI.
 
 Three tiers of evidence, increasing in reliability:
-  1) Live paper equity curve  — daily Sharpe/vol/drawdown/beta (usually tiny sample).
-  2) Closed-trade distribution — expectancy, win rate, payoff, per-trade Sharpe, Kelly.
-  3) XBI reference            — long-run annualized return / vol / Sharpe / max drawdown.
+  1) Live paper equity curve: daily Sharpe/vol/drawdown/beta (usually tiny sample).
+  2) Closed-trade distribution: expectancy, win rate, payoff, per-trade Sharpe, Kelly.
+  3) XBI reference: long-run annualized return / vol / Sharpe / max drawdown.
 
 Sharpe uses rf=0 (paper book, short horizon). Annualized with 252 trading days.
-Everything is flagged when the sample is too small to trust.
+Everything is flagged when the sample is too small to trust. The math lives in
+layers/portfolio/stats.py, shared with the Streamlit terminal.
 
   python scripts/risk_report.py
 """
 
 from __future__ import annotations
 
-import math
-import statistics as st
 import sys
 from pathlib import Path
 
@@ -23,30 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config
 from db import get_connection
-
-ANN = math.sqrt(252)
-
-
-def _returns(series: list[float]) -> list[float]:
-    return [series[i] / series[i - 1] - 1 for i in range(1, len(series)) if series[i - 1]]
-
-
-def _max_dd(series: list[float]) -> float:
-    peak, mdd = series[0], 0.0
-    for p in series:
-        peak = max(peak, p)
-        if peak:
-            mdd = min(mdd, p / peak - 1)
-    return mdd
-
-
-def _sharpe(rets: list[float]) -> float | None:
-    if len(rets) < 2:
-        return None
-    sd = st.pstdev(rets)
-    if sd <= 0:
-        return None
-    return (sum(rets) / len(rets)) / sd * ANN
+from layers.portfolio import stats
 
 
 def run() -> None:
@@ -80,51 +56,39 @@ def run() -> None:
 
     # ---- 1) live equity curve ----
     print("\n[1] LIVE PAPER EQUITY CURVE")
-    eq = [float(r[1]) for r in snaps]
-    if len(eq) >= 3:
-        pr = _returns(eq)
-        vol = st.pstdev(pr) * ANN if len(pr) >= 2 else float("nan")
-        shp = _sharpe(pr)
-        print(f"    snapshots: {len(eq)}   period return: {eq[-1]/eq[0]-1:+.2%}")
-        print(f"    ann. vol: {vol:.1%}   Sharpe: {shp:.2f}" if shp else "    Sharpe: n/a")
-        print(f"    max drawdown: {_max_dd(eq):.2%}")
-        # beta vs XBI on overlapping days
-        pair = [(float(a[1]), float(a[2])) for a in snaps if a[2] is not None]
-        if len(pair) >= 3:
-            pe = _returns([p[0] for p in pair])
-            xe = _returns([p[1] for p in pair])
-            n = min(len(pe), len(xe))
-            if n >= 2 and st.pstdev(xe[:n]) > 0:
-                mean_p = sum(pe[:n]) / n
-                mean_x = sum(xe[:n]) / n
-                cov = sum((pe[i] - mean_p) * (xe[i] - mean_x) for i in range(n)) / n
-                beta = cov / st.pvariance(xe[:n])
-                print(f"    beta vs XBI: {beta:+.2f}  (n={n} days)")
-        print(f"    ⚠ n={len(eq)} — statistically meaningless; ignore the magnitudes.")
+    equity = [float(r[1]) for r in snaps]
+    bench = [float(r[2]) if r[2] is not None else None for r in snaps]
+    curve = stats.equity_curve_stats(equity, benchmark=bench)
+    if curve:
+        print(f"    snapshots: {curve['n']}   period return: {curve['period_return']:+.2%}")
+        if curve["sharpe"] is not None:
+            print(f"    ann. vol: {curve['ann_vol']:.1%}   Sharpe: {curve['sharpe']:.2f}")
+        else:
+            print("    Sharpe: n/a")
+        print(f"    max drawdown: {curve['max_drawdown']:.2%}")
+        if curve["beta"] is not None:
+            print(f"    beta vs XBI: {curve['beta']:+.2f}  (n={curve['beta_days']} days)")
+        print(f"    ⚠ n={curve['n']}: statistically meaningless; ignore the magnitudes.")
     else:
         print("    not enough snapshots yet.")
 
     # ---- 2) closed-trade distribution ----
     print("\n[2] CLOSED-TRADE DISTRIBUTION (realized longs)")
-    if trades:
-        rets = [float(p) / float(cb) for p, cb in trades]
-        n = len(rets)
-        m, sd = sum(rets) / n, st.pstdev(rets)
-        wins = [r for r in rets if r > 0]
-        losses = [r for r in rets if r < 0]
-        wr = len(wins) / n
-        aw = sum(wins) / len(wins) if wins else 0.0
-        al = sum(losses) / len(losses) if losses else 0.0
-        payoff = (aw / abs(al)) if al else float("inf")
-        kelly = wr - (1 - wr) / payoff if payoff not in (0, float("inf")) else float("nan")
-        print(f"    trades: {n}   expectancy: {m:+.2%}/trade   sd: {sd:.2%}")
+    dist = stats.closed_trade_stats([float(p) / float(cb) for p, cb in trades])
+    if dist:
         print(
-            f"    win rate: {wr:.0%}   avg win: {aw:+.2%}   avg loss: {al:+.2%}   payoff: {payoff:.2f}"
+            f"    trades: {dist['n']}   expectancy: {dist['expectancy']:+.2%}/trade   "
+            f"sd: {dist['sd']:.2%}"
         )
-        print(f"    per-trade Sharpe (mean/sd): {m/sd:.2f}" if sd else "")
-        print(f"    implied full-Kelly fraction: {kelly:.0%}")
         print(
-            f"    ⚠ young + upward-biased: profit-lock/rebalance book small wins & "
+            f"    win rate: {dist['win_rate']:.0%}   avg win: {dist['avg_win']:+.2%}   "
+            f"avg loss: {dist['avg_loss']:+.2%}   payoff: {dist['payoff']:.2f}"
+        )
+        if dist["per_trade_sharpe"] is not None:
+            print(f"    per-trade Sharpe (mean/sd): {dist['per_trade_sharpe']:.2f}")
+        print(f"    implied full-Kelly fraction: {dist['kelly']:.0%}")
+        print(
+            "    ⚠ young + upward-biased: profit-lock/rebalance book small wins & "
             "cut winners; losers may still be open (survivorship)."
         )
     else:
@@ -132,14 +96,12 @@ def run() -> None:
 
     # ---- 3) XBI reference ----
     print("\n[3] XBI REFERENCE (long-run yardstick)")
-    if len(xbi_hist) > 60:
-        xr = _returns(xbi_hist)
-        m = sum(xr) / len(xr)
-        vol = st.pstdev(xr) * ANN
-        print(f"    history: {len(xbi_hist)} days")
+    ref = stats.benchmark_reference_stats(xbi_hist)
+    if ref:
+        print(f"    history: {ref['n']} days")
         print(
-            f"    ann. return: {(1+m)**252-1:+.1%}   ann. vol: {vol:.1%}   "
-            f"Sharpe: {m/st.pstdev(xr)*ANN:.2f}   max DD: {_max_dd(xbi_hist):.1%}"
+            f"    ann. return: {ref['ann_return']:+.1%}   ann. vol: {ref['ann_vol']:.1%}   "
+            f"Sharpe: {ref['sharpe']:.2f}   max DD: {ref['max_drawdown']:.1%}"
         )
     else:
         print("    insufficient XBI history.")

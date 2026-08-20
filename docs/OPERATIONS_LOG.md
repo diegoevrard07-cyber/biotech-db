@@ -1,9 +1,9 @@
 # Operations Log
 
-A running record of operational changes to the GBM Sentiment Arbitrage system so they
-can be reviewed and evaluated later. This complements `docs/AGENT_HANDOFF.md` (intent +
-current state) and `.cursorrules` (coding standards): this file is a chronological
-journal of **what changed, when, why, and how to evaluate it.**
+A running record of operational changes to the system so they can be reviewed and
+evaluated later. This complements `docs/HANDBOOK.md` (intent + current state) and
+`.cursorrules` (coding standards): this file is a chronological journal of
+**what changed, when, why, and how to evaluate it.**
 
 ## Conventions
 
@@ -141,7 +141,7 @@ screenshot. Data/logic layer untouched (same DB functions).
   balance" card with metric selector + timeframe segmented control (1W…ALL) and a
   soft-filled area chart + XBI overlay; twin allocation donuts (start → now) with a
   color legend; **kept** the Position breakdown (P&L bar) and Portfolio allocation
-  (donut) charts per owner request, restyled; a tabbed Actions card (Open / Trade book /
+  (donut) charts, restyled; a tabbed Actions card (Open / Trade book /
   Closed) with ticker search and green/red P&L.
 - Helpers added: `_stat_card`, `render_kpi_row`, `render_page_header`, `_bucket_donut`,
   `_alloc_legend_html`, `_cockpit_balance_chart`, `_timeframe_control`, `_rgba`.
@@ -278,7 +278,7 @@ freshness, drawdown, computed stats):
   `corr(...)` stat, metrics, and the build command. Trimmed chart/section titles.
 - **Sidebar footer:** "Cache 30s · click Refresh after autopilot runs" → "Cache 30s".
 
-**Why:** owner designed the system and does not need explanations; maximize operational
+**Why:** the terminal is an operator's tool, not a tutorial; maximize operational
 signal, drop fluff.
 
 **Verify:** `python -m pytest` → 182 passed; `pyflakes scripts/terminal.py` → clean;
@@ -333,8 +333,7 @@ against the live DB → no exceptions.
   the DB at display time.
 - Removed the sidebar caption *"Decision support · read-only"*.
 
-**Why:** owner preference — declutter the terminal; the advisory copy is no longer
-wanted on screen.
+**Why:** declutter the terminal; the advisory copy is no longer wanted on screen.
 
 **Verify:** `python -m pytest tests/test_portfolio_tracker.py` passes; reload Streamlit
 and confirm the strings are gone from Cockpit, Portfolio, and the sidebar.
