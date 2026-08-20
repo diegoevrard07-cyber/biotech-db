@@ -75,7 +75,7 @@ def collect() -> dict:
                     r["weight"],
                     r["catalyst_id"],
                 )
-                for r in book["rows"][:12]
+                for r in book["rows"][:10]
             ]
             out["book_summary"] = {
                 "positions": book["positions"],
@@ -86,13 +86,13 @@ def collect() -> dict:
             out["signals"] = []
             out["book_summary"] = None
 
-        # Model/market move components for the signal rows (keyed by catalyst).
+        # Model/market move components for the signal rows (keyed by catalyst_id).
         out["moves"] = {
             int(r[0]): (
                 float(r[1]) if r[1] is not None else None,
                 float(r[2]) if r[2] is not None else None,
             )
-            for r in _q(cur, "SELECT id, expected_move, implied_move FROM edge_scores")
+            for r in _q(cur, "SELECT catalyst_id, expected_move, implied_move FROM edge_scores")
         }
 
         out["calibration"] = _q(
@@ -309,22 +309,22 @@ def _calendar_svg(rows: list[tuple], *, width: int = 470, height: int = 54) -> s
 # ---------------------------------------------------------------------------
 
 
-def signal_sentence(ticker: str, ctype: str, edate, ttype: str, base, gap) -> str:
+def signal_sentence(edate, ttype: str, base, gap) -> str:
     """One factual sentence about the lead signal, derived only from its fields."""
     days = (edate - date.today()).days if edate else None
     when = f"expected {fdate(edate)} ({days} days)" if edate else "date unconfirmed"
     if ttype == "buy_the_rumor":
         return (
-            f"{ticker}: catalyst {when}. Historical success odds {pct(base, 0)}; "
+            f"Catalyst {when}. Historical success odds {pct(base, 0)}; "
             f"the plan is to ride the pre-event run-up and exit before the result."
         )
     if gap is not None and gap > 0.05:
         return (
-            f"{ticker}: catalyst {when}. The model's expected move exceeds the "
+            f"Catalyst {when}. The model's expected move exceeds the "
             f"options market's by {pp(gap)} — underpriced, so hold through the result."
         )
     return (
-        f"{ticker}: catalyst {when}. Historical success odds {pct(base, 0)} with "
+        f"Catalyst {when}. Historical success odds {pct(base, 0)} with "
         f"acceptable financing; hold through the result."
     )
 
@@ -461,7 +461,7 @@ def build_html(d: dict) -> str:
         first = d["signals"][0]
         parts.append(
             f"<div class='lead'>Lead idea: <b>{esc(first[0])}</b> — "
-            f"{esc(signal_sentence(first[0], first[1], first[2], first[3], first[4], first[5]))}</div>"
+            f"{esc(signal_sentence(first[2], first[3], first[4], first[5]))}</div>"
         )
         parts.append(
             "<table><tr><th>Ticker</th><th>Catalyst</th><th>Date</th>"
