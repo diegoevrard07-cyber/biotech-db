@@ -17,20 +17,20 @@ whether it works, and how much data is behind it — on one screen.
 
 ## The numbers, as they actually are
 
-Queried from the live database on **2026-08-17** (regenerate: `python scripts/db_inventory.py`):
+Queried from the live database on **2026-08-20** (regenerate: `python scripts/db_inventory.py`):
 
 | Metric | Value | Note |
 |--------|-------|------|
 | Universe companies | 106 (131 tracked, 17 GBM-flagged) | small-cap oncology/CNS |
-| Upcoming catalysts | 462 (42 in next 90 days) | 451 readouts · 8 PDUFA · 3 adcom |
+| Upcoming catalysts | 462 (41 in next 90 days) | 451 readouts · 8 PDUFA · 3 adcom |
 | Scored signals | 481 → 222 long, 259 avoid | long-only; fades retired on evidence |
 | Base-rate model holdout | Brier skill +0.098 · AUC 0.676 | n = 10,127 labeled trials, temporal split (2026-06-21) |
-| Resolved catalyst outcomes | 15 (1 hit / 1 miss / 13 ambiguous) | **small — calibration is just getting started** |
+| Resolved catalyst outcomes | 16 | **small — calibration is just getting started** |
 | Calibration vs outcomes | Brier 0.260, n = 2 | printed as-is; near-empty samples are the honest state |
-| Event study | 2,214 real 8-K events, 6,831 return rows | median 3d abnormal ≈ −1%, std ≈ 22% |
+| Event study | 6,855 return rows from real 8-K events | median 3d abnormal ≈ −1%, std ≈ 22% |
 | Historical trials mined | 52,341 (14,959 with success labels) | ClinicalTrials.gov |
-| Price history | 145,938 rows · 115 tickers · through 2026-08-14 | yfinance EOD |
-| Paper book | $10,438 (+4.4%) vs XBI +7.5% since 2026-06-28 | 31 open longs; young record, lagging a hot tape |
+| Price history | 146,222 rows · 114 tickers · through 2026-08-19 | yfinance EOD |
+| Paper book | +7.9% vs XBI +16.2% over 28 trading days | 35-position book; young record, lagging a hot tape |
 
 ## Why this exists
 
