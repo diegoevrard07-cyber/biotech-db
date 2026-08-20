@@ -17,6 +17,35 @@ journal of **what changed, when, why, and how to evaluate it.**
 
 ---
 
+## 2026-08-20 — Research-note redesign (stranger-test legibility) + real screenshots
+
+**Branch:** `cursor/data-first-dashboard-0203`
+
+Presentation-only; no scoring, decision, or ingestion logic changed. The prior
+data-first pass over-corrected into raw density — illegible to outsiders. This pass
+rebuilds the landing view as an institutional research note (warm paper, burgundy
+accent, serif masthead, hairline panels, tabular numerals):
+
+- **`scripts/terminal.py`**: masthead + plain-English subtitle → pipeline strip with
+  live counts → CURRENT SIGNALS blotter in human terms (Model prob. / Model move /
+  Market-implied / Edge pp / Action / Weight) with a generated lead-idea sentence and
+  per-name component drill-down → EVIDENCE (calibration numbers + equity-vs-XBI with
+  honest verdict captions) → coverage & freshness. Owner operations moved to a second
+  tab (Positions & activity). Light theme locked in `.streamlit/config.toml`.
+- **`scripts/generate_report.py`**: same identity on paper; one-page memo. Fixed en
+  route: moves lookup keyed by catalyst_id (was score id → all em dashes), lead-line
+  ticker duplication, 2-page overflow.
+- **Real screenshots in CI**: `scripts/capture_note_screenshot.py` (Playwright + system
+  Chrome) waits for the dataframe and no-stale state — naive headless shots caught the
+  boot skeleton twice before this. Committed: `docs/img/terminal.png`,
+  `docs/img/note_full.png`, regenerated `docs/report_sample.{html,pdf}`.
+- **README**: hero = note landing; numbers table refreshed to the 2026-08-20 inventory.
+
+**Verify:** 180 passed / 7 skipped; AppTest render of both tabs + drill-down with
+synthetic data → no exceptions; screenshots inspected — real content, not skeleton.
+
+---
+
 ## 2026-08-17 — Data-first dashboard redesign + printable research memo
 
 **Branch:** `cursor/data-first-dashboard-0203` (stacked on the public-release cleanup)
