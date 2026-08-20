@@ -1,4 +1,4 @@
-"""Central configuration for the GBM edge engine."""
+"""Central configuration for the Biotech Catalyst Edge Engine."""
 
 from __future__ import annotations
 
@@ -36,8 +36,8 @@ SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 SEC_XBRL_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 POE_API_BASE_URL = "https://api.poe.com/v1"
 
-SEC_USER_AGENT_PLACEHOLDER = "GBM-Edge-Engine user@example.com"
-# TODO: Replace with your real name and email — SEC requires a descriptive User-Agent.
+SEC_USER_AGENT_PLACEHOLDER = "Biotech-Edge-Engine user@example.com"
+# TODO: Replace with your real name and email; SEC requires a descriptive User-Agent.
 SEC_USER_AGENT = os.getenv("SEC_USER_AGENT", SEC_USER_AGENT_PLACEHOLDER)
 
 
@@ -166,7 +166,7 @@ STOP_LOSS_PCT = float(os.getenv("STOP_LOSS_PCT", "0.15"))  # -15% from entry
 
 # Market-regime filter: when the benchmark (XBI) closes below its N-day simple
 # moving average, scale ALL target sizes down. Participate fully in an up-tape,
-# run lighter gross in a down-tape — the main lever for risk-adjusted return
+# run lighter gross in a down-tape: the main lever for risk-adjusted return
 # vs a long-only index.
 REGIME_FILTER_ENABLED = os.getenv("REGIME_FILTER_ENABLED", "1") not in ("0", "false", "False")
 REGIME_SMA_DAYS = int(os.getenv("REGIME_SMA_DAYS", "20"))
@@ -186,7 +186,7 @@ PROFIT_LOCK_LOOKBACK_DAYS = int(os.getenv("PROFIT_LOCK_LOOKBACK_DAYS", "20"))  #
 PROFIT_LOCK_MIN_DAYS_TO_CATALYST = int(os.getenv("PROFIT_LOCK_MIN_DAYS_TO_CATALYST", "3"))
 
 # Risk haircut (size DOWN violent names). Grounded in the event-return regression
-# (returns_regression.py): direction is unpredictable, but MAGNITUDE is — and the
+# (returns_regression.py): direction is unpredictable, but MAGNITUDE is, and the
 # strongest driver is small market cap (smaller => bigger blowups). So we shrink
 # positions on tiny-cap names. This can ONLY reduce exposure (raises cash buffer),
 # never increase it. Tiers: (market_cap_ceiling_usd, multiplier).

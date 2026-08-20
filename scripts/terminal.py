@@ -1,5 +1,5 @@
 """
-GBM/Onc-CNS Edge Engine - Bloomberg-style terminal.
+Biotech Catalyst Edge Engine - Bloomberg-style terminal.
 
 Run with:
     streamlit run scripts/terminal.py
@@ -2457,12 +2457,61 @@ def page_research() -> None:
 
 # ===========================================================================
 def page_validation(*, embedded: bool = False) -> None:
-    """Render the Validation page: event-study evidence, calibration, and backtest results."""
+    """Render the Validation page: research findings, event-study evidence, calibration, backtest."""
     if not embedded:
         st.title("Validation")
 
+    # --- Headline research findings (dated, reproducible) ---
+    st.subheader("Research findings")
+    st.caption(
+        "Headline results as of 2026-06-21, each reproducible from the named script. "
+        "Live calibration below accrues separately as forward catalysts resolve."
+    )
+    findings = pd.DataFrame(
+        [
+            {
+                "Question": "Can trial success be predicted?",
+                "Result": "Yes: Brier skill +0.098 over prior, AUC 0.676, well calibrated",
+                "Sample": "n=10,127, temporal holdout (train <2019, test ≥2019)",
+                "Verdict": "VALIDATED",
+                "Reproduce": "validate_base_rates.py",
+            },
+            {
+                "Question": "What do 8-K reactions look like?",
+                "Result": "Median −1%, std 22%; ~30% of events move ≥10%",
+                "Sample": "n=2,028 events, 3-day hold, vs XBI",
+                "Verdict": "MEASURED",
+                "Reproduce": "build_event_returns.py",
+            },
+            {
+                "Question": "Does price action predict reaction direction?",
+                "Result": "No: OOS R² −0.001, hit rate 47.6% (below coin flip)",
+                "Sample": "n=609 OOS events, temporal split",
+                "Verdict": "NO EDGE (not wired)",
+                "Reproduce": "returns_regression.py",
+            },
+            {
+                "Question": "Does price action predict reaction magnitude?",
+                "Result": "Weakly: OOS R² +0.019; predicted-big realized 13.9% vs 7.8%",
+                "Sample": "n=609 OOS events, temporal split",
+                "Verdict": "USED FOR SIZING ONLY",
+                "Reproduce": "returns_regression.py",
+            },
+            {
+                "Question": "Does a logistic regression beat the base-rate lookup?",
+                "Result": "No: AUC 0.655 vs 0.672; lookup also better calibrated",
+                "Sample": "n=10,127, same temporal holdout",
+                "Verdict": "LOOKUP KEPT",
+                "Reproduce": "train_success_model.py",
+            },
+        ]
+    )
+    st.dataframe(findings, use_container_width=True, hide_index=True)
+
+    st.divider()
+
     # --- Event-study evidence: the REAL returns dataset (8-K reactions) ---
-    st.subheader("Event-study evidence — abnormal returns around 8-K announcements")
+    st.subheader("Event-study evidence: abnormal returns around 8-K announcements")
     st.caption(
         "Abnormal return = name − XBI over the hold. "
         "Build/refresh: `python scripts/build_event_returns.py`"

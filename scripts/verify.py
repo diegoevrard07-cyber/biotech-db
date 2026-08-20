@@ -1,4 +1,4 @@
-"""Post-phase health check for the GBM edge engine database."""
+"""Post-phase health check for the edge engine database."""
 
 from __future__ import annotations
 

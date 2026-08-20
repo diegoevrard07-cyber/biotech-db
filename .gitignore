@@ -35,4 +35,5 @@ data/backups/
 Thumbs.db
 .idea/
 .vscode/
+.cursor/
 *.swp
