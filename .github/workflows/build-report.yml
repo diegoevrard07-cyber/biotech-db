@@ -11,6 +11,7 @@ on:
       - "scripts/db_inventory.py"
       - "scripts/generate_report.py"
       - "scripts/terminal.py"
+      - "scripts/capture_note_screenshot.py"
       - ".streamlit/config.toml"
   workflow_dispatch:
 
@@ -48,15 +49,11 @@ jobs:
 
       - name: Screenshot the live research note (headless)
         run: |
+          pip install playwright
           mkdir -p docs/img
           streamlit run scripts/terminal.py --server.port 8530 --server.headless true &
-          sleep 20
-          google-chrome --headless --disable-gpu --no-sandbox \
-            --window-size=1440,900 --virtual-time-budget=45000 \
-            --screenshot=docs/img/terminal.png http://localhost:8530
-          google-chrome --headless --disable-gpu --no-sandbox \
-            --window-size=1440,3200 --virtual-time-budget=45000 \
-            --screenshot=docs/img/note_full.png http://localhost:8530
+          sleep 15
+          python scripts/capture_note_screenshot.py --port 8530 --out docs/img
 
       - name: Upload report artifacts
         uses: actions/upload-artifact@v4

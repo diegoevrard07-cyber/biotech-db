@@ -8,7 +8,12 @@ into sized, typed paper trades.**
 ![Tests](https://github.com/diegoevrard07-cyber/biotech-db/actions/workflows/tests.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-![Edge Terminal — the action book with trust metrics on the same screen](docs/img/terminal.png)
+![The Edge Terminal reads like an institutional research note — masthead, pipeline strip with live counts, current signals, evidence](docs/img/terminal.png)
+
+*The dashboard is a one-page research note: what the system does, what it recommends,
+whether it works, and how much data is behind it — on one screen.
+[Full note](docs/img/note_full.png) ·
+[printable memo](docs/report_sample.pdf)*
 
 ## The numbers, as they actually are
 
@@ -67,8 +72,8 @@ Daily, from raw public data to a risk-capped trade book:
    measurement** — no reliable edge, and the main paper-trading drag.
 6. **Cap the risk** — sector/GBM/gross caps, a market-cap risk haircut, and EOD
    overlays (stop-loss, drawdown tiers, regime filter) that can only reduce exposure.
-7. **Execute on paper** via a GitHub Actions autopilot; display in a dense,
-   data-first Streamlit terminal.
+7. **Execute on paper** via a GitHub Actions autopilot; display in a Streamlit
+   dashboard designed to read like an institutional research note.
 
 ```
 ClinicalTrials.gov ┐
