@@ -10,11 +10,11 @@ GitHub Actions and reports into a Streamlit terminal.
 ![Tests](https://github.com/diegoevrard07-cyber/biotech-db/actions/workflows/tests.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-![Edge Terminal cockpit: paper-book equity vs the XBI biotech benchmark](docs/img/terminal.png)
+![Portfolio: equity vs XBI, allocation, live KPIs](docs/img/terminal.png)
 
-![Risk Lab: 6-month Monte Carlo fan chart and index-shock scenarios](docs/img/risk-lab.png)
+![Research / Risk: Monte Carlo fan and index-shock scenarios](docs/img/risk-lab.png)
 
-![Risk Lab: 3D catalyst landscape and Kelly sizing surface](docs/img/dashboard.png)
+![Research / Risk: 3D catalyst landscape and Kelly surface](docs/img/dashboard.png)
 
 ## The idea
 

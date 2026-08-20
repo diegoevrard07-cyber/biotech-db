@@ -1,13 +1,12 @@
 # Images
 
-Committed screenshots of the Edge Terminal, captured from a live render of the
-current UI. Replace them with shots of your own paper book when you want the
-README to show live numbers.
+Screenshots of the two-page terminal (light theme). Replace with shots of
+the live paper book when you want the README to show current numbers.
 
 | File | Page |
 |------|------|
-| `terminal.png` | Cockpit (KPIs, equity vs XBI, allocation) |
-| `cockpit-record.png` | Cockpit (positions table + trading record) |
-| `risk-lab.png` | Risk Lab (Monte Carlo fan + shock scenarios) |
-| `dashboard.png` | Risk Lab (3D catalyst landscape + Kelly surface) |
-| `portfolio-risk.png` | Portfolio (performance and risk expander) |
+| `terminal.png` | Portfolio (KPIs, equity vs XBI, allocation) |
+| `cockpit-record.png` | Portfolio (positions and trading record) |
+| `risk-lab.png` | Research / Risk (Monte Carlo + shocks) |
+| `dashboard.png` | Research / Risk (3D landscape + Kelly) |
+| `portfolio-risk.png` | Research / Evidence |

@@ -1,17 +1,9 @@
 """
-Biotech Catalyst Edge Engine - Bloomberg-style terminal.
+Biotech Catalyst Edge Engine terminal.
 
-Run with:
     streamlit run scripts/terminal.py
 
-Dark, dense, multi-panel cockpit for the Rung 2 decision-support engine. Portfolio
-data is cached briefly (30s); reference/research queries cache for 5 min. No
-hardcoded credentials (DATABASE_URL from .env).
-
-Nav:
-    Trade Desk : Cockpit · Portfolio · Action Desk
-    Research   : Strategy · Market & Models (dossier, calendar, validation,
-                 data health, glossary)
+Two pages: Portfolio (book, P&L, trades) and Research (risk, evidence, spec).
 """
 
 from __future__ import annotations
@@ -56,24 +48,24 @@ st.set_page_config(
     page_title="Edge Terminal", layout="wide", page_icon="◆", initial_sidebar_state="collapsed"
 )
 
-# ---- Design tokens (Projection-Finance-style dark UI) ----
+# ---- Design tokens (light, institutional research look) ----
 THEME = {
-    "bg": "#0a0d13",
-    "bg2": "#0e121a",
-    "card": "#12161f",
-    "card2": "#161b26",
-    "border": "#222a38",
-    "border_soft": "#1a212e",
-    "text": "#e8ebf2",
-    "muted": "#8b95a7",
-    "faint": "#596474",
-    "accent": "#6c8cff",
-    "green": "#2fd39a",
-    "red": "#f76a83",
-    "amber": "#f4b740",
-    "purple": "#8b7bff",
-    "font": "'Inter', 'Segoe UI', system-ui, sans-serif",
-    "mono": "'JetBrains Mono', 'SF Mono', 'Consolas', monospace",
+    "bg": "#f5f6f8",
+    "bg2": "#eef0f3",
+    "card": "#ffffff",
+    "card2": "#ffffff",
+    "border": "#d8dde5",
+    "border_soft": "#e7eaef",
+    "text": "#1c2536",
+    "muted": "#5f6b7c",
+    "faint": "#939dab",
+    "accent": "#1f4e79",
+    "green": "#1a7f4e",
+    "red": "#b23a2f",
+    "amber": "#a06b1c",
+    "purple": "#54568f",
+    "font": "'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif",
+    "mono": "'IBM Plex Mono', 'SF Mono', 'Consolas', monospace",
 }
 
 TRADE_COLORS = {
@@ -85,16 +77,16 @@ TRADE_COLORS = {
 
 # Ordered palette for allocation donuts / categorical charts.
 ALLOC_PALETTE = [
-    "#2fd39a",
-    "#6c8cff",
-    "#f76a83",
-    "#f4b740",
-    "#8b7bff",
-    "#39c0d3",
-    "#e77ac6",
-    "#9aa7bd",
-    "#5b8def",
-    "#57d9a3",
+    "#1f4e79",
+    "#1a7f4e",
+    "#b23a2f",
+    "#a06b1c",
+    "#54568f",
+    "#2e7f8f",
+    "#8a4f7d",
+    "#5f6b7c",
+    "#3f6db4",
+    "#4f9d7a",
 ]
 
 
@@ -103,20 +95,9 @@ def _inject_css() -> None:
     st.markdown(
         f"""
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
           html, body, [class*="css"] {{ font-family: {t['font']}; color: {t['text']}; }}
-          .stApp {{
-            background:
-              radial-gradient(1200px 600px at 15% -10%, #141b2b 0%, rgba(20,27,43,0) 55%),
-              radial-gradient(1000px 500px at 100% 0%, #17131f 0%, rgba(23,19,31,0) 50%),
-              radial-gradient(900px 520px at 55% 115%, #0e1f1b 0%, rgba(14,31,27,0) 55%),
-              {t['bg']};
-          }}
-          .stApp::before {{
-            content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-            background-image: radial-gradient(rgba(139,148,167,.05) 1px, transparent 1px);
-            background-size: 26px 26px;
-          }}
+          .stApp {{ background: {t['bg']}; }}
           header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
           [data-testid="stToolbar"] {{ right: 1rem; }}
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
@@ -133,10 +114,10 @@ def _inject_css() -> None:
           .pf-topbar {{ display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }}
           .pf-logo {{ display: flex; align-items: center; gap: 10px; font-weight: 800;
                       letter-spacing: .1em; font-size: .9rem; white-space: nowrap; }}
-          .pf-logo .mark {{ width: 26px; height: 26px; border-radius: 8px;
-                            background: linear-gradient(135deg,{t['accent']},{t['purple']});
+          .pf-logo .mark {{ width: 26px; height: 26px; border-radius: 6px;
+                            background: {t['accent']};
                             display: inline-flex; align-items: center; justify-content: center;
-                            color: #0a0d13; }}
+                            color: #ffffff; }}
 
           h1 {{ font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 .1rem; }}
           h2, h3 {{ font-size: .95rem; font-weight: 600; color: {t['text']}; margin: .3rem 0 .4rem; }}
@@ -145,17 +126,17 @@ def _inject_css() -> None:
 
           /* ---- cards (bordered containers) ---- */
           [data-testid="stVerticalBlockBorderWrapper"] {{
-            background: linear-gradient(180deg, {t['card2']} 0%, {t['card']} 100%);
-            border: 1px solid {t['border']}; border-radius: 16px;
-            padding: 2px 4px; box-shadow: 0 1px 0 rgba(255,255,255,.02) inset, 0 8px 24px rgba(0,0,0,.28);
+            background: {t['card']};
+            border: 1px solid {t['border']}; border-radius: 10px;
+            padding: 2px 4px; box-shadow: 0 1px 2px rgba(16,24,40,.05);
           }}
 
           /* ---- KPI stat grid (custom HTML) ---- */
           .pf-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                      gap: 14px; margin: .2rem 0 .3rem; }}
-          .pf-card {{ background: linear-gradient(180deg, {t['card2']} 0%, {t['card']} 100%);
-                      border: 1px solid {t['border']}; border-radius: 16px; padding: 16px 18px;
-                      box-shadow: 0 8px 24px rgba(0,0,0,.28); }}
+                      gap: 12px; margin: .2rem 0 .3rem; }}
+          .pf-card {{ background: {t['card']};
+                      border: 1px solid {t['border']}; border-radius: 10px; padding: 14px 16px;
+                      box-shadow: 0 1px 2px rgba(16,24,40,.05); }}
           .pf-stat-label {{ color: {t['muted']}; font-size: .66rem; text-transform: uppercase;
                             letter-spacing: .09em; font-weight: 600; margin-bottom: 10px; }}
           .pf-stat-row {{ display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }}
@@ -164,19 +145,19 @@ def _inject_css() -> None:
           .pf-stat-sub {{ color: {t['muted']}; font-size: .72rem; margin-top: 7px; }}
           .pf-arrow {{ color: {t['muted']}; font-weight: 600; }}
           .pf-delta {{ font-size: .74rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }}
-          .pf-delta.up {{ color: {t['green']}; background: rgba(47,211,154,.12); }}
-          .pf-delta.down {{ color: {t['red']}; background: rgba(247,106,131,.12); }}
-          .pf-delta.flat {{ color: {t['muted']}; background: rgba(139,148,167,.12); }}
+          .pf-delta.up {{ color: {t['green']}; background: rgba(26,127,78,.09); }}
+          .pf-delta.down {{ color: {t['red']}; background: rgba(178,58,47,.09); }}
+          .pf-delta.flat {{ color: {t['muted']}; background: rgba(95,107,124,.09); }}
 
           /* ---- badges / chips ---- */
           .pf-badge {{ display: inline-flex; align-items: center; gap: 6px; font-size: .7rem;
                        font-weight: 600; padding: 3px 10px; border-radius: 20px;
-                       background: rgba(108,140,255,.14); color: {t['accent']};
-                       border: 1px solid rgba(108,140,255,.25); }}
-          .pf-badge.green {{ background: rgba(47,211,154,.12); color: {t['green']};
-                             border-color: rgba(47,211,154,.25); }}
-          .pf-badge.amber {{ background: rgba(244,183,64,.12); color: {t['amber']};
-                             border-color: rgba(244,183,64,.25); }}
+                       background: rgba(31,78,121,.08); color: {t['accent']};
+                       border: 1px solid rgba(31,78,121,.22); }}
+          .pf-badge.green {{ background: rgba(26,127,78,.09); color: {t['green']};
+                             border-color: rgba(26,127,78,.22); }}
+          .pf-badge.amber {{ background: rgba(160,107,28,.09); color: {t['amber']};
+                             border-color: rgba(160,107,28,.22); }}
           .pf-chip {{ display: inline-flex; align-items: center; gap: 7px; font-size: .76rem;
                       color: {t['text']}; padding: 6px 12px; border-radius: 10px;
                       background: {t['card']}; border: 1px solid {t['border']}; }}
@@ -200,10 +181,10 @@ def _inject_css() -> None:
           /* ---- buttons ---- */
           .stButton > button {{ border-radius: 10px; border: 1px solid {t['border']};
                                 background: {t['card2']}; color: {t['text']}; font-weight: 600; }}
-          .stButton > button:hover {{ border-color: {t['accent']}; color: #fff; }}
+          .stButton > button:hover {{ border-color: {t['accent']}; color: {t['accent']}; }}
           .stButton > button[kind="primary"] {{ background: {t['accent']}; border-color: {t['accent']};
-                                                 color: #0a0d13; }}
-          .stButton > button[kind="primary"]:hover {{ background: #85a0ff; color: #0a0d13; }}
+                                                 color: #ffffff; }}
+          .stButton > button[kind="primary"]:hover {{ background: #2a629a; color: #ffffff; }}
           .stDownloadButton > button {{ border-radius: 10px; background: {t['card2']};
                                         border: 1px solid {t['border']}; color: {t['text']}; }}
 
@@ -337,7 +318,7 @@ def _timeframe_cutoff(label: str) -> int | None:
 def _style_trade_col(df: pd.DataFrame, col: str = "trade") -> pd.io.formats.style.Styler:
     def color_trade(val):
         """CSS style coloring a trade-type cell by its TRADE_COLORS entry."""
-        return f"color: {TRADE_COLORS.get(val, '#cfd3dc')}; font-weight:700"
+        return f"color: {TRADE_COLORS.get(val, '#5f6b7c')}; font-weight:700"
 
     return df.style.map(color_trade, subset=[col])
 
@@ -1271,118 +1252,28 @@ def _render_performance_risk() -> None:
                 st.caption("Insufficient benchmark history.")
 
 
-def page_portfolio() -> None:
-    """Render the Portfolio page: account setup, open positions, action center, history."""
-    st.title("Portfolio")
-    ensure_account()
-    _purge_open_shorts_once()
-    acct = get_account()
-    prices = latest_prices()
-    open_df = load_holdings("open")
-
-    # ---- account setup ----
-    needs_setup = acct["starting_capital"] is None and acct["cash"] == 0 and open_df.empty
-    with st.expander("⚙️ Account / cash", expanded=needs_setup):
-        cash = st.number_input(
-            "Cash balance ($)", value=float(acct["cash"]), step=100.0, format="%.2f"
-        )
-        start_cap = st.number_input(
-            "Starting capital ($) — for total-return tracking",
-            value=float(acct["starting_capital"] or 0.0),
-            step=100.0,
-            format="%.2f",
-        )
+def _manage_tab(acct: dict, prices: dict, open_df: pd.DataFrame) -> None:
+    """Account settings, trade entry, and position close."""
+    st.markdown('<div class="pf-stat-label">Account</div>', unsafe_allow_html=True)
+    ac = st.columns([1, 1, 1])
+    cash = ac[0].number_input(
+        "Cash balance ($)", value=float(acct["cash"]), step=100.0, format="%.2f"
+    )
+    start_cap = ac[1].number_input(
+        "Starting capital ($)",
+        value=float(acct["starting_capital"] or 0.0),
+        step=100.0,
+        format="%.2f",
+    )
+    with ac[2]:
+        st.write("")
         if st.button("Save account"):
             set_account(cash, start_cap or None)
             st.cache_data.clear()
             st.rerun()
 
-    # ---- account summary ----
-    summ = pf.account_summary(_holding_dicts(open_df), acct["cash"], prices)
-    if config.LONG_ONLY:
-        m = st.columns(5)
-        m[0].metric("Account value", fmt_usd(summ["equity"]))
-        m[1].metric("Cash", fmt_usd(summ["cash"]))
-        m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
-        m[3].metric(
-            "Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"])
-        )
-        cash_pct = (summ["cash"] / summ["equity"]) if summ["equity"] else 0.0
-        m[4].metric("Cash %", f"{cash_pct:.0%}")
-    else:
-        m = st.columns(6)
-        m[0].metric("Account value", fmt_usd(summ["equity"]))
-        m[1].metric("Cash", fmt_usd(summ["cash"]))
-        m[2].metric("Unrealized P&L", fmt_usd(summ["unrealized_pnl_usd"]))
-        m[3].metric(
-            "Gross long", f"{summ['gross_long_pct']:.0%}", help=fmt_usd(summ["gross_long_usd"])
-        )
-        m[4].metric(
-            "Gross short", f"{summ['gross_short_pct']:.0%}", help=fmt_usd(summ["gross_short_usd"])
-        )
-        m[5].metric("Net", f"{summ['net_pct']:+.0%}", help=fmt_usd(summ["net_usd"]))
-    if acct["starting_capital"]:
-        tot = summ["equity"] - float(acct["starting_capital"])
-        st.caption(
-            f"Total return since start: **{fmt_usd(tot)}** "
-            f"({tot/float(acct['starting_capital']):+.1%})"
-        )
-    freshness_caption()
-
     st.divider()
-    _render_performance_risk()
-
-    st.divider()
-    render_action_center(open_df)
-
-    # ---- holdings table ----
-    st.divider()
-    st.subheader("📂 Open positions")
-    if open_df.empty:
-        st.caption("None yet.")
-    else:
-        rows = []
-        for r in open_df.itertuples():
-            cur = prices.get(r.ticker)
-            mv = pf.market_value(r.side, float(r.shares), cur)
-            pnl = pf.unrealized_pnl(r.side, float(r.shares), float(r.entry_price), cur)
-            pnl_pct = pf.unrealized_pnl_pct(r.side, float(r.entry_price), cur)
-            rows.append(
-                {
-                    "ticker": r.ticker,
-                    "side": r.side,
-                    "type": r.trade_type,
-                    "shares": float(r.shares),
-                    "entry": float(r.entry_price),
-                    "now": cur,
-                    "mkt_value": abs(mv) if mv is not None else None,
-                    "% book": (
-                        abs(mv) / summ["equity"] if mv is not None and summ["equity"] else None
-                    ),
-                    "P&L $": pnl,
-                    "P&L %": pnl_pct,
-                    "exit_by": r.planned_exit_date,
-                    "rule": pf.format_exit_rule(r.planned_exit_rule),
-                }
-            )
-        hv = pd.DataFrame(rows)
-        sty = hv.style.format(
-            {
-                "entry": "{:.2f}",
-                "now": "{:.2f}",
-                "mkt_value": "${:,.0f}",
-                "% book": "{:.1%}",
-                "P&L $": "${:,.0f}",
-                "P&L %": "{:+.1%}",
-                "shares": "{:.0f}",
-            },
-            na_rep="—",
-        )
-        st.dataframe(sty, use_container_width=True, hide_index=True, height=280)
-
-    # ---- add trade ----
-    st.divider()
-    st.subheader("➕ Log a trade")
+    st.markdown('<div class="pf-stat-label">Log a trade</div>', unsafe_allow_html=True)
     companies = q("SELECT id, ticker FROM companies WHERE ticker IS NOT NULL ORDER BY ticker")
     if companies.empty:
         st.caption("No companies in DB.")
@@ -1408,7 +1299,7 @@ def page_portfolio() -> None:
             "AND expected_date >= CURRENT_DATE ORDER BY expected_date",
             (cid,),
         )
-        cat_map = {"(none — manual exit)": (None, None)}
+        cat_map = {"(none / manual exit)": (None, None)}
         for r in cats.itertuples():
             cat_map[f"{r.catalyst_type} @ {r.expected_date} (#{r.id})"] = (
                 int(r.id),
@@ -1466,7 +1357,7 @@ def page_portfolio() -> None:
     # ---- close trade ----
     if not open_df.empty:
         st.divider()
-        st.subheader("✅ Close a position")
+        st.markdown('<div class="pf-stat-label">Close a position</div>', unsafe_allow_html=True)
         lbl_map = {
             f"{r.ticker} {r.side} {float(r.shares):.0f}@{float(r.entry_price):.2f} (#{r.id})": r
             for r in open_df.itertuples()
@@ -1587,8 +1478,9 @@ def _rgba(hex_color: str, alpha: float) -> str:
 
 
 def page_home() -> None:
-    """Render the Home cockpit: equity curve vs XBI, KPIs, allocation, and risk posture."""
+    """Portfolio page: equity vs XBI, KPIs, allocation, positions, trade management."""
     ensure_account()
+    _purge_open_shorts_once()
     acct = get_account()
     prices = latest_prices()
     open_df = load_holdings("open")
@@ -1634,7 +1526,7 @@ def page_home() -> None:
     chips.append(("Positions", str(summ["positions"])))
     if last_eod:
         chips.append(("Last EOD", str(last_eod)))
-    render_page_header("Cockpit", badges=badges, chips=chips)
+    render_page_header("Portfolio", badges=badges, chips=chips)
 
     # ---------- KPI cards ----------
     render_kpi_row(
@@ -1828,7 +1720,9 @@ def page_home() -> None:
             label_visibility="collapsed",
             key="cockpit_search",
         )
-        tab_open, tab_book, tab_closed = st.tabs(["Open positions", "Trade book", "Closed"])
+        tab_open, tab_book, tab_closed, tab_manage = st.tabs(
+            ["Open positions", "Trade book", "Closed", "Manage"]
+        )
 
         with tab_open:
             if hv.empty:
@@ -1947,9 +1841,14 @@ def page_home() -> None:
                     height=min(420, 46 + 34 * len(cd)),
                 )
 
+        with tab_manage:
+            _manage_tab(acct, prices, open_df)
+
     render_trading_record(closed_df)
 
     render_action_center(open_df)
+
+    _render_performance_risk()
 
 
 # ===========================================================================
@@ -2655,24 +2554,24 @@ def _render_data_health() -> None:
 
 
 def page_research() -> None:
-    """Single research surface: dossiers, calendar, validation, data health, glossary.
-
-    Merges the former 'Market Intel' and 'Models & Data' pages into one tabbed view.
-    """
-    st.title("Market & models")
-    tab_dossier, tab_cal, tab_val, tab_health, tab_gloss = st.tabs(
-        ["Company dossier", "Catalyst calendar", "Validation", "Data health", "Glossary"]
+    """Research page: risk, evidence, calendar, names, spec."""
+    tab_risk, tab_ev, tab_cal, tab_names, tab_spec = st.tabs(
+        ["Risk", "Evidence", "Calendar", "Names", "Spec"]
     )
-    with tab_dossier:
-        _intel_dossier_tab()
+    with tab_risk:
+        page_risk_lab(embedded=True)
+    with tab_ev:
+        page_validation(embedded=True)
+        with st.expander("Data health"):
+            _render_data_health()
     with tab_cal:
         _render_catalyst_calendar()
-    with tab_val:
-        page_validation(embedded=True)
-    with tab_health:
-        _render_data_health()
-    with tab_gloss:
-        page_glossary(embedded=True)
+    with tab_names:
+        _intel_dossier_tab()
+    with tab_spec:
+        page_strategy(embedded=True)
+        with st.expander("Glossary"):
+            page_glossary(embedded=True)
 
 
 # ===========================================================================
@@ -2682,11 +2581,8 @@ def page_validation(*, embedded: bool = False) -> None:
         st.title("Validation")
 
     # --- Headline research findings (dated, reproducible) ---
-    st.subheader("Research findings")
-    st.caption(
-        "Headline results as of 2026-06-21, each reproducible from the named script. "
-        "Live calibration below accrues separately as forward catalysts resolve."
-    )
+    st.subheader("Findings")
+    st.caption("As of 2026-06-21. Scripts in Reproduce column.")
     findings = pd.DataFrame(
         [
             {
@@ -2771,7 +2667,7 @@ def page_validation(*, embedded: bool = False) -> None:
                 x="q",
                 y="abnormal_return",
                 color="abnormal_return",
-                color_continuous_scale=["#ff5c5c", "#6b7280", "#29d391"],
+                color_continuous_scale=[THEME["red"], THEME["muted"], THEME["green"]],
                 title="Forward abnormal return by pre-event run-up quintile",
             )
             fig.update_layout(
@@ -2780,7 +2676,7 @@ def page_validation(*, embedded: bool = False) -> None:
                 coloraxis_showscale=False,
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#cfd3dc",
+                font_color=THEME["text"],
                 yaxis_tickformat=".1%",
                 xaxis_title="",
                 yaxis_title="avg forward abnormal",
@@ -2845,7 +2741,7 @@ def page_validation(*, embedded: bool = False) -> None:
                         height=340,
                         paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
-                        font_color="#cfd3dc",
+                        font_color=THEME["text"],
                         title="Reliability (diagonal = perfect)",
                     )
                     st.plotly_chart(fig, use_container_width=True)
@@ -2861,14 +2757,18 @@ def page_validation(*, embedded: bool = False) -> None:
             x="outcome_label",
             y="n",
             color="outcome_label",
-            color_discrete_map={"hit": "#29d391", "miss": "#ff5c5c", "ambiguous": "#6b7280"},
+            color_discrete_map={
+                "hit": THEME["green"],
+                "miss": THEME["red"],
+                "ambiguous": THEME["muted"],
+            },
         )
         fig.update_layout(
             height=280,
             showlegend=False,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#cfd3dc",
+            font_color=THEME["text"],
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -2881,7 +2781,7 @@ def page_validation(*, embedded: bool = False) -> None:
 
 
 # ===========================================================================
-def page_strategy() -> None:
+def page_strategy(*, embedded: bool = False) -> None:
     """Quant-grade specification of the engine: how a signal becomes a sized position.
 
     Reads live values from `config` and `layers.composite.scorer` so the page can
@@ -2891,13 +2791,9 @@ def page_strategy() -> None:
     tiers = config.RISK_HAIRCUT_TIERS
 
     mode = "LONG-ONLY" if config.LONG_ONLY else "LONG/SHORT"
-    st.title("Strategy specification")
-    st.caption(
-        "Decision-support engine for catalyst-driven small-cap onc/CNS biotech "
-        "(GBM flagship subset). End-of-day data; one rebalance per day. "
-        f"Mode: **{mode}**. "
-        "Parameters below are read live from config — they reflect what is actually running."
-    )
+    if not embedded:
+        st.title("Strategy specification")
+    st.caption(f"EOD, daily rebalance, **{mode}**. Live config.")
 
     # ---- 1. Thesis ----
     st.subheader("1 · Thesis")
@@ -3109,7 +3005,7 @@ def _scene_axes(title_x: str, title_y: str, title_z: str) -> dict:
         gridcolor=THEME["border"],
         zerolinecolor=THEME["border"],
         showbackground=True,
-        backgroundcolor="rgba(14,18,26,.55)",
+        backgroundcolor="rgba(245,246,248,.7)",
         color=THEME["muted"],
     )
     return dict(
@@ -3136,9 +3032,8 @@ def _book_daily_returns(perf: pd.DataFrame, bench_df: pd.DataFrame, beta: float 
     return [], ""
 
 
-def page_risk_lab() -> None:
-    """Risk Lab: Monte Carlo projection, index scenarios, 3D catalyst landscape,
-    Kelly sizing surface, drawdown profile, and cap utilization."""
+def page_risk_lab(*, embedded: bool = False) -> None:
+    """Monte Carlo projection, index scenarios, 3D landscape, Kelly surface, drawdown, caps."""
     perf = load_performance_history()
     closed_df = load_holdings("closed")
     open_df = load_holdings("open")
@@ -3163,7 +3058,8 @@ def page_risk_lab() -> None:
     chips = [("Equity", fmt_usd(equity)), ("Gross long", f"{gross:.0%}")]
     if beta is not None:
         chips.append(("Beta vs XBI", f"{beta:+.2f}"))
-    render_page_header("Risk Lab", badges=badges, chips=chips)
+    if not embedded:
+        render_page_header("Risk Lab", badges=badges, chips=chips)
 
     # ---------- headline risk stats ----------
     rets, ret_src = _book_daily_returns(perf, bench_df, beta)
@@ -3205,8 +3101,7 @@ def page_risk_lab() -> None:
     with left:
         with st.container(border=True):
             st.markdown(
-                '<div class="pf-stat-label">6-month Monte Carlo projection · '
-                "2,000 bootstrap paths</div>",
+                '<div class="pf-stat-label">6-month Monte Carlo · 2,000 paths</div>',
                 unsafe_allow_html=True,
             )
             if len(rets) >= 5 and equity > 0:
@@ -3220,7 +3115,7 @@ def page_risk_lab() -> None:
                         x=x + x[::-1],
                         y=list(qs[95]) + list(qs[5])[::-1],
                         fill="toself",
-                        fillcolor="rgba(108,140,255,.10)",
+                        fillcolor="rgba(31,78,121,.10)",
                         line=dict(width=0),
                         name="P5–P95",
                         hoverinfo="skip",
@@ -3231,7 +3126,7 @@ def page_risk_lab() -> None:
                         x=x + x[::-1],
                         y=list(qs[75]) + list(qs[25])[::-1],
                         fill="toself",
-                        fillcolor="rgba(108,140,255,.22)",
+                        fillcolor="rgba(31,78,121,.20)",
                         line=dict(width=0),
                         name="P25–P75",
                         hoverinfo="skip",
@@ -3260,10 +3155,9 @@ def page_risk_lab() -> None:
                 fig.update_yaxes(gridcolor=THEME["border_soft"], tickprefix="$")
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
                 st.caption(
-                    f"Resampling {ret_src}. 6-month outcomes: P5 {fmt_usd(summ_p['p05'])} · "
+                    f"{ret_src}. P5 {fmt_usd(summ_p['p05'])} · "
                     f"median {fmt_usd(summ_p['p50'])} · P95 {fmt_usd(summ_p['p95'])} · "
-                    f"P(loss) {summ_p['prob_loss']:.0%} · P(−10%) {summ_p['prob_down_10']:.0%}. "
-                    "IID bootstrap; ignores catalysts and regime shifts by construction."
+                    f"P(loss) {summ_p['prob_loss']:.0%} · P(−10%) {summ_p['prob_down_10']:.0%}."
                 )
             else:
                 st.caption("Needs price/return history. Run the pipeline first.")
@@ -3271,8 +3165,7 @@ def page_risk_lab() -> None:
     with right:
         with st.container(border=True):
             st.markdown(
-                '<div class="pf-stat-label">Index shock scenarios · '
-                "first-order beta approximation</div>",
+                '<div class="pf-stat-label">Index shocks · beta approximation</div>',
                 unsafe_allow_html=True,
             )
             b_used = beta if beta is not None else 1.0
@@ -3310,18 +3203,14 @@ def page_risk_lab() -> None:
                 height=46 + 34 * len(sc),
             )
             note = "measured beta" if beta is not None else "beta assumed 1.0 (history too short)"
-            st.caption(
-                f"Impact = beta × shock × gross. Using {note}. Stop-losses and "
-                "drawdown tiers would cut exposure before the worst rows fully land."
-            )
+            st.caption(f"Impact = β × shock × gross. {note}.")
 
     # ---------- 3D catalyst landscape + Kelly surface ----------
     c3d1, c3d2 = st.columns(2, gap="medium")
     with c3d1:
         with st.container(border=True):
             st.markdown(
-                '<div class="pf-stat-label">Catalyst landscape · odds vs priced move '
-                "(drag to rotate)</div>",
+                '<div class="pf-stat-label">Catalyst landscape</div>',
                 unsafe_allow_html=True,
             )
             blot = load_blotter()
@@ -3365,16 +3254,12 @@ def page_risk_lab() -> None:
                     font_color=THEME["text"],
                 )
                 st.plotly_chart(fig, use_container_width=True)
-                st.caption(
-                    "Each dot is one upcoming catalyst; size = suggested weight. "
-                    "The book hunts high-odds names whose priced move looks wrong."
-                )
+                st.caption("Size = suggested weight. Drag to rotate.")
 
     with c3d2:
         with st.container(border=True):
             st.markdown(
-                '<div class="pf-stat-label">Kelly sizing surface · where the book sits '
-                "(drag to rotate)</div>",
+                '<div class="pf-stat-label">Kelly surface</div>',
                 unsafe_allow_html=True,
             )
             wp, po, surf = pj.kelly_surface()
@@ -3384,10 +3269,10 @@ def page_risk_lab() -> None:
                     y=po,
                     z=surf,
                     colorscale=[
-                        [0.0, "#101623"],
-                        [0.35, "#28406e"],
-                        [0.7, "#6c8cff"],
-                        [1.0, "#2fd39a"],
+                        [0.0, "#eef2f7"],
+                        [0.35, "#9db8d4"],
+                        [0.7, "#1f4e79"],
+                        [1.0, "#1a7f4e"],
                     ],
                     opacity=0.96,
                     showscale=False,
@@ -3418,7 +3303,7 @@ def page_risk_lab() -> None:
                 font_color=THEME["text"],
             )
             st.plotly_chart(fig, use_container_width=True)
-            cap = "Sizing runs at quarter-Kelly of this surface, capped 5% per name."
+            cap = "Quarter-Kelly, 5% name cap."
             if record and record["payoff"] not in (0, float("inf")):
                 cap += (
                     f" Book operating point: win rate {record['win_rate']:.0%}, "
@@ -3431,7 +3316,7 @@ def page_risk_lab() -> None:
     with d1:
         with st.container(border=True):
             st.markdown(
-                '<div class="pf-stat-label">Drawdown profile · % below running peak</div>',
+                '<div class="pf-stat-label">Drawdown vs peak</div>',
                 unsafe_allow_html=True,
             )
             if not perf.empty and perf["equity"].notna().sum() >= 3:
@@ -3444,7 +3329,7 @@ def page_risk_lab() -> None:
                         y=dd_df["dd"],
                         fill="tozeroy",
                         line=dict(color=THEME["red"], width=1.6),
-                        fillcolor="rgba(247,106,131,.18)",
+                        fillcolor="rgba(178,58,47,.14)",
                     )
                 )
                 for tier_dd, factor in sorted(config.DRAWDOWN_TIERS, reverse=True):
@@ -3469,17 +3354,14 @@ def page_risk_lab() -> None:
                 fig.update_xaxes(gridcolor=THEME["border_soft"])
                 fig.update_yaxes(gridcolor=THEME["border_soft"])
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-                st.caption(
-                    "Dotted lines are the live drawdown tiers: targets shrink automatically "
-                    "as the book falls, and recover with it."
-                )
+                st.caption("Dotted lines: live de-risk tiers.")
             else:
                 st.caption("Needs equity history.")
 
     with d2:
         with st.container(border=True):
             st.markdown(
-                '<div class="pf-stat-label">Cap utilization · hard limits</div>',
+                '<div class="pf-stat-label">Cap utilization</div>',
                 unsafe_allow_html=True,
             )
             book = load_action_book(90)
@@ -3506,7 +3388,7 @@ def page_risk_lab() -> None:
                         x=[cap],
                         y=[name],
                         orientation="h",
-                        marker=dict(color="rgba(139,148,167,.15)"),
+                        marker=dict(color="rgba(95,107,124,.12)"),
                         hoverinfo="skip",
                         showlegend=False,
                     )
@@ -3535,29 +3417,22 @@ def page_risk_lab() -> None:
             )
             fig.update_xaxes(gridcolor=THEME["border_soft"])
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption(
-                "Caps are enforced in sizing, not advisory: sector ≤ 40%, GBM cluster "
-                "≤ 25%, single name ≤ 5% after the market-cap haircut."
-            )
+            st.caption("Gross long, GBM cluster, largest name vs hard caps.")
 
 
 PAGES: dict[str, callable] = {
-    "Cockpit": page_home,
-    "Portfolio": page_portfolio,
-    "Action Desk": page_action_desk,
-    "Risk Lab": page_risk_lab,
-    "Strategy": page_strategy,
-    "Market & Models": page_research,
+    "Portfolio": page_home,
+    "Research": page_research,
 }
 
 
 def _top_nav() -> callable:
     """Single-page top navigation bar (replaces the sidebar)."""
     names = list(PAGES.keys())
-    bar = st.columns([2.2, 6, 1.2], gap="small", vertical_alignment="center")
+    bar = st.columns([1.4, 4, 1.1], gap="small", vertical_alignment="center")
     with bar[0]:
         st.markdown(
-            '<div class="pf-logo"><span class="mark">◆</span>EDGE TERMINAL</div>',
+            '<div class="pf-logo"><span class="mark">◆</span>EDGE</div>',
             unsafe_allow_html=True,
         )
     with bar[1]:
