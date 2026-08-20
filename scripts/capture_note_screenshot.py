@@ -48,16 +48,21 @@ def capture(*, port: int, out_dir: Path, width: int = 1440, height: int = 900) -
         page.screenshot(path=str(out_dir / "note_full.png"), full_page=True)
 
         # the Trade thesis tab (second tab) for the README's secondary slot
-        page.click("button:has-text('Trade thesis')")
-        page.wait_for_selector("text=The event", timeout=60_000)
-        page.wait_for_function(
-            "document.querySelectorAll('[data-stale=\"true\"]').length === 0",
-            timeout=60_000,
-        )
-        page.wait_for_timeout(6_000)
-        page.screenshot(path=str(out_dir / "thesis.png"), full_page=True)
+        try:
+            page.click('[data-baseweb="tab"]:has-text("Trade thesis")', timeout=30_000)
+            page.wait_for_selector("text=The event", timeout=60_000)
+            page.wait_for_function(
+                "document.querySelectorAll('[data-stale=\"true\"]').length === 0",
+                timeout=60_000,
+            )
+            page.wait_for_timeout(6_000)
+            page.screenshot(path=str(out_dir / "thesis.png"), full_page=True)
+            print("thesis tab captured")
+        except Exception as exc:  # noqa: BLE001 — diagnostics, never fail the job
+            print(f"THESIS CAPTURE FAILED: {type(exc).__name__}")
+            print("body text after click:", page.inner_text("body")[:800])
         browser.close()
-    print(f"wrote terminal.png, note_full.png, thesis.png in {out_dir}")
+    print(f"wrote terminal.png, note_full.png in {out_dir}")
 
 
 def main() -> None:
