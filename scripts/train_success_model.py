@@ -6,7 +6,7 @@ from phase, indication, sponsor class/track-record, enrollment, and era. The out
 a sharper probability that feeds `base_rate` -> the grade -> the edge gap.
 
 Honest scope: this predicts CLINICAL success, which is a FEATURE of the trade, not the
-stock return. The signed-return model is blocked on data depth (see AGENT_HANDOFF.md).
+stock return. The signed-return model is blocked on data depth (see docs/HANDBOOK.md).
 
 Validation = temporal holdout (train on older trials, test on newer) so we measure
 generalization, not memorization. We compare against the base-rate LOOKUP baseline

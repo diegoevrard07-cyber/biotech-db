@@ -1,12 +1,12 @@
 # Operations
 
-How the pipeline runs unattended. **Use exactly one execution venue** — running both
+How the pipeline runs unattended. **Use exactly one execution venue**: running both
 cloud and local schedulers double-trades the paper book (this actually happened once;
 see `docs/OPERATIONS_LOG.md`, 2026-07-14).
 
-## Cloud automation (GitHub Actions — the supported venue)
+## Cloud automation (GitHub Actions, the supported venue)
 
-Because all state lives in Postgres, the autopilot runs serverless on GitHub Actions —
+Because all state lives in Postgres, the autopilot runs serverless on GitHub Actions,
 no laptop required. See `.github/workflows/`:
 
 | Workflow | Trigger | Runs |
@@ -17,7 +17,7 @@ no laptop required. See `.github/workflows/`:
 | `tests.yml` | push / PR | pytest |
 
 The autopilot is **chained** to the refresh (`workflow_run`), so trades always run on
-fresh data no matter how long the refresh takes — no fixed-gap race. The refresh runs
+fresh data no matter how long the refresh takes, with no fixed-gap race. The refresh runs
 every day (research data stays current); the autopilot gates itself to weekdays.
 
 **Why once a day, not every few minutes:** every signal here is end-of-day granularity
@@ -27,7 +27,7 @@ the close is optimal.
 
 **Setup (one time):** add repo secrets under *Settings → Secrets and variables →
 Actions*: `DATABASE_URL` (both jobs) and `SEC_USER_AGENT` (refresh only, for SEC
-EDGAR). `POE_API_KEY` is **not** needed — the Layer-2 council is scaffolded but not
+EDGAR). `POE_API_KEY` is **not** needed: the Layer-2 council is scaffolded but not
 wired into the active pipeline. All workflows also have a manual *Run workflow* button
 (`workflow_dispatch`).
 
@@ -72,7 +72,7 @@ streamlit run scripts/terminal.py            # Edge Terminal (current UI)
 ```
 
 The legacy `scripts/dashboard.py` (the original five-page read-only dashboard) was
-removed in the 2026-08 cleanup — superseded by the terminal; recoverable from git
+removed in the 2026-08 cleanup (superseded by the terminal); recoverable from git
 history if ever needed.
 
 ## Risk mitigation overlays (paper autopilot)
@@ -89,6 +89,6 @@ Additional overlays added 2026-07-14 (see `docs/OPERATIONS_LOG.md`): per-positio
 stop-loss (`STOP_LOSS_PCT=0.15`), graded drawdown tiers (`DRAWDOWN_TIERS`), and an
 XBI regime filter (`REGIME_SMA_DAYS=20`, `REGIME_DERISK_FACTOR=0.60`).
 
-Disable any of them with `*_ENABLED=0`. Note: EOD-based — they mitigate multi-day
+Disable any of them with `*_ENABLED=0`. Note: these are EOD-based; they mitigate multi-day
 slides and over-extension, not single-name overnight gaps (the 5% per-name cap covers
 that).

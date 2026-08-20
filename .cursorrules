@@ -1,12 +1,12 @@
-# Project: GBM Sentiment Arbitrage Database
+# Project: Biotech Catalyst Edge Engine
 
 ## Context
-This is a clinical trial and market data pipeline focused exclusively on glioblastoma (GBM) drug development. The goal is to identify mispricings between market sentiment and clinical/regulatory reality in small-cap biotech stocks with GBM programs.
+A clinical trial and market data pipeline for small-cap oncology/CNS biotech, with glioblastoma (GBM) as the flagship subset. The goal is to identify mispricings between market sentiment and clinical/regulatory reality ahead of trial readouts and FDA decisions.
 
 ## Tech Stack (do not deviate)
 - Python 3.12+ (3.14 verified; CI runs 3.12)
 - PostgreSQL 16 via Supabase cloud pooler (DATABASE_URL); a local Postgres works too
-- Libraries: see requirements.txt (pinned). Do not add heavy deps (sklearn/statsmodels) without asking — small models are implemented in pure numpy.
+- Libraries: see requirements.txt (pinned). Do not add heavy deps (sklearn/statsmodels) without asking; small models are implemented in pure numpy.
 - Config via .env file (never hardcode secrets)
 
 ## Code Standards
@@ -28,11 +28,11 @@ Never add columns without updating `schema.sql`.
 - Do not over-engineer. Prefer simple scripts over frameworks.
 
 ## Verification Requirement
-After making any change, the agent must:
+After making any change:
 1. Run the affected scripts
 2. Report what actually happened (not what should have happened)
 3. Show row counts, sample data, or query results as proof
 4. Flag any silent failures or fallback paths
 
-## What I Want From You
-Speed and correctness. I do not want to learn. I want working code. But I want to know when something failed silently. Always tell me when you took a shortcut, made an assumption, or skipped verification.
+## Working Style
+Correctness over cleverness. Silent failures, shortcuts, assumptions, and skipped verification must always be surfaced, never hidden.
