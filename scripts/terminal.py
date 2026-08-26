@@ -106,32 +106,47 @@ def _inject_css() -> None:
           [data-testid="stDecoration"],
           [data-testid="stStatusWidget"],
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
-          .block-container {{ padding: 1.15rem 1.5rem 2rem; max-width: 1440px; }}
+          .block-container {{ padding: 1.6rem 1.6rem 2rem !important; max-width: 1440px; }}
           #MainMenu, footer {{ visibility: hidden; }}
-          /* columns default to min-content width, so Plotly legends/pills spill
-             into the neighboring card. Allow them to shrink. */
-          [data-testid="stHorizontalBlock"] > div {{ min-width: 0 !important; }}
-          [data-testid="column"] {{ min-width: 0 !important; }}
+          /* Plotly legends spill into the next card unless those columns can shrink.
+             Do not apply this to the top nav or the EDGE mark overflows the pills. */
+          [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"] > div,
+          [data-testid="stVerticalBlockBorderWrapper"] [data-testid="column"] {{
+             min-width: 0 !important;
+          }}
           .stPlotlyChart, .js-plotly-plot, .plot-container {{
              max-width: 100% !important; overflow: hidden;
           }}
           /* hover toolbar covers dataframe column headers */
           div[data-testid="stElementToolbar"] {{ display: none !important; }}
-          /* single-page: no left nav bar */
-          [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
-          [data-testid="collapsedControl"] {{ display: none !important; }}
+          /* single-page: no left nav / hamburger sitting on the logo */
+          [data-testid="stSidebar"],
+          [data-testid="stSidebarCollapsedControl"],
+          [data-testid="collapsedControl"],
+          [data-testid="stExpandSidebarButton"],
+          [data-testid="stHeaderActionElements"],
+          button[kind="header"],
+          button[kind="headerNoPadding"] {{ display: none !important; }}
           /* hide previous page's lingering (stale) content during a rerun so it
              does not ghost over the newly loading page */
           [data-testid="stElementContainer"][data-stale="true"] {{ display: none !important; }}
+          [data-testid="stAppViewContainer"],
+          [data-testid="stMain"] {{ margin-left: 0 !important; }}
 
           /* top navigation bar */
           .pf-topbar {{ display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }}
-          .pf-logo {{ display: flex; align-items: center; gap: 10px; font-weight: 800;
-                      letter-spacing: .1em; font-size: .9rem; white-space: nowrap; }}
-          .pf-logo .mark {{ width: 26px; height: 26px; border-radius: 6px;
+          .pf-logo {{ display: inline-flex; align-items: center; gap: 8px; font-weight: 800;
+                      letter-spacing: .14em; font-size: .88rem; white-space: nowrap;
+                      min-width: max-content; padding: 2px 12px 2px 0; line-height: 1;
+                      color: {t['text']}; }}
+          .pf-logo .mark {{ width: 26px; height: 26px; border-radius: 6px; flex: 0 0 26px;
                             background: {t['accent']};
                             display: inline-flex; align-items: center; justify-content: center;
                             color: #ffffff; }}
+          .pf-logo .word {{ letter-spacing: .16em; }}
+          div[data-testid="stMarkdownContainer"]:has(.pf-logo) {{
+             min-width: 8rem; margin-bottom: 0 !important;
+          }}
 
           h1 {{ font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 .1rem; }}
           h2, h3 {{ font-size: .95rem; font-weight: 600; color: {t['text']}; margin: .3rem 0 .4rem; }}
@@ -3390,10 +3405,10 @@ PAGES: dict[str, callable] = {
 def _top_nav() -> callable:
     """Single-page top navigation bar (replaces the sidebar)."""
     names = list(PAGES.keys())
-    bar = st.columns([0.9, 3.6, 0.95], gap="small", vertical_alignment="center")
+    bar = st.columns([1.7, 4.2, 1.2], gap="medium", vertical_alignment="center")
     with bar[0]:
         st.markdown(
-            '<div class="pf-logo"><span class="mark">◆</span>EDGE</div>',
+            '<div class="pf-logo"><span class="mark">◆</span><span class="word">EDGE</span></div>',
             unsafe_allow_html=True,
         )
     with bar[1]:
