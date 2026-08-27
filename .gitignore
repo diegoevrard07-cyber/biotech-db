@@ -29,6 +29,7 @@ data/raw/
 data/cache/
 data/logs/
 data/backups/
+data/pgdata/
 
 # --- OS / editor junk ---
 .DS_Store

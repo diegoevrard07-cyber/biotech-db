@@ -66,10 +66,11 @@ the pinned deps — do not use it. From the repo root:
 ```
 
 That finds a 3.12+ interpreter (or downloads one), rebuilds `.venv` if it was
-created with the system 3.9, starts local Docker Postgres if `DATABASE_URL` is
-still the example placeholder, and opens the terminal at
-[http://localhost:8321](http://localhost:8321). For the live paper book instead
-of an empty local database, paste a real Supabase URI into `.env`.
+created with the system 3.9, starts Postgres (Docker if a daemon is already
+running, otherwise an embedded server — Docker Desktop is not required), and
+opens the terminal at [http://localhost:8321](http://localhost:8321). For the
+live paper book instead of an empty local database, paste a real Supabase URI
+into `.env`.
 
 To run the pipeline itself, not just the UI:
 
