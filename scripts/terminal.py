@@ -107,31 +107,53 @@ def _inject_css() -> None:
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
           .block-container {{ padding: 1.6rem 1.6rem 2rem; max-width: 1500px; }}
 
-          /* ---- top nav: logo row + nav row (no overlap with segmented control) ---- */
-          .pf-nav-shell {{ margin: 0 0 4px; }}
-          .pf-nav-top {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 10px;
+          /* ---- top nav: one row, logo isolated from segmented-control chrome ---- */
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) {{
+            align-items: center !important;
+            gap: 18px !important;
+            margin: 0 0 14px !important;
+            padding-bottom: 12px !important;
+            border-bottom: 1px solid {t['border_soft']} !important;
           }}
-          .pf-nav-tabs {{
-            display: flex;
-            align-items: center;
-            gap: 10px;
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div[data-testid="column"]:first-child,
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div:first-child {{
+            flex: 0 0 132px !important;
+            width: 132px !important;
+            min-width: 132px !important;
+            max-width: 132px !important;
+            z-index: 5;
+            position: relative;
+            background: {t['bg']};
+            padding-right: 8px;
           }}
-          .pf-nav-tabs [data-testid="stSegmentedControl"],
-          .pf-nav-tabs [data-testid="stRadio"] {{
-            max-width: 320px;
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div[data-testid="column"]:nth-child(2),
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div:nth-child(2) {{
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: 320px !important;
+            z-index: 1;
+            overflow: hidden;
           }}
-          .pf-nav-tabs [data-testid="stSegmentedControl"] > div {{
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div[data-testid="column"]:nth-child(3),
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div:nth-child(3) {{
+            flex: 1 1 auto !important;
+            min-width: 120px !important;
+          }}
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stVerticalBlockBorderWrapper"] {{
+            border: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }}
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stSegmentedControl"],
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stRadio"] {{
             width: fit-content !important;
+            max-width: 300px !important;
           }}
-          div[data-testid="stHorizontalBlock"]:has([data-testid="stSegmentedControl"]) [data-testid="stSegmentedControl"] {{
-            max-width: 320px;
-          }}
-          div[data-testid="stHorizontalBlock"]:has([data-testid="stSegmentedControl"]) [data-testid="stSegmentedControl"] > div {{
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stSegmentedControl"] > div,
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stRadio"] > div {{
             width: fit-content !important;
           }}
 
@@ -230,12 +252,13 @@ def _inject_css() -> None:
 
           /* top navigation bar */
           .pf-topbar {{ display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }}
-          .pf-logo {{ display: flex; align-items: center; gap: 10px; font-weight: 800;
-                      letter-spacing: .1em; font-size: .9rem; white-space: nowrap; }}
+          .pf-logo {{ display: inline-flex; align-items: center; gap: 10px; font-weight: 800;
+                      letter-spacing: .1em; font-size: .9rem; white-space: nowrap;
+                      line-height: 1; margin: 0; padding: 4px 0; }}
           .pf-logo .mark {{ width: 26px; height: 26px; border-radius: 6px;
-                            background: {t['accent']};
+                            background: {t['accent']}; flex-shrink: 0;
                             display: inline-flex; align-items: center; justify-content: center;
-                            color: #ffffff; }}
+                            color: #ffffff; font-size: .72rem; }}
 
           h1 {{ font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 .1rem; }}
           h2, h3 {{ font-size: .95rem; font-weight: 600; color: {t['text']}; margin: .3rem 0 .4rem; }}
@@ -3567,18 +3590,13 @@ PAGES: dict[str, callable] = {
 def _top_nav() -> callable:
     """Single-page top navigation bar (replaces the sidebar)."""
     names = list(PAGES.keys())
-    top = st.columns([5, 1], gap="small", vertical_alignment="center")
-    with top[0]:
+    bar = st.columns([1.2, 1.4, 2.4], gap="medium", vertical_alignment="center")
+    with bar[0]:
         st.markdown(
             '<div class="pf-logo"><span class="mark">◆</span>EDGE</div>',
             unsafe_allow_html=True,
         )
-    with top[1]:
-        if st.button("↻ Refresh", use_container_width=True, type="primary"):
-            st.cache_data.clear()
-            st.rerun()
-    nav = st.columns([1], gap="small")
-    with nav[0]:
+    with bar[1]:
         if hasattr(st, "segmented_control"):
             sel = st.segmented_control(
                 "nav", names, default=names[0], label_visibility="collapsed", key="topnav"
@@ -3587,10 +3605,10 @@ def _top_nav() -> callable:
             sel = st.radio(
                 "nav", names, horizontal=True, label_visibility="collapsed", key="topnav"
             )
-    st.markdown(
-        f'<hr style="margin:.4rem 0 1rem;border-color:{THEME["border_soft"]}">',
-        unsafe_allow_html=True,
-    )
+    with bar[2]:
+        if st.button("↻ Refresh", use_container_width=True, type="primary"):
+            st.cache_data.clear()
+            st.rerun()
     return PAGES.get(sel or names[0], PAGES[names[0]])
 
 
