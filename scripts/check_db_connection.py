@@ -30,10 +30,7 @@ def main() -> int:
     if not db_url:
         print("FAIL: DATABASE_URL not found in .env")
         print("Expected one line like:")
-        print(
-            "  DATABASE_URL=postgresql://postgres.REF:PASSWORD@"
-            "aws-0-REGION.pooler.supabase.com:6543/postgres"
-        )
+        print("  DATABASE_URL=postgresql://postgres:postgres@localhost:5432/biotech")
         return 1
 
     # Never print credentials — show only the host part after '@'.

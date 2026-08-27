@@ -413,10 +413,24 @@ def get_conn():
     except Exception as exc:
         msg = str(exc)
         st.error(f"Could not connect to the database: {msg}")
-        if "https" in msg.lower() or "could not translate host name" in msg.lower():
+        if "aws-0-REGION" in (url or "") or "PROJECT_REF" in (url or ""):
             st.info(
-                f"Your DATABASE_URL in `{env_path}` is malformed (often an `https://` paste). "
+                f"`{env_path}` still has the example DATABASE_URL. "
+                "`aws-0-REGION` is a placeholder, not a VPN failure. "
+                "Paste a real Supabase URI, or set "
+                "`DATABASE_URL=postgresql://postgres:postgres@localhost:5432/biotech` "
+                "and run `docker compose up -d`."
+            )
+        elif "https" in (url or "").lower() or "https" in msg.lower():
+            st.info(
+                f"Your DATABASE_URL in `{env_path}` looks like a web link. "
                 "It must start with `postgresql://`. Fix `.env`, then restart."
+            )
+        elif "could not translate host name" in msg.lower():
+            st.info(
+                "Postgres could not resolve the hostname. Check DATABASE_URL "
+                "in `.env` (and that Docker/Supabase is actually running). "
+                "A VPN can block DNS; try without it if the host is real."
             )
         st.stop()
 

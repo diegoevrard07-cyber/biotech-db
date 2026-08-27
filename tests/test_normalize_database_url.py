@@ -45,6 +45,15 @@ def test_supabase_forces_ssl_and_session_port():
     assert ":6543/" not in out
 
 
+def test_rejects_env_example_placeholder():
+    raw = (
+        "postgresql://postgres.PROJECT_REF:PASSWORD@"
+        "aws-0-REGION.pooler.supabase.com:6543/postgres"
+    )
+    with pytest.raises(RuntimeError, match="placeholder"):
+        normalize_database_url(raw)
+
+
 def test_supabase_keeps_existing_sslmode():
     raw = (
         "postgresql://u:p@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres" "?sslmode=require"

@@ -62,6 +62,16 @@ def normalize_database_url(raw: str | None) -> str:
             "In Supabase: Project → Connect → Session pooler → URI."
         )
 
+    # Copied .env.example without replacing PROJECT_REF / REGION / PASSWORD.
+    if "aws-0-REGION.pooler.supabase.com" in value or "postgres.PROJECT_REF:" in value:
+        raise RuntimeError(
+            "DATABASE_URL is still the example placeholder from .env.example "
+            "(aws-0-REGION is not a real host). Either paste your Supabase "
+            "session-pooler URI, or use local Docker: "
+            "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/biotech "
+            "and run `docker compose up -d`."
+        )
+
     # Supabase: psycopg2 + transaction pooler (6543) often fails handshake.
     # Prefer session pooler (5432) on the same host, and always require SSL.
     if "supabase.com" in value:
