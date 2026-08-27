@@ -1,106 +1,125 @@
 # Biotech Catalyst Edge Engine
 
-A daily pipeline that scores upcoming small-cap biotech catalysts (trial readouts, FDA
-decisions) against what the options market has priced in, and runs the result as a
-paper portfolio. The most useful thing I found building it is a negative one: pre-event
-price action predicts the *direction* of a biotech catalyst move about as well as a coin
-flip (47.6% directional hit rate out of sample), so the model bets on base rates and
-mispricing, never on calling which way the stock jumps.
+I built this to answer one question: for a binary biotech event like a Phase 2 readout or an
+FDA decision, can you predict the stock's reaction well enough to trade it? The most useful
+thing I found is a negative result. On an out-of-sample study of roughly two thousand real
+8-K reactions, pre-event price action calls the direction of the move 47.6% of the time,
+worse than a coin flip. So the engine never bets on direction. It bets on two things I can
+actually measure: the historical base rate of a trial succeeding, and the gap between the
+move I expect and the move the options market has already priced.
 
 ![Tests](https://github.com/diegoevrard07-cyber/biotech-db/actions/workflows/tests.yml/badge.svg)
 
-![Portfolio page: equity vs XBI, current allocation, and live paper P&L](docs/img/terminal.png)
+![Portfolio page: equity versus XBI, current allocation, and the next catalysts](docs/img/portfolio.png)
+*The paper book on 2026-08-27, drawn from the daily run: equity versus the XBI biotech index, how the capital is currently allocated, and the catalysts due next.*
 
-## The interesting part
+## Why I built it
 
-The idea I wanted to test is that for a binary event like a Phase 2 readout you cannot
-forecast the outcome, but you can estimate its odds from history and measure what the
-market has already priced in, and the gap between those two numbers is the only thing
-worth trading. So the load-bearing model is deliberately plain: it grades each trial on
-the historical success rate for its phase, indication, and sponsor type. I checked
-whether a logistic regression with more features could beat that lookup on a temporal
-holdout (train before 2019, test after), and it lost — the plain base-rate lookup scored
-a higher AUC (0.672 vs 0.655) and was better calibrated — so the regression never went
-into the scorer. It's still in the repo as a research tool, with the result that it lost
-written down next to it.
+I wanted to know whether small-cap biotech catalyst trading is a real edge or just dressed-up
+variance. The folklore is that you buy the run-up into a readout and sell before the print. I
+did not want folklore, I wanted a number, so I built the whole pipeline around measuring my own
+ideas and throwing out the ones that failed.
 
-The same measure-first habit retired the short book. An event study on roughly two
-thousand real 8-K filings is where the coin-flip finding above comes from: a ridge
-regression on leakage-safe price features could not call the sign of the reaction, so
-there is no chart-based direction signal anywhere in the model. Reaction *magnitude* was
-weakly predictable, and I use it only to shrink position sizes for the smallest, most
-volatile names, never to pick a side.
+The habit that came out of it is the part I am most happy with. Every claim in here is backed by
+a script and a validation number, and where something did not work I left it in the repo with the
+result written next to it, rather than quietly deleting it. That is the opposite of a backtest
+that only shows its good days.
 
 ## How it works
 
-The daily run pulls upcoming catalysts from ClinicalTrials.gov, financials and 8-K and
-Form 4 filings from SEC EDGAR, and prices and options-implied moves from yfinance, then
-writes everything to Postgres. Each catalyst gets a grade that is a weighted average of
-three inputs: how soon the catalyst lands (weight 0.25), its historical base rate
-(0.45), and whether the company has the cash to survive to its own readout (0.30). The
-base rate carries the most weight because it is the only input I have validated. In
-parallel the model estimates the size of the expected move and subtracts the
-options-implied move to get an "edge gap," and a decision layer turns the grade and that
-gap into one of three actions — ride the run-up and sell before the print, hold through
-the binary, or avoid — plus a size from a quarter-Kelly fraction capped at 5% per name
-and 25% across the correlated glioblastoma cluster.
+The pipeline runs once a day on GitHub Actions and writes everything to Postgres (22 tables).
 
-The whole loop runs unattended once a day on GitHub Actions. That cadence is a choice,
-not a limitation: every input here is end-of-day data — daily closes, SEC filings, a
-trial registry that changes slowly — so polling more often would add cost and
-rate-limit risk without adding signal. Every position is paper only, and a set of
-end-of-day overlays (a 15% per-name stop, graded drawdown tiers, and a regime filter
-that de-risks when XBI closes below its 20-day average) can only ever cut exposure, not
-add it. The design notes and the specific database traps I hit are in
-[docs/HANDBOOK.md](docs/HANDBOOK.md); the full run order is in
-[docs/PIPELINE.md](docs/PIPELINE.md).
+- Ingest: upcoming catalysts from ClinicalTrials.gov, financials plus 8-K and Form 4 filings
+  from SEC EDGAR, and prices and options-implied moves from yfinance. I filter to small-cap
+  oncology and CNS names at ingestion, with glioblastoma flagged as the flagship cluster.
+- Grade each catalyst on a weighted average of three inputs: how soon it lands (0.25), the
+  trial's historical base rate (0.45), and whether the company has the cash to survive to its
+  own readout (0.30). The base rate carries the most weight because it is the only input I
+  validated.
+- Price the mispricing: expected move minus options-implied move gives an edge gap. Positive
+  means the market underprices the event, negative means it is paying up for a coin flip.
+- Decide and size: each name becomes ride-the-rumor, hold-through, or avoid, sized by a
+  quarter-Kelly fraction and capped at 5% per name and 25% across the correlated glioblastoma
+  cluster.
+- Manage risk end of day: a 15% per-name stop, graded drawdown tiers, and a regime filter that
+  de-risks when XBI closes below its 20-day average. Each overlay can only cut exposure.
+
+Everything is paper and marked at prior close. The daily cadence is a design choice, not a
+limit: every input is end-of-day data, so polling more often would add cost and rate-limit
+risk without adding signal.
+
+## The result
+
+These are the validation numbers the engine is built on, each reproducible from the named
+script on a temporal holdout (train before 2019, test after).
+
+| Question | Finding | Verdict |
+| --- | --- | --- |
+| Can trial success be predicted? | Brier skill +0.098 over the prior, AUC 0.676, well calibrated (n=10,127) | Validated |
+| Does price action predict reaction direction? | No: out-of-sample R² −0.001, 47.6% hit rate (n=609) | No edge, not wired in |
+| Does price action predict reaction magnitude? | Weakly: R² +0.019, predicted-big names realized 13.9% versus 7.8% | Used for sizing only |
+| Does a logistic model beat the base-rate lookup? | No: AUC 0.655 versus 0.672, and worse calibrated | Lookup kept |
+
+The direction result is the load-bearing one. Sorting events into quintiles by their 30-day
+run-up into the catalyst shows no monotonic link to the forward move: the biggest run-ups do
+not lead to the biggest or the most predictable reactions.
+
+![Forward abnormal return by pre-event run-up quintile](docs/img/eventstudy.png)
+*Forward abnormal return grouped by how much each name ran up before its catalyst. If price action predicted direction this would slope cleanly; it does not, which is why no chart-based direction signal is wired into the book.*
+
+Because I trust the base rate and not the direction, the same discipline retired the short book
+entirely. The engine is long-only, and reaction magnitude is used only to size the smallest,
+most volatile names down, never to pick a side.
+
+![Single-name research view for one catalyst](docs/img/dossier.png)
+*One name's full picture: composite grade, trial base rate, edge gap, runway, and implied move, all in one view before any capital is committed.*
+
+## What it doesn't do
+
+The validated model predicts trial success, not stock returns, so it is a feature and not a
+profit-and-loss engine. The live paper book is young: over the window shown it is up 7.9% while
+XBI is up 15.4%, so it has trailed the index and shown negative alpha, and 442 closed trades is
+still far too small a sample to call an edge. The edge gap compares the size of the expected move
+against the implied move rather than a signed return, so it is a mispricing screen, not a return
+forecast. Historical implied-move and short-interest snapshots cannot be reconstructed, which
+means the edge gap itself is not yet backtestable; the universe is today's listed names, so it
+carries survivorship bias; and because it never touches real money there is no transaction-cost,
+borrow, or slippage model. The resolved-catalyst calibration sample is also still nearly empty,
+so that number will not mean much until the forward book actually resolves.
+
+![Risk lab: Monte Carlo projection and index-shock scenarios](docs/img/risk.png)
+*The risk view on the same book: a 2,000-path Monte Carlo of the next six months, annualized volatility of 19.8%, a −7.5% max drawdown, and beta of 0.53 to XBI.*
 
 ## Running it
 
-Requires Python 3.12+ and a Postgres database (a free Supabase project, or local
-`docker compose up -d`). macOS still ships `python3` as 3.9, which cannot install
-the pinned deps — do not use it. From the repo root:
+You need Python 3.12+ and a Postgres database (a free Supabase project, or a local
+`docker compose up -d`). macOS still ships `python3` as 3.9, which cannot install the pinned
+dependencies, so do not use it. From the repo root:
 
 ```bash
 ./scripts/launch_terminal.sh
 ```
 
-That finds a 3.12+ interpreter (or downloads one), rebuilds `.venv` if it was
-created with the system 3.9, starts Postgres (Docker if a daemon is already
-running, otherwise an embedded server — Docker Desktop is not required), and
-opens the terminal at [http://localhost:8321](http://localhost:8321). For the
-live paper book instead of an empty local database, paste a real Supabase URI
-into `.env`.
+That finds a 3.12+ interpreter (or downloads one), builds the virtual environment, starts
+Postgres (Docker if a daemon is already running, otherwise an embedded server, so Docker Desktop
+is not required), and opens the terminal at http://localhost:8321. To see the live paper book
+instead of an empty local database, paste a real Supabase connection string into `.env`.
 
-To run the pipeline itself, not just the UI:
+To run the pipeline itself rather than just the UI:
 
 ```bash
 python scripts/apply_schema.py   # create the 22 tables (idempotent)
-python scripts/refresh_all.py    # full pipeline: ingest, score, validate (fail-soft)
+python scripts/refresh_all.py    # full pipeline: ingest, score, validate
 ```
 
-SEC ingestion fails fast unless `SEC_USER_AGENT` is a descriptive "Name email"
-string, which EDGAR's fair-use policy requires. `python -m pytest` runs the suite;
-the database-backed tests skip automatically when `DATABASE_URL` is absent.
-
-## Limitations
-
-The part I have validated is the trial-success model, and it predicts trial success, not
-stock returns — it is a feature, not a P&L. The paper-trading record is young and small,
-a few dozen closed trades over a couple of weeks, and it has lagged simply holding XBI
-over that stretch, so nothing here is evidence of alpha yet; the point of the repo is the
-process that will eventually confirm or reject the edge. The edge gap compares the
-*magnitude* of the expected move against the implied move rather than signed return, so
-it is a mispricing screen, not a return forecast. Historical implied-move and
-short-interest snapshots cannot be reconstructed, which means the edge gap itself is not
-yet backtestable; the universe is today's listed names, so it carries survivorship bias;
-and because it never touches real money there is no transaction-cost, borrow, or slippage
-model. A reviewer should also push on the resolved-catalyst calibration sample, which is
-still nearly empty — the forward book has to actually resolve before that calibration
-number means much.
+The one real gotcha: SEC ingestion fails fast unless `SEC_USER_AGENT` is a descriptive
+"Name email" string, which EDGAR's fair-use policy requires.
 
 ## Development
 
-`python -m pytest` for the suite (~220 tests, database-backed ones skip without a
-`DATABASE_URL`), `black` and `isort` for formatting, `pyflakes` for lint; config is in
-`pyproject.toml`.
+`python -m pytest` runs the suite (about 220 tests; the database-backed ones skip automatically
+when `DATABASE_URL` is absent). Formatting is `black` and `isort`, linting is `pyflakes`, and the
+config lives in `pyproject.toml`. Every database write uses an idempotent upsert so the daily job
+can be re-run safely. If you want the deeper design notes and the specific database traps I hit,
+they are in [docs/HANDBOOK.md](docs/HANDBOOK.md), and the full run order is in
+[docs/PIPELINE.md](docs/PIPELINE.md).
