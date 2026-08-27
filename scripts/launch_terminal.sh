@@ -43,6 +43,21 @@ fi
 echo "Installing requirements into .venv…"
 uv pip install -r "$PROJ/requirements.txt"
 
+# If .env already points at a real database (e.g. Supabase), use it as-is and do
+# not start a local one. Only placeholder / localhost URLs fall through.
+existing_url="$(grep -E '^DATABASE_URL=' "$PROJ/.env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+case "$existing_url" in
+  ""|*aws-0-REGION*|*PROJECT_REF*|*localhost*|*127.0.0.1*)
+    : ;;  # placeholder or local: set up a local database below
+  postgresql://*|postgres://*)
+    echo "Using DATABASE_URL from .env"
+    echo "Opening http://localhost:${PORT}"
+    exec "$PROJ/.venv/bin/python" -m streamlit run "$PROJ/scripts/terminal.py" \
+      --server.port "$PORT" \
+      --server.headless false
+    ;;
+esac
+
 if docker info >/dev/null 2>&1; then
   echo "Docker is running — using docker compose Postgres."
   if [[ ! -f "$PROJ/.env" ]]; then
