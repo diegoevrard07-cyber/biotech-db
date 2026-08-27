@@ -107,38 +107,20 @@ def _inject_css() -> None:
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
           .block-container {{ padding: 1.6rem 1.6rem 2rem; max-width: 1500px; }}
 
-          /* ---- top nav: one row, logo isolated from segmented-control chrome ---- */
+          /* ---- top nav ---- */
           div[data-testid="stHorizontalBlock"]:has(.pf-logo) {{
             align-items: center !important;
-            gap: 18px !important;
-            margin: 0 0 14px !important;
-            padding-bottom: 12px !important;
+            gap: 20px !important;
+            margin: 0 0 12px !important;
+            padding-bottom: 10px !important;
             border-bottom: 1px solid {t['border_soft']} !important;
           }}
-          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div[data-testid="column"]:first-child,
-          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div:first-child {{
-            flex: 0 0 132px !important;
-            width: 132px !important;
-            min-width: 132px !important;
-            max-width: 132px !important;
-            z-index: 5;
-            position: relative;
-            background: {t['bg']};
-            padding-right: 8px;
-          }}
-          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div[data-testid="column"]:nth-child(2),
-          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div:nth-child(2) {{
-            flex: 0 0 auto !important;
-            width: auto !important;
-            min-width: 0 !important;
-            max-width: 320px !important;
-            z-index: 1;
-            overflow: hidden;
-          }}
-          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div[data-testid="column"]:nth-child(3),
-          div[data-testid="stHorizontalBlock"]:has(.pf-logo) > div:nth-child(3) {{
-            flex: 1 1 auto !important;
-            min-width: 120px !important;
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stMarkdownContainer"],
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stElementContainer"],
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) .pf-logo {{
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
           }}
           div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stVerticalBlockBorderWrapper"] {{
             border: none !important;
@@ -147,13 +129,16 @@ def _inject_css() -> None:
             padding: 0 !important;
             margin: 0 !important;
           }}
-          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stSegmentedControl"],
-          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stRadio"] {{
-            width: fit-content !important;
-            max-width: 300px !important;
-          }}
+          /* Nav tabs: no grey pill track — only the active tab gets a highlight */
           div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stSegmentedControl"] > div,
           div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stRadio"] > div {{
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+          }}
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stSegmentedControl"],
+          div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stRadio"] {{
             width: fit-content !important;
           }}
 
@@ -336,13 +321,14 @@ def _inject_css() -> None:
                                 border-radius: 10px !important; color: {t['text']} !important; }}
           .stTextInput input::placeholder {{ color: {t['faint']}; }}
 
-          /* ---- segmented control (timeframe pills) ---- */
+          /* ---- segmented control (timeframe pills; not the top nav) ---- */
           [data-testid="stSegmentedControl"] button {{ background: transparent; border: none;
                                                         color: {t['muted']}; border-radius: 8px; }}
           [data-testid="stSegmentedControl"] button[aria-checked="true"],
           [data-testid="stSegmentedControl"] button[aria-selected="true"] {{
              background: {t['card2']}; color: {t['text']}; }}
-          [data-testid="stSegmentedControl"] > div {{ background: {t['card']};
+          div[data-testid="stHorizontalBlock"]:not(:has(.pf-logo)) [data-testid="stSegmentedControl"] > div {{
+             background: {t['card']};
              border: 1px solid {t['border']}; border-radius: 10px; padding: 3px; }}
 
           /* ---- tabs ---- */
