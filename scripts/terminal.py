@@ -129,7 +129,7 @@ def _inject_css() -> None:
             padding: 0 !important;
             margin: 0 !important;
           }}
-          /* Nav tabs: no grey pill track — only the active tab gets a highlight */
+          /* Nav tabs: no grey pill track, only the active tab gets a highlight */
           div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stSegmentedControl"] > div,
           div[data-testid="stHorizontalBlock"]:has(.pf-logo) [data-testid="stRadio"] > div {{
             background: transparent !important;
@@ -769,7 +769,7 @@ def freshness_caption() -> None:
         age = (today - ts).days if ts.tzinfo else (pd.Timestamp(date.today()) - ts).days
         flag = "🟢" if age <= 2 else ("🟠" if age <= 7 else "🔴")
         bits.append(f"{flag} {name} ({age}d)")
-    st.caption("Data freshness — " + " · ".join(bits))
+    st.caption("Data freshness: " + " · ".join(bits))
 
 
 @st.cache_data(ttl=300)
@@ -942,7 +942,7 @@ def _alloc_pie_chart(hv: pd.DataFrame) -> go.Figure:
 
 @st.cache_data(ttl=30)
 def load_performance_history() -> pd.DataFrame:
-    """Daily equity snapshots — Supabase portfolio_performance (falls back to local CSV)."""
+    """Daily equity snapshots from Supabase portfolio_performance (falls back to local CSV)."""
     try:
         conn = get_conn()
         try:
@@ -1212,7 +1212,7 @@ def render_action_center(open_df: pd.DataFrame) -> None:
         return
     for a in alerts:
         when = "TODAY / overdue" if a["days"] <= 0 else f"in {a['days']} day(s) ({a['exit_date']})"
-        line = f"**{a['action']} {a['ticker']}** — {when}. {a['reason']}"
+        line = f"{a['action']} {a['ticker']}: {when}. {a['reason']}"
         (st.error if a["level"] == "now" else st.warning)(line)
 
 
@@ -1473,7 +1473,7 @@ def _manage_tab(acct: dict, prices: dict, open_df: pd.DataFrame) -> None:
         catalyst_id, cat_date = cat_map[cat_label]
         exit_date, exit_rule = pf.planned_exit(ttype, cat_date)
         if exit_date:
-            st.caption(f"Planned exit: **{exit_date}** — {pf.format_exit_rule(exit_rule)}")
+            st.caption(f"Planned exit: {exit_date}, {pf.format_exit_rule(exit_rule)}")
         if st.button("Add trade", type="primary"):
             if amount <= 0 or price <= 0:
                 st.error("Enter a positive size and entry price.")
@@ -1517,7 +1517,7 @@ def _manage_tab(acct: dict, prices: dict, open_df: pd.DataFrame) -> None:
         )
         xdate = cclose[2].date_input("Exit date", value=date.today(), key="close_date")
         rp = pf.realized_pnl(row.side, float(row.shares), float(row.entry_price), xprice)
-        st.caption(f"Realized P&L if closed here: **{fmt_usd(rp)}**")
+        st.caption(f"Realized P&L if closed here: {fmt_usd(rp)}")
         if st.button("Close position"):
             close_holding(
                 int(row.id), row.side, float(row.shares), float(row.entry_price), xprice, xdate
@@ -2007,7 +2007,7 @@ def page_glossary(*, embedded: bool = False) -> None:
         (
             "Base rate",
             "The historical success rate for this kind of trial (by phase, disease, "
-            "sponsor type). Our most-validated number — it's the statistical 'reality' the crowd's "
+            "sponsor type). Our most-validated number: it is the statistical 'reality' the crowd's "
             "mood is measured against.",
         ),
         (
@@ -2017,7 +2017,7 @@ def page_glossary(*, embedded: bool = False) -> None:
         ),
         (
             "Composite score / grade",
-            "Overall quality of a setup (0–1): blends how soon the catalyst "
+            "Overall quality of a setup (0 to 1): blends how soon the catalyst "
             "is, the base rate, and the company's cash runway. NO market sentiment in it.",
         ),
         (
@@ -2028,7 +2028,7 @@ def page_glossary(*, embedded: bool = False) -> None:
         (
             "Suggested / target weight",
             "Fraction of your book the model would put on this name "
-            "(Kelly-fractional, capped). Long-only — always ≥ 0.",
+            "(Kelly-fractional, capped). Long-only, so always ≥ 0.",
         ),
         (
             "Implied move",
@@ -2037,12 +2037,12 @@ def page_glossary(*, embedded: bool = False) -> None:
         ),
         (
             "Run-up (30d)",
-            "How much the stock already moved in the last 30 days — proxy for how "
+            "How much the stock already moved in the last 30 days, a proxy for how "
             "much hope is already baked in before the event.",
         ),
         (
             "Short % float",
-            "Percent of tradeable shares sold short — a sentiment/positioning gauge.",
+            "Percent of tradeable shares sold short, a sentiment and positioning gauge.",
         ),
         ("Confidence", "How much to trust THIS row (more data + a reliable date = higher)."),
         ("Unrealized P&L", "Paper gain/loss on open positions at the latest close (not yet sold)."),
@@ -2054,7 +2054,7 @@ def page_glossary(*, embedded: bool = False) -> None:
         ),
     ]
     for name, desc in terms:
-        st.markdown(f"**{name}** — {desc}")
+        st.markdown(f"{name}: {desc}")
 
 
 @st.cache_data(ttl=300)
@@ -2126,7 +2126,12 @@ def render_ticker_dossier(ticker: str, *, blotter: pd.DataFrame | None = None) -
     )
 
     gbm = " · GBM flagship" if crow["is_gbm_focused"] else ""
-    st.markdown(f"**{crow['name']}** · {crow['indication_category'] or '—'}{gbm}")
+    st.markdown(
+        f"<div style='font-weight:700;font-size:1rem;margin-bottom:2px'>{crow['name']}</div>"
+        f"<div style='color:{THEME['muted']};font-size:.8rem'>"
+        f"{crow['indication_category'] or 'n/a'}{gbm}</div>",
+        unsafe_allow_html=True,
+    )
 
     if not sig.empty:
         s = sig.iloc[0]
@@ -2302,7 +2307,7 @@ def render_ticker_dossier(ticker: str, *, blotter: pd.DataFrame | None = None) -
                     )
                 )
             _plotly_theme(
-                fig, height=360, title=f"{ticker} — amber = catalyst, green = insider buy"
+                fig, height=360, title=f"{ticker}: amber = catalyst, green = insider buy"
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -2441,7 +2446,7 @@ def render_trade_book_panel(
     sel_rows = pick.selection.rows if pick.selection else []
     if sel_rows:
         ticker = summary.iloc[sel_rows[0]]["ticker"]
-        with st.expander(f"{ticker} — company dossier", expanded=True):
+        with st.expander(f"{ticker} company dossier", expanded=True):
             render_ticker_dossier(ticker)
 
 
@@ -2531,7 +2536,7 @@ def page_action_desk() -> None:
             )
             st.dataframe(styled, use_container_width=True, hide_index=True, height=520)
             if not equity:
-                st.caption("No starting capital set — $/share sizing hidden.")
+                st.caption("No starting capital set, so $/share sizing is hidden.")
             csv = view.to_csv(index=False).encode("utf-8")
             st.download_button(
                 "⬇ Download capped book (CSV)",
@@ -2842,7 +2847,7 @@ def page_validation(*, embedded: bool = False) -> None:
             )
             tt["mean"] = (tt["mean"] * 100).round(2).astype(str) + "%"
             tt["median"] = (tt["median"] * 100).round(2).astype(str) + "%"
-            st.markdown("**Abnormal return by event type**")
+            st.markdown('<div class="pf-stat-label">Abnormal return by event type</div>', unsafe_allow_html=True)
             st.dataframe(tt, use_container_width=True, hide_index=True)
 
     st.divider()
@@ -2940,41 +2945,41 @@ def page_strategy(*, embedded: bool = False) -> None:
     mode = "LONG-ONLY" if config.LONG_ONLY else "LONG/SHORT"
     if not embedded:
         st.title("Strategy specification")
-    st.caption(f"EOD, daily rebalance, **{mode}**. Live config.")
+    st.caption(f"EOD, daily rebalance, {mode}. Live config.")
 
     # ---- 1. Thesis ----
     st.subheader("1 · Thesis")
     st.markdown(
-        "The edge is the **gap between an intrinsic, sentiment-free grade of a binary "
-        "catalyst and the move the options market has priced for it.** Direction of a "
-        "biotech catalyst is close to unforecastable; the *magnitude* and the *crowd's "
-        "mispricing of that magnitude* are not. Two orthogonal quantities drive every "
+        "The edge is the gap between an intrinsic, sentiment-free grade of a binary "
+        "catalyst and the move the options market has priced for it. The direction of a "
+        "biotech catalyst is close to unforecastable; its magnitude, and the crowd's "
+        "mispricing of that magnitude, are not. Two orthogonal quantities drive every "
         "decision:\n\n"
-        "- **Grade** — intrinsic quality of the setup (proximity, trial base rate, "
+        "- Grade: intrinsic quality of the setup (proximity, trial base rate, "
         "balance-sheet survivability). No price or sentiment in it.\n"
-        "- **Edge gap** — model-expected move minus market-implied move. The money signal."
+        "- Edge gap: model-expected move minus market-implied move. This is the money signal."
     )
 
     # ---- 2. Universe & inputs ----
     st.subheader("2 · Universe & data inputs")
     st.markdown(
-        f"- **Universe:** US-listed oncology/CNS small caps; market cap ≤ "
+        f"- Universe: US-listed oncology/CNS small caps; market cap ≤ "
         f"`${config.SMALL_CAP_CEILING_USD:,.0f}` kept in-universe (larger names tagged "
         f"out-of-universe, not traded). GBM-focused names flagged as the flagship subset.\n"
-        f"- **Catalysts:** {', '.join(sorted(config.ALLOWED_CATALYST_TYPES))} from "
-        f"ClinicalTrials.gov + SEC filings; only dated, future catalysts enter the book.\n"
-        "- **Prices / positioning:** yfinance OHLCV (EOD), short % float, options-implied "
+        f"- Catalysts: {', '.join(sorted(config.ALLOWED_CATALYST_TYPES))} from "
+        f"ClinicalTrials.gov and SEC filings; only dated, future catalysts enter the book.\n"
+        "- Prices and positioning: yfinance OHLCV (EOD), short % float, options-implied "
         "move, ATM IV, 30-day run-up.\n"
-        "- **Fundamentals:** SEC XBRL — cash, quarterly burn, runway, shares outstanding.\n"
-        "- **Insider flow:** SEC Form 4 net open-market buys.\n"
-        f"- **Benchmark:** `{config.BENCHMARK_TICKER}` (abnormal return = name minus benchmark)."
+        "- Fundamentals: SEC XBRL, giving cash, quarterly burn, runway, and shares outstanding.\n"
+        "- Insider flow: SEC Form 4 net open-market buys.\n"
+        f"- Benchmark: `{config.BENCHMARK_TICKER}` (abnormal return = name minus benchmark)."
     )
 
     # ---- 3. Composite grade ----
     st.subheader("3 · Composite grade")
     st.markdown(
-        "Deliberately few factors at near-equal weights (anti-*Noise*; no kitchen-sink "
-        "regression). Each sub-score is mapped to [0, 1]:"
+        "Deliberately few factors at near-equal weights (no kitchen-sink "
+        "regression, in the spirit of Kahneman's Noise). Each sub-score is mapped to [0, 1]:"
     )
     st.latex(
         rf"\text{{composite}} = {w['proximity']}\cdot P_{{\text{{prox}}}} "
@@ -2982,26 +2987,26 @@ def page_strategy(*, embedded: bool = False) -> None:
         rf"+ {w['financial']}\cdot P_{{\text{{fin}}}}"
     )
     st.markdown(
-        "- **Proximity** `P_prox` — step function on days-to-catalyst: ≤30d→1.0, ≤90d→0.85, "
+        "- Proximity `P_prox`: step function on days-to-catalyst: ≤30d→1.0, ≤90d→0.85, "
         "≤180d→0.65, ≤365d→0.45, beyond→0.25, past→0.1.\n"
-        "- **Base rate** `P_base` — historical success probability for the trial phase / "
-        "indication / sponsor class, clamped to [0, 1] (0.5 if unknown).\n"
-        "- **Financial** `P_fin` — runway buckets: self-funding→1.0, ≥24mo→1.0, ≥12mo→0.75, "
+        "- Base rate `P_base`: historical success probability for the trial phase, "
+        "indication, and sponsor class, clamped to [0, 1] (0.5 if unknown).\n"
+        "- Financial `P_fin`: runway buckets: self-funding→1.0, ≥24mo→1.0, ≥12mo→0.75, "
         "≥6mo→0.5, ≥3mo→0.3, else 0.1.\n"
-        "- SEC-confirmed dates get a +0.03 composite bump. **Confidence** is tracked "
-        "separately (data completeness + date reliability) and is *not* folded into the grade."
+        "- SEC-confirmed dates get a +0.03 composite bump. Confidence is tracked "
+        "separately (data completeness and date reliability) and is not folded into the grade."
     )
 
     # ---- 4. Edge gap ----
     st.subheader("4 · Edge gap (mispricing)")
     st.latex(r"\text{edge\_gap} = \text{expected\_move} - \text{implied\_move}")
     st.markdown(
-        "- **expected_move** is a heuristic of absolute catalyst magnitude, maximal at "
-        "maximum uncertainty: `0.20 + 0.40·(1 − 2·|base − 0.5|)` — i.e. coin-flip events "
-        "carry the largest expected move (~0.40), lopsided ones the smallest (~0.20).\n"
-        "- **implied_move** is the options-market expected move around the event.\n"
-        "- `edge_gap < 0` → market pays for a **bigger** move than justified → overpriced "
-        "→ **avoid** (do not short). `edge_gap > 0` → market **underprices** the move → "
+        "- `expected_move` is a heuristic of absolute catalyst magnitude, maximal at "
+        "maximum uncertainty: `0.20 + 0.40·(1 − 2·|base − 0.5|)`, so coin-flip events "
+        "carry the largest expected move (~0.40) and lopsided ones the smallest (~0.20).\n"
+        "- `implied_move` is the options-market expected move around the event.\n"
+        "- `edge_gap < 0` → market pays for a bigger move than justified → overpriced "
+        "→ avoid (do not short). `edge_gap > 0` → market underprices the move → "
         "own the binary."
     )
 
@@ -3009,24 +3014,24 @@ def page_strategy(*, embedded: bool = False) -> None:
     st.subheader("5 · Trade-type decision rules")
     st.markdown(
         "Evaluated in order; first match wins. `run_up` = 30-day pre-event return, "
-        "`fin_tilt` ≤ 0 = dilution pressure. **Fades/shorts are retired** — former fade "
-        "setups map to **avoid**.\n\n"
-        "1. `fin_tilt ≤ −0.15` **and** `run_up > 0.50` → **avoid** (financing-stressed hype).\n"
-        "2. `base < 0.25` **and** (`run_up > 0.75` **or** edge_gap < −0.05) → **avoid**.\n"
-        "3. `edge_gap < −0.10` **and** `base < 0.5` → **avoid** (paying up for a coin-flip).\n"
-        "4. `edge_gap > 0.10` **and** `base ≥ 0.45` **and** `fin_tilt > −0.10` → "
-        "**hold_through** (cheap optionality).\n"
-        "5. `proximity ≥ 0.85` **and** `base ≥ 0.35` **and** `fin_tilt > −0.10` **and** "
-        "reliable date → **buy_the_rumor**.\n"
-        "6. `base ≥ 0.55` **and** `fin_tilt > −0.10` **and** not overpriced → **hold_through**.\n"
-        "7. otherwise → **avoid** (excluded from the book).\n\n"
+        "`fin_tilt` ≤ 0 = dilution pressure. Fades and shorts are retired, so former fade "
+        "setups map to avoid.\n\n"
+        "1. `fin_tilt ≤ −0.15` and `run_up > 0.50` → avoid (financing-stressed hype).\n"
+        "2. `base < 0.25` and (`run_up > 0.75` or edge_gap < −0.05) → avoid.\n"
+        "3. `edge_gap < −0.10` and `base < 0.5` → avoid (paying up for a coin-flip).\n"
+        "4. `edge_gap > 0.10` and `base ≥ 0.45` and `fin_tilt > −0.10` → "
+        "hold_through (cheap optionality).\n"
+        "5. `proximity ≥ 0.85` and `base ≥ 0.35` and `fin_tilt > −0.10` and "
+        "reliable date → buy_the_rumor.\n"
+        "6. `base ≥ 0.55` and `fin_tilt > −0.10` and not overpriced → hold_through.\n"
+        "7. otherwise → avoid (excluded from the book).\n\n"
         "`buy_the_rumor` requires a reliable (SEC-confirmed or medium/high-confidence) date "
         "because it lives or dies on timing."
     )
     st.markdown(
-        "**Long-only is hard:** the scorer never emits `fade`, negative weights are dropped "
-        "from the capped book, paper targets refuse short sides, and the execution guard "
-        "blocks any short open. Run `python scripts/fix_long_only_book.py` to cover "
+        "Long-only is enforced in depth: the scorer never emits `fade`, negative weights are "
+        "dropped from the capped book, paper targets refuse short sides, and the execution "
+        "guard blocks any short open. Run `python scripts/fix_long_only_book.py` to cover "
         "leftover shorts, strip their history, and retire stale fade scores in the DB."
     )
 
@@ -3037,13 +3042,13 @@ def page_strategy(*, embedded: bool = False) -> None:
         f"Raw long weight by trade type, then scaled by fractional Kelly "
         f"`λ = {config.KELLY_FRACTION}` and clamped to `+{config.MAX_SINGLE_NAME_WEIGHT:.0%}` "
         f"per name:\n\n"
-        "- **hold_through:** `λ · kelly(base)` (long).\n"
-        "- **buy_the_rumor:** `λ · 0.5 · proximity` (long, base-agnostic, event-driven).\n"
-        "- **fade:** retired — weight forced to `0`.\n"
+        "- hold_through: `λ · kelly(base)` (long).\n"
+        "- buy_the_rumor: `λ · 0.5 · proximity` (long, base-agnostic, event-driven).\n"
+        "- fade: retired, weight forced to `0`.\n"
         "- Net insider buying nudges long conviction up (still capped).\n\n"
-        "**Risk haircut (magnitude control).** Before portfolio caps, each weight is "
-        "multiplied by a market-cap tier multiplier — smaller caps blow up harder, so they "
-        "are sized down. This can only *reduce* exposure:"
+        "Risk haircut (magnitude control): before portfolio caps, each weight is "
+        "multiplied by a market-cap tier multiplier, since smaller caps blow up harder, so they "
+        "are sized down. This can only reduce exposure:"
     )
     haircut = pd.DataFrame(
         [
@@ -3059,15 +3064,15 @@ def page_strategy(*, embedded: bool = False) -> None:
     st.markdown(
         "Applied in order to the best signal per ticker (highest |weight|, then nearest "
         "date), scaling signed weights within each constraint:\n\n"
-        f"1. **Sector** (per indication category): gross ≤ `{config.MAX_SECTOR_WEIGHT:.0%}`.\n"
-        f"2. **GBM cluster** (correlated): gross ≤ `{config.MAX_GBM_WEIGHT:.0%}`.\n"
-        f"3. **Gross long** ≤ `{config.MAX_GROSS_LONG:.0%}` "
-        f"(gross short cap is `{config.MAX_GROSS_SHORT:.0%}` — shorts retired).\n"
-        f"4. **Net exposure** = gross long in long-only mode "
+        f"1. Sector (per indication category): gross ≤ `{config.MAX_SECTOR_WEIGHT:.0%}`.\n"
+        f"2. GBM cluster (correlated): gross ≤ `{config.MAX_GBM_WEIGHT:.0%}`.\n"
+        f"3. Gross long ≤ `{config.MAX_GROSS_LONG:.0%}` "
+        f"(gross short cap is `{config.MAX_GROSS_SHORT:.0%}`, shorts retired).\n"
+        f"4. Net exposure = gross long in long-only mode "
         f"(legacy ±`{config.MAX_NET:.0%}` throttle skipped).\n\n"
         f"Names below 0.1% weight are dropped. Catalysts within `{config.URGENT_DAYS}` days "
         "are flagged urgent.\n\n"
-        f"**Long-only:** deployment is governed by the gross-long cap "
+        f"Long-only: deployment is governed by the gross-long cap "
         f"`{config.MAX_GROSS_LONG:.0%}`."
     )
 
@@ -3075,9 +3080,9 @@ def page_strategy(*, embedded: bool = False) -> None:
     st.subheader("8 · Exit timing")
     st.markdown(
         "Exit date is derived from the linked catalyst:\n\n"
-        "- **buy_the_rumor** → exit ~1 trading day **before** the catalyst.\n"
-        "- **hold_through** → exit shortly **after** the readout.\n\n"
-        "No linked catalyst ⇒ manual exit. The action center surfaces exits that are "
+        "- buy_the_rumor → exit about 1 trading day before the catalyst.\n"
+        "- hold_through → exit shortly after the readout.\n\n"
+        "No linked catalyst means a manual exit. The action center surfaces exits that are "
         "overdue or due within 7 days."
     )
 
@@ -3085,40 +3090,40 @@ def page_strategy(*, embedded: bool = False) -> None:
     st.subheader("9 · Risk overlays (paper autopilot)")
     tiers_txt = " · ".join(f"−{lvl:.0%}→×{s}" for lvl, s in config.DRAWDOWN_TIERS)
     st.markdown(
-        f"- **Per-position stop-loss (longs):** close any long marked down more than "
+        f"- Per-position stop-loss (longs): close any long marked down more than "
         f"`{config.STOP_LOSS_PCT:.0%}` from entry at EOD; the name is not re-bought the "
-        f"same run. {'**ON**' if config.STOP_LOSS_ENABLED else '**OFF**'}.\n"
-        f"- **Graded drawdown de-risk:** target sizes scale with drawdown from peak "
+        f"same run. {'ON' if config.STOP_LOSS_ENABLED else 'OFF'}.\n"
+        f"- Graded drawdown de-risk: target sizes scale with drawdown from peak "
         f"({tiers_txt}); new opens pause at scale ≤ "
         f"`{config.DRAWDOWN_OPEN_PAUSE_SCALE}`. Catches correlated sector selloffs "
         f"that per-name caps miss. "
-        f"{'**ON**' if config.DRAWDOWN_CIRCUIT_ENABLED else '**OFF**'}.\n"
-        f"- **Regime filter:** when {config.BENCHMARK_TICKER} closes below its "
+        f"{'ON' if config.DRAWDOWN_CIRCUIT_ENABLED else 'OFF'}.\n"
+        f"- Regime filter: when {config.BENCHMARK_TICKER} closes below its "
         f"`{config.REGIME_SMA_DAYS}`-day SMA, all targets scale by "
         f"`{config.REGIME_DERISK_FACTOR}` (full size restored above the SMA). "
-        f"{'**ON**' if config.REGIME_FILTER_ENABLED else '**OFF**'}.\n"
-        f"- **Execution guard:** short opens are refused at execution when long-only, "
+        f"{'ON' if config.REGIME_FILTER_ENABLED else 'OFF'}.\n"
+        f"- Execution guard: short opens are refused at execution when long-only, "
         f"regardless of upstream signals.\n"
-        f"- **Mean-reversion profit-lock (longs only):** when an open long is up "
-        f"≥ `{config.PROFIT_LOCK_GAIN_PCT:.0%}` **and** stretched ≥ "
+        f"- Mean-reversion profit-lock (longs only): when an open long is up "
+        f"≥ `{config.PROFIT_LOCK_GAIN_PCT:.0%}` and stretched ≥ "
         f"`{config.PROFIT_LOCK_ZSCORE}`σ above its `{config.PROFIT_LOCK_LOOKBACK_DAYS}`-day mean, "
         f"trim `{config.PROFIT_LOCK_TRIM_FRACTION:.0%}` of the position. Skipped within "
         f"`{config.PROFIT_LOCK_MIN_DAYS_TO_CATALYST}` days of a catalyst so events can play out. "
         f"Self-limiting (stops once the name reverts). "
-        f"{'**ON**' if config.PROFIT_LOCK_ENABLED else '**OFF**'}."
+        f"{'ON' if config.PROFIT_LOCK_ENABLED else 'OFF'}."
     )
 
     # ---- 10. Validation ----
     st.subheader("10 · Validation & calibration")
     st.markdown(
-        f"- **Ground truth:** abnormal returns (name − {config.BENCHMARK_TICKER}) around 8-K "
+        f"- Ground truth: abnormal returns (name − {config.BENCHMARK_TICKER}) around 8-K "
         f"announcements over 1/3/5-day holds.\n"
-        f"- **Outcome labels:** a catalyst is hit/miss when |abnormal return| over a "
+        f"- Outcome labels: a catalyst is hit/miss when |abnormal return| over a "
         f"±`{config.EVENT_WINDOW_DAYS}`-day window exceeds `{config.OUTCOME_MOVE_THRESHOLD:.0%}`, "
         "else ambiguous.\n"
-        "- **Calibration:** Brier score + reliability curve of model probability vs realized "
+        "- Calibration: Brier score and reliability curve of model probability versus realized "
         "hit rate; base-rate model held out temporally.\n"
-        "- **Backtest:** walk-forward of the trade rules. See the **Validation** tab for the "
+        "- Backtest: walk-forward of the trade rules. See the Validation tab for the "
         "live numbers."
     )
 
@@ -3127,7 +3132,7 @@ def page_strategy(*, embedded: bool = False) -> None:
     st.markdown(
         f"- One end-of-day cycle: full data refresh, then paper autopilot rebalances toward "
         f"the capped book over a `{config.AUTOPILOT_HORIZON_DAYS}`-day horizon.\n"
-        f"- **Rebalance band:** a position is resized only when the target deviates by more "
+        f"- Rebalance band: a position is resized only when the target deviates by more "
         f"than `{config.AUTOPILOT_REBALANCE_PCT:.0%}` (suppresses churn).\n"
         "- Equity, cash, and benchmark marks are snapshotted daily to `portfolio_performance`.\n"
         "- All marks are prior-close; nothing here is intraday or live."
@@ -3138,8 +3143,8 @@ def page_strategy(*, embedded: bool = False) -> None:
     st.markdown(
         "- `expected_move` and `base_rate` are heuristics; calibration refines them but they "
         "are not market-derived.\n"
-        "- Fade/short signals are **retired** (unvalidated; were the main P&L drag). Former "
-        "fade setups now map to avoid — the book is long-only.\n"
+        "- Fade and short signals are retired (unvalidated; they were the main P&L drag). Former "
+        "fade setups now map to avoid, since the book is long-only.\n"
         "- Options-implied move and short-interest data are sparse for the smallest names.\n"
         "- No transaction-cost, borrow-cost, or slippage model; paper fills at prior close."
     )
@@ -3264,7 +3269,7 @@ def page_risk_lab(*, embedded: bool = False) -> None:
                         fill="toself",
                         fillcolor="rgba(31,78,121,.10)",
                         line=dict(width=0),
-                        name="P5–P95",
+                        name="P5-P95",
                         hoverinfo="skip",
                     )
                 )
@@ -3275,7 +3280,7 @@ def page_risk_lab(*, embedded: bool = False) -> None:
                         fill="toself",
                         fillcolor="rgba(31,78,121,.20)",
                         line=dict(width=0),
-                        name="P25–P75",
+                        name="P25-P75",
                         hoverinfo="skip",
                     )
                 )
