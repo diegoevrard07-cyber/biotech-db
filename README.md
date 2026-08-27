@@ -58,24 +58,28 @@ add it. The design notes and the specific database traps I hit are in
 ## Running it
 
 Requires Python 3.12+ and a Postgres database (a free Supabase project, or local
-`docker compose up -d`).
+`docker compose up -d`). macOS still ships `python3` as 3.9, which cannot install
+the pinned deps — do not use it. From the repo root:
 
 ```bash
-git clone https://github.com/diegoevrard07-cyber/biotech-db.git
-cd biotech-db
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-cp .env.example .env          # set DATABASE_URL; SEC_USER_AGENT is needed for EDGAR ingest
-python scripts/apply_schema.py   # create the 22 tables (idempotent)
-python scripts/refresh_all.py    # full pipeline: ingest, score, validate (fail-soft)
-streamlit run scripts/terminal.py
+./scripts/launch_terminal.sh
 ```
 
-Two honest gotchas: the pipeline needs a real Postgres connection to do anything, and
-SEC ingestion fails fast unless `SEC_USER_AGENT` is a descriptive "Name email" string,
-which EDGAR's fair-use policy requires. `python -m pytest` runs the suite; the
-database-backed tests skip automatically when `DATABASE_URL` is absent.
+That finds a 3.12+ interpreter (or downloads one), rebuilds `.venv` if it was
+created with the system 3.9, installs requirements, and opens the terminal in the
+browser. Set `DATABASE_URL` in `.env` (copy `.env.example` if it is missing) or
+the charts come up empty.
+
+To run the pipeline itself, not just the UI:
+
+```bash
+python scripts/apply_schema.py   # create the 22 tables (idempotent)
+python scripts/refresh_all.py    # full pipeline: ingest, score, validate (fail-soft)
+```
+
+SEC ingestion fails fast unless `SEC_USER_AGENT` is a descriptive "Name email"
+string, which EDGAR's fair-use policy requires. `python -m pytest` runs the suite;
+the database-backed tests skip automatically when `DATABASE_URL` is absent.
 
 ## Limitations
 
