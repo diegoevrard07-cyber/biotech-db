@@ -106,6 +106,120 @@ def _inject_css() -> None:
           [data-testid="stDecoration"] {{ display: none !important; }}
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
           .block-container {{ padding: 1.6rem 1.6rem 2rem; max-width: 1500px; }}
+
+          /* ---- top nav: logo row + nav row (no overlap with segmented control) ---- */
+          .pf-nav-shell {{ margin: 0 0 4px; }}
+          .pf-nav-top {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+          }}
+          .pf-nav-tabs {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }}
+          .pf-nav-tabs [data-testid="stSegmentedControl"],
+          .pf-nav-tabs [data-testid="stRadio"] {{
+            max-width: 320px;
+          }}
+          .pf-nav-tabs [data-testid="stSegmentedControl"] > div {{
+            width: fit-content !important;
+          }}
+          div[data-testid="stHorizontalBlock"]:has([data-testid="stSegmentedControl"]) [data-testid="stSegmentedControl"] {{
+            max-width: 320px;
+          }}
+          div[data-testid="stHorizontalBlock"]:has([data-testid="stSegmentedControl"]) [data-testid="stSegmentedControl"] > div {{
+            width: fit-content !important;
+          }}
+
+          /* ---- balance header: P&L pill must sit below the headline, not on the card edge ---- */
+          .pf-balance-head {{
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 0 0 10px;
+          }}
+          .pf-delta-inline {{
+            display: inline-block;
+            margin: 0;
+            position: static;
+          }}
+
+          /* ---- allocation legend: keep the next card's border from cutting through rows ---- */
+          .pf-legend {{
+            margin: 10px 0 16px;
+            padding-bottom: 6px;
+          }}
+          .pf-legend-row {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: .76rem;
+            margin: 6px 0;
+            line-height: 1.35;
+            white-space: nowrap;
+          }}
+          .pf-legend-row span:nth-child(2) {{
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: {t['muted']};
+          }}
+
+          /* ---- stacked bordered cards need breathing room ---- */
+          [data-testid="column"] [data-testid="stVerticalBlockBorderWrapper"] {{
+            margin-bottom: 14px;
+          }}
+          [data-testid="column"] [data-testid="stVerticalBlockBorderWrapper"]:last-child {{
+            margin-bottom: 0;
+          }}
+
+          /* ---- plotly blocks should not bleed into the legend below ---- */
+          [data-testid="stPlotlyChart"] {{
+            margin-bottom: 6px;
+            overflow: hidden;
+          }}
+
+          /* ---- tabs: hide inactive panels so empty bordered shells do not stack ---- */
+          [data-testid="stTabs"] [data-baseweb="tab-panel"][aria-hidden="true"],
+          [data-testid="stTabs"] [role="tabpanel"][aria-hidden="true"] {{
+            display: none !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+          }}
+          [data-testid="stTabs"] [data-baseweb="tab-panel"] [data-testid="stVerticalBlockBorderWrapper"],
+          [data-testid="stTabs"] [role="tabpanel"] [data-testid="stVerticalBlockBorderWrapper"] {{
+            border: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+          }}
+          /* Collapse empty bordered shells Streamlit renders while switching pages/tabs */
+          [data-testid="stVerticalBlockBorderWrapper"]:empty {{
+            display: none !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            min-height: 0 !important;
+          }}
+          /* Inactive tab panels: strip phantom borders from nested shells */
+          [data-testid="stTabs"] [aria-hidden="true"] [data-testid="stVerticalBlockBorderWrapper"] {{
+            display: none !important;
+          }}
+          .pf-alloc-section {{ margin-top: 4px; }}
+          .pf-alloc-divider {{
+            border: none;
+            border-top: 1px solid {t['border_soft']};
+            margin: 14px 0 12px;
+          }}
           #MainMenu, footer {{ visibility: hidden; }}
           /* single-page: no left nav bar */
           [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
@@ -132,7 +246,8 @@ def _inject_css() -> None:
           [data-testid="stVerticalBlockBorderWrapper"] {{
             background: {t['card']};
             border: 1px solid {t['border']}; border-radius: 10px;
-            padding: 2px 4px; box-shadow: 0 1px 2px rgba(16,24,40,.05);
+            padding: 14px 16px; box-shadow: 0 1px 2px rgba(16,24,40,.05);
+            overflow: visible;
           }}
 
           /* ---- KPI stat grid (custom HTML) ---- */
@@ -301,7 +416,7 @@ def _bucket_donut(
         showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=8, r=8, t=34, b=8),
+        margin=dict(l=8, r=8, t=34, b=4),
         title=dict(text=title, font=dict(size=12, color=THEME["muted"]), x=0.5, xanchor="center"),
         annotations=[
             dict(
@@ -1427,14 +1542,15 @@ def _alloc_legend_html(buckets: dict[str, float], total: float) -> str:
         c = ALLOC_PALETTE[i % len(ALLOC_PALETTE)]
         pct = (v / total) if total else 0
         rows.append(
-            '<div style="display:flex;align-items:center;gap:8px;font-size:.76rem;margin:5px 0;">'
-            f'<span style="width:9px;height:9px;border-radius:3px;background:{c};"></span>'
-            f'<span style="flex:1;color:{THEME["muted"]}">{k}</span>'
-            f'<span style="font-family:{THEME["mono"]}">{fmt_usd(v)}</span>'
-            f'<span style="color:{THEME["faint"]};min-width:44px;text-align:right;">{pct:.0%}</span>'
-            "</div>"
+            f'<div class="pf-legend-row">'
+            f'<span style="width:9px;height:9px;border-radius:3px;background:{c};flex-shrink:0;"></span>'
+            f'<span>{k}</span>'
+            f'<span style="font-family:{THEME["mono"]};flex-shrink:0;">{fmt_usd(v)}</span>'
+            f'<span style="color:{THEME["faint"]};min-width:44px;text-align:right;flex-shrink:0;">'
+            f"{pct:.0%}</span>"
+            f"</div>"
         )
-    return "".join(rows)
+    return f'<div class="pf-legend">{"".join(rows)}</div>'
 
 
 def _cockpit_balance_chart(
@@ -1585,9 +1701,11 @@ def page_home() -> None:
             head = st.columns([2, 1.3, 2])
             head[0].markdown(
                 f'<div class="pf-stat-label">Current balance</div>'
+                f'<div class="pf-balance-head">'
                 f'<div class="pf-big">{fmt_usd(equity)}</div>'
-                f'<span class="pf-delta {_dir(tot_ret_usd)}">'
-                f'{fmt_usd(tot_ret_usd) if tot_ret_usd is not None else "—"}</span>',
+                f'<span class="pf-delta pf-delta-inline {_dir(tot_ret_usd)}">'
+                f'{fmt_usd(tot_ret_usd) if tot_ret_usd is not None else "—"}</span>'
+                f"</div>",
                 unsafe_allow_html=True,
             )
             metric = head[1].selectbox(
@@ -1679,9 +1797,11 @@ def page_home() -> None:
                 config={"displayModeBar": False},
             )
             st.markdown(_alloc_legend_html(now_buckets, equity), unsafe_allow_html=True)
-
-        with st.container(border=True):
-            st.markdown('<div class="pf-stat-label">Next catalysts</div>', unsafe_allow_html=True)
+            st.markdown('<hr class="pf-alloc-divider">', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="pf-stat-label pf-alloc-section">Next catalysts</div>',
+                unsafe_allow_html=True,
+            )
             blot = load_blotter()
             upcoming = pd.DataFrame()
             if not blot.empty:
@@ -3447,13 +3567,18 @@ PAGES: dict[str, callable] = {
 def _top_nav() -> callable:
     """Single-page top navigation bar (replaces the sidebar)."""
     names = list(PAGES.keys())
-    bar = st.columns([1.4, 4, 1.1], gap="small", vertical_alignment="center")
-    with bar[0]:
+    top = st.columns([5, 1], gap="small", vertical_alignment="center")
+    with top[0]:
         st.markdown(
             '<div class="pf-logo"><span class="mark">◆</span>EDGE</div>',
             unsafe_allow_html=True,
         )
-    with bar[1]:
+    with top[1]:
+        if st.button("↻ Refresh", use_container_width=True, type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+    nav = st.columns([1], gap="small")
+    with nav[0]:
         if hasattr(st, "segmented_control"):
             sel = st.segmented_control(
                 "nav", names, default=names[0], label_visibility="collapsed", key="topnav"
@@ -3462,10 +3587,6 @@ def _top_nav() -> callable:
             sel = st.radio(
                 "nav", names, horizontal=True, label_visibility="collapsed", key="topnav"
             )
-    with bar[2]:
-        if st.button("↻ Refresh", use_container_width=True, type="primary"):
-            st.cache_data.clear()
-            st.rerun()
     st.markdown(
         f'<hr style="margin:.4rem 0 1rem;border-color:{THEME["border_soft"]}">',
         unsafe_allow_html=True,
