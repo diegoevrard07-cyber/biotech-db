@@ -1,7 +1,7 @@
 """Pure risk-overlay logic for the paper autopilot: stop-loss, graded drawdown
 de-risking, and the benchmark regime filter.
 
-No DB, no I/O — plain values in, plain values out (unit-testable)."""
+No DB, no I/O: plain values in, plain values out (unit-testable)."""
 
 from __future__ import annotations
 

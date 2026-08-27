@@ -40,7 +40,7 @@ Context: 23 tickers returned zero CT.gov trials under primary company name searc
 | FIX_ALIAS | 15 | ADAP, ADCT, ALKS, ANAB, ANNX, BCAB, BLTE, CGON, ETNB, GBIO, IBRX, IMNM, LQDA, PCVX, XBIO |
 | UNKNOWN | 3 | HYFT, MTVA, VYND |
 
-**Net CSV change:** 136 → 131 rows (−5 removed)
+Net CSV change: 136 → 131 rows (−5 removed)
 
 ## Post re-ingest (2026-06-12)
 
@@ -49,16 +49,16 @@ After alias column + improved org-name matching (`ctgov` cache v2):
 | Metric | Before triage | After |
 |--------|---------------|-------|
 | Companies in CSV/DB | 136 | 131 |
-| Zero-trial companies | 23 | **4** |
-| Total trials | 2,671 | **3,016** |
-| Upcoming catalysts | 391 | **447** |
-| Trial coverage | 83.1% | **96.9%** |
+| Zero-trial companies | 23 | 4 |
+| Total trials | 2,671 | 3,016 |
+| Upcoming catalysts | 391 | 447 |
+| Trial coverage | 83.1% | 96.9% |
 
-**Remaining zero-trial (4):**
+Remaining zero-trial (4):
 
 | Ticker | Classification | Notes |
 |--------|----------------|-------|
 | HYFT | UNKNOWN_VERIFY_MANUALLY | As triaged |
 | MTVA | UNKNOWN_VERIFY_MANUALLY | As triaged |
 | GBIO | UNKNOWN_VERIFY_MANUALLY | Alias fix did not surface lead-sponsor trials |
-| VSTM | UNKNOWN_VERIFY_MANUALLY | Verastem — may need manual sponsor review |
+| VSTM | UNKNOWN_VERIFY_MANUALLY | Verastem, may need manual sponsor review |

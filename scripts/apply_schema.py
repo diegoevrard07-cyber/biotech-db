@@ -1,6 +1,6 @@
 """Apply the database schema (schema.sql at repo root) idempotently.
 
-Pipeline role: stage 0 of every refresh — creates/updates all tables and indexes
+Pipeline role: stage 0 of every refresh: creates/updates all tables and indexes
 before any ingestion runs, so downstream stages can assume the schema exists.
 """
 
@@ -56,7 +56,7 @@ def apply_schema(dry_run: bool = False) -> list[str]:
         sys.exit(1)
 
     sql = SCHEMA_PATH.read_text(encoding="utf-8")
-    # Strip line comments before splitting — a leading file comment must not swallow the first CREATE.
+    # Strip line comments before splitting, since a leading file comment must not swallow the first CREATE.
     cleaned_lines = [line.split("--")[0] for line in sql.splitlines()]
     cleaned_sql = "\n".join(line for line in cleaned_lines if line.strip())
     statements = [s.strip() for s in cleaned_sql.split(";") if s.strip()]

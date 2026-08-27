@@ -1,6 +1,6 @@
 """Smoke-test the DATABASE_URL connection and print the Postgres version.
 
-Not part of the pipeline — a setup diagnostic to confirm credentials and
+Not part of the pipeline, a setup diagnostic to confirm credentials and
 network reachability before running ingestion. Exits non-zero on failure.
 """
 
@@ -33,7 +33,7 @@ def main() -> int:
         print("  DATABASE_URL=postgresql://postgres:postgres@localhost:5432/biotech")
         return 1
 
-    # Never print credentials — show only the host part after '@'.
+    # Never print credentials; show only the host part after '@'.
     host = db_url.split("@", 1)[1] if "@" in db_url else "<unparseable>"
     print(f"Connecting to: {host}")
 

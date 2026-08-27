@@ -8,9 +8,9 @@ then buckets predictions to show observed win rate vs mean predicted probability
 (a reliability/calibration view) and a Brier score on win/loss outcomes.
 
 Two views:
-  * RESOLVED  — trades whose catalyst date has already passed (the bet actually
+  * RESOLVED: trades whose catalyst date has already passed (the bet actually
                 played out). This is the meaningful sample.
-  * ALL       — every closed trade with a base-rated catalyst (includes names
+  * ALL: every closed trade with a base-rated catalyst (includes names
                 closed by rebalancing before the catalyst; use with caution).
 
   python scripts/base_rate_report.py            # resolved-catalyst trades
@@ -60,11 +60,11 @@ def run(*, resolved_only: bool = True) -> None:
             cur.close()
 
     label = "RESOLVED (catalyst date passed)" if resolved_only else "ALL closed base-rated"
-    print(f"=== BASE-RATE REPORT — {label} ===")
+    print(f"=== BASE-RATE REPORT: {label} ===")
     if not trades:
         print("  No trades in this view yet.")
         if resolved_only:
-            print("  (Catalysts for the current book haven't fired — nothing has truly resolved.)")
+            print("  (Catalysts for the current book haven't fired, nothing has truly resolved.)")
         return
 
     # meaningful realized bets ignore flat (0) trims/dupes
@@ -100,7 +100,7 @@ def run(*, resolved_only: bool = True) -> None:
 
     if n < 20:
         print(
-            f"\n  ⚠ Sample is tiny (n={n}). Treat as directional only — not a validated edge. "
+            f"\n  ⚠ Sample is tiny (n={n}). Treat as directional only, not a validated edge. "
             "Calibration needs dozens of resolved catalysts."
         )
 

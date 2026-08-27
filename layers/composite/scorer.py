@@ -58,13 +58,13 @@ AVOID = "avoid"
 
 
 def score_proximity(expected_date: date | None, *, today: date | None = None) -> float:
-    """Map days-to-catalyst to [0, 1] — nearer catalysts are more actionable.
+    """Map days-to-catalyst to [0, 1]. Nearer catalysts are more actionable.
 
     Coarse steps, not a smooth curve: catalyst dates are estimates, so timing
     precision finer than a month would be false precision.
     """
     if not expected_date:
-        return 0.3  # no date: below the 1-year step — barely tradable on timing
+        return 0.3  # no date: below the 1-year step, barely tradable on timing
     today = today or date.today()
     days = (expected_date - today).days
     if days < 0:
@@ -90,14 +90,14 @@ def score_base_rate(base_rate: float | None) -> float:
 def score_financial(runway_months: float | None, quarterly_burn: float | None) -> float:
     """Map balance-sheet survivability to [0, 1].
 
-    A company that cannot fund itself to its catalyst cannot realize the edge —
+    A company that cannot fund itself to its catalyst cannot realize the edge,
     under ~3 months of runway it is effectively distressed (0.1); self-funding
     (non-positive burn) scores a full 1.0.
     """
     if quarterly_burn is not None and quarterly_burn <= 0:
         return 1.0
     if runway_months is None:
-        return 0.4  # unknown balance sheet: below mid — survivability unproven
+        return 0.4  # unknown balance sheet: below mid, survivability unproven
     if runway_months >= 24:
         return 1.0
     if runway_months >= 12:
@@ -112,7 +112,7 @@ def score_financial(runway_months: float | None, quarterly_burn: float | None) -
 # ---------------------------------------------------------------------------
 # Decision layer
 # ---------------------------------------------------------------------------
-# Decision thresholds. Each is a deliberate, coarse band — implied moves are
+# Decision thresholds. Each is a deliberate, coarse band; implied moves are
 # sparse and approximate for small caps, so only disagreements well outside
 # estimation noise are actionable. Fine-tuning these would be overfitting
 # (the *Noise* lesson the scorer is built on).
@@ -120,7 +120,7 @@ def score_financial(runway_months: float | None, quarterly_burn: float | None) -
 # edge_gap bands (model expected move − options-implied move).
 EDGE_GAP_OVERPRICED = -0.05  # < −5pp: market pays for a bigger move than justified
 EDGE_GAP_STRONGLY_OVERPRICED = -0.10  # < −10pp: paying up for a coin-flip
-EDGE_GAP_UNDERPRICED = 0.10  # > +10pp: market underprices the move — own the binary
+EDGE_GAP_UNDERPRICED = 0.10  # > +10pp: market underprices the move, so own the binary
 
 # Dilution pressure (financing_tilt ≤ 0). −0.15 ≈ runway < 6 months or repeated
 # offerings: the company likely cannot wait for its own catalyst.
@@ -227,7 +227,7 @@ def decide_trade(
     strongly_overpriced = edge_gap is not None and edge_gap < EDGE_GAP_STRONGLY_OVERPRICED
     underpriced = edge_gap is not None and edge_gap > EDGE_GAP_UNDERPRICED
 
-    # 1–3. Former fade setups → avoid (shorts/fades removed from the strategy).
+    # 1-3. Former fade setups → avoid (shorts/fades removed from the strategy).
     if fin_tilt <= FIN_TILT_DISTRESS and run_up > RUNUP_HEATED:
         return AVOID
     if base < BASE_LONG_SHOT and (run_up > RUNUP_MANIA or overpriced):
@@ -285,7 +285,7 @@ def compute_edge_score(
 
     Answers the project's central question for a single event: *is the market's
     priced-in move out of line with this catalyst's intrinsic grade, and if so,
-    is the gap big enough to act on — and with how much capital?* Returns the
+    is the gap big enough to act on, and with how much capital?* Returns the
     full record persisted to `edge_scores` (composite grade, confidence, trade
     type, edge gap, tilts, Kelly-capped weight, and a human-readable rationale).
     """

@@ -140,7 +140,7 @@ def verify_layer1() -> bool:
             print(f"  {tick}: {n}")
 
     if failures:
-        print(f"\n❌ FAILED — {len(failures)} issue(s):")
+        print(f"\n❌ FAILED: {len(failures)} issue(s):")
         for f in failures:
             print(f"  - {f}")
         log.warning("verify_layer1_failed", failures=failures)

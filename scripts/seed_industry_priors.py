@@ -1,7 +1,7 @@
 """
 Seed hardcoded industry priors for PDUFA/adcom catalyst types.
 
-These rows use synthetic n=100 for illustrative Wilson-style CIs — they are NOT
+These rows use synthetic n=100 for illustrative Wilson-style CIs, they are NOT
 derived from our openFDA ingest (which lacks CRL/filing denominators). Sources:
 published BIO/Informa/Tufts CSDD approval-rate ranges, conservatively rounded.
 

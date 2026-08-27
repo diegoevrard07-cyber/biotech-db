@@ -202,7 +202,7 @@ def train(*, store: bool = True, l2: float = 2.0) -> dict:
 
 
 def _print(res: dict, coefs: list[dict]) -> None:
-    print("\n=== Clinical Success Model — temporal holdout ===")
+    print("\n=== Clinical Success Model: temporal holdout ===")
     print(
         f"Trials: {res['n_total']}  (train {res['n_train']} <= {res['cutoff_date']} "
         f"< test {res['n_test']})"
@@ -225,7 +225,7 @@ def _print(res: dict, coefs: list[dict]) -> None:
         else (
             "no meaningful lift over lookup"
             if lift > -0.005
-            else "lookup is better — keep base rates"
+            else "lookup is better, keep base rates"
         )
     )
     print(f"AUC lift vs lookup: {lift:+.4f}  -> {verdict}")

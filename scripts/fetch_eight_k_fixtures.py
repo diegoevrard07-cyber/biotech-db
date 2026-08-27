@@ -83,7 +83,7 @@ NEGATIVE_META = [
     {
         "prefix": "lifted_clinical_hold",
         "forbidden": "crl",
-        "notes": "Clinical hold lifted — opposite of CRL",
+        "notes": "Clinical hold lifted, opposite of CRL",
     },
 ]
 

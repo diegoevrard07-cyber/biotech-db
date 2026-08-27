@@ -19,7 +19,7 @@ def setup_logger(script_name: str) -> structlog.stdlib.BoundLogger:
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     log_file = log_dir / f"{script_name}_{date_str}.log"
 
-    # Root logger — file handler (JSON) + console handler (plain)
+    # Root logger: file handler (JSON) + console handler (plain)
     root = logging.getLogger()
     root.handlers.clear()
     root.setLevel(logging.INFO)

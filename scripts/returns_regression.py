@@ -3,21 +3,21 @@ Signed-return regression on the event_returns dataset (roadmap #5).
 
 Question: can leakage-safe, PRE-event information predict the realized abnormal
 return around an 8-K? We fit two pure-numpy ridge models on a TEMPORAL split
-(train on older events, test on newer ones — no look-ahead):
+(train on older events, test on newer ones, no look-ahead):
 
   1. SIGNED model    -> target = abnormal_return        (can we call direction?)
   2. MAGNITUDE model -> target = |abnormal_return|       (can we call size?)
 
 Features (all computed strictly from price_history BEFORE the filing date):
   run_up 5/10/30/60d, realized vol 30d, log dollar-volume 20d, distance from
-  52-week high, log market cap at event (current mcap scaled by price ratio —
+  52-week high, log market cap at event (current mcap scaled by price ratio,
   share count is ~stable, so this is leakage-safe for size).
 
 Honest expectation: direction of biotech event reactions is close to a coin
 flip (semi-strong efficiency); magnitude (vol clusters) is more predictable and
 more useful for SIZING. We report out-of-sample R^2, directional hit-rate, and
 standardized coefficients, and compare against the naive "predict the train
-mean" baseline. A negative result is a valid, reported outcome — we will NOT
+mean" baseline. A negative result is a valid, reported outcome; we will NOT
 wire a model into the scorer unless it beats the baseline out of sample.
 
 No sklearn (stack discipline): ridge via numpy closed form.
@@ -170,7 +170,7 @@ def run(lam: float = 10.0, test_frac: float = 0.30) -> dict:
     y = np.array(y, float)
     n = len(y)
     if n < 100:
-        print(f"Only {n} usable events — too few. Aborting.")
+        print(f"Only {n} usable events, too few. Aborting.")
         return {"n": n}
 
     # temporal split (events already ordered by filing_date)

@@ -1,6 +1,6 @@
 """Pure portfolio math for the tracker: valuation, P&L, cash flows, exit timing.
 
-No DB, no I/O — every function takes plain values so it is trivially testable and
+No DB, no I/O: every function takes plain values so it is trivially testable and
 the dashboard can reuse it. Sign convention: a LONG is a positive asset
 (+shares*price); a SHORT is a negative liability (-shares*price). This makes
 account equity a single clean sum: equity = cash + sum(signed market values).
@@ -39,7 +39,7 @@ def planned_exit(
     tt = (trade_type or "").lower()
     rule = EXIT_RULES.get(tt, "Review around the catalyst date.")
     if catalyst_date is None:
-        return None, "No linked catalyst — set an exit date manually."
+        return None, "No linked catalyst; set an exit date manually."
     if tt == "buy_the_rumor":
         return catalyst_date - timedelta(days=lead_days), rule
     if tt in ("hold_through", "fade"):

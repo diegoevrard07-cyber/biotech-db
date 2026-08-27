@@ -102,7 +102,7 @@ def backtest(*, lead_days: int = 30, slippage: float = 0.005, csv_path: str | No
                 edge_gap=None,
             )
             if trade_type not in (BUY_THE_RUMOR, HOLD_THROUGH):
-                continue  # avoid (incl. former fades) — long-only backtest
+                continue  # avoid (incl. former fades), long-only backtest
 
             # Realized return per trade type (longs only).
             if trade_type == BUY_THE_RUMOR:

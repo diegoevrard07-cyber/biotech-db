@@ -252,7 +252,7 @@ def fetch_filings(
 
 
 def main() -> None:
-    """CLI entry: Layer 4 ingestion — pull 8-K filings from EDGAR into sec_filings/material_events."""
+    """CLI entry: Layer 4 ingestion: pull 8-K filings from EDGAR into sec_filings/material_events."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--since", help="YYYY-MM-DD")

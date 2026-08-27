@@ -124,7 +124,7 @@ def render_report(rows: list[dict]) -> str:
         )
     lines.extend(["", "## OCF detail (last 4 quarters)", ""])
     for row in rows:
-        lines.append(f"### {row['ticker']} — {row['entity']}")
+        lines.append(f"### {row['ticker']}: {row['entity']}")
         lines.append("")
         for q in row["ocf_quarters"]:
             lines.append(f"- {q['period_end']}: ${q['value_m']}M ({q['source']})")

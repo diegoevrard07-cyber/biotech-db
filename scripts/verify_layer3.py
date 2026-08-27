@@ -180,7 +180,7 @@ def verify_layer3() -> bool:
         )
 
     if failures:
-        print(f"\nFAILED — {len(failures)} issue(s):")
+        print(f"\nFAILED: {len(failures)} issue(s):")
         for f in failures:
             print(f"  - {f}")
         return False

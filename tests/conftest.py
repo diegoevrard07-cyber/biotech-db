@@ -19,7 +19,7 @@ def _db_available() -> bool:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if _db_available():
         return
-    skip_no_db = pytest.mark.skip(reason="DATABASE_URL not set — skipping DB-backed test")
+    skip_no_db = pytest.mark.skip(reason="DATABASE_URL not set, skipping DB-backed test")
     for item in items:
         if _is_db_test(item):
             item.add_marker(skip_no_db)

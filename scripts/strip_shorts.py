@@ -13,7 +13,7 @@ What it does (all shorts are expected to be closed already):
   4. Rewrites portfolio_performance snapshots to a long-only basis: realized_to_date
      recomputed from long closes only, and equity shifted by the short realized booked
      up to each snapshot date. (Intra-window unrealized marks on days a short was still
-     open are not restated — a second-order effect; the latest snapshot, with no open
+     open are not restated, a second-order effect; the latest snapshot, with no open
      shorts, is exact.)
 
 Idempotent: if there are no short rows, it does nothing.
@@ -58,7 +58,7 @@ def run(*, dry_run: bool = False) -> None:
             shorts = [dict(zip(cols, r)) for r in cur.fetchall()]
 
             if not shorts:
-                print("No short holdings found — nothing to strip.")
+                print("No short holdings found; nothing to strip.")
                 return
 
             open_shorts = [h for h in shorts if h["status"] == "open"]
@@ -76,7 +76,7 @@ def run(*, dry_run: bool = False) -> None:
             print(f"  cash: ${cash:,.2f} -> ${new_cash:,.2f}  (reversing short cash impact)")
             if open_shorts:
                 print(
-                    f"  WARNING: {len(open_shorts)} short(s) still OPEN — their market "
+                    f"  WARNING: {len(open_shorts)} short(s) still OPEN; their market "
                     "value is dropped; cover them first for an exact reversal."
                 )
 
@@ -122,7 +122,7 @@ def run(*, dry_run: bool = False) -> None:
                 )
 
             if dry_run:
-                print("\n  (dry run — nothing written)")
+                print("\n  (dry run, nothing written)")
                 return
 
             # ---- backup ----

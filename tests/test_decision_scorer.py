@@ -41,7 +41,7 @@ def test_financing_tilt_dilution_negative():
 
 
 def test_decide_avoid_on_financing_stressed_hype():
-    # Former fade setup — shorts retired → avoid.
+    # Former fade setup, shorts retired -> avoid.
     tt = decide_trade(proximity=0.85, base=0.4, fin_tilt=-0.15, run_up_30d=0.8, edge_gap=None)
     assert tt == AVOID
 

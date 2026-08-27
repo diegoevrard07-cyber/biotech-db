@@ -1,5 +1,5 @@
 """
-8-K material event parser — fixture-driven, not regex-first.
+8-K material event parser, fixture-driven, not regex-first.
 
 Layer 4 pre-build hardening pass: extracts PDUFA, CRL, approval, AdCom,
 offering, and license events from primary 8-K HTML with negative-case guards.
@@ -36,7 +36,7 @@ class ExtractedEvent:
 
 _MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
 _DATE_PATTERNS = [
-    # Fixture: LPCN_000110465920028911 — "PDUFA Date of August 28, 2020"
+    # Fixture: LPCN_000110465920028911: "PDUFA Date of August 28, 2020"
     re.compile(
         rf"(?:PDUFA\s+(?:action\s+)?date\s+of|assigned\s+(?:a\s+)?PDUFA\s+date\s+of)\s+"
         rf"({_MONTHS})\s+(\d{{1,2}}),?\s+(\d{{4}})",
@@ -49,7 +49,7 @@ _DATE_PATTERNS = [
     re.compile(r"(\d{4})-(\d{2})-(\d{2})"),
 ]
 
-# Fixture: YMAB_000110465921025436 — speculative PDUFA language
+# Fixture: YMAB_000110465921025436: speculative PDUFA language
 _NEGATIVE_PDUFA = re.compile(
     r"PDUFA\s+date\s+(?:may|might|could)\s+be|"
     r"may\s+receive\s+a\s+Complete\s+Response\s+Letter|"
@@ -57,7 +57,7 @@ _NEGATIVE_PDUFA = re.compile(
     re.I | re.S,
 )
 
-# Fixture: ALDX_000119312526109511 — assigned PDUFA in past narrative before new CRL
+# Fixture: ALDX_000119312526109511: assigned PDUFA in past narrative before new CRL
 _HISTORICAL_PDUFA_ONLY = re.compile(
     r"assigned\s+a\s+PDUFA\s+date\s+of\s+[^.]+\.\s+On\s+(?:December|January|February|March)",
     re.I,
@@ -114,7 +114,7 @@ def _excerpt(text: str, start: int, length: int = 220) -> str:
 
 def _extract_drug_near(text: str, pos: int) -> str | None:
     window = text[max(0, pos - 120) : pos + 200]
-    # Fixture: OMER — narsoplimab; ALDX — reproxalap
+    # Fixture: OMER, narsoplimab; ALDX, reproxalap
     m = re.search(
         r"(?:for|of|regarding)\s+(?:the\s+)?([A-Za-z0-9][\w\-]{2,30})(?:\s+(?:for|in|to)\b)",
         window,
@@ -298,7 +298,7 @@ def _scan_crl(text: str, items: list[str] | None) -> list[ExtractedEvent]:
 
 def _scan_approval(text: str, items: list[str] | None) -> list[ExtractedEvent]:
     events: list[ExtractedEvent] = []
-    # Fixture: NVCR, ERNA, RGTPQ, ITRM (positive approval — not negative trap)
+    # Fixture: NVCR, ERNA, RGTPQ, ITRM (positive approval, not negative trap)
     patterns = [
         re.compile(
             r"(?:the\s+)?(?:U\.S\.\s+)?FDA\s+approved\s+([A-Za-z0-9][\w\-™ ]{2,40}?)(?:\s+for|\s*$|\.)",
@@ -321,7 +321,7 @@ def _scan_approval(text: str, items: list[str] | None) -> list[ExtractedEvent]:
         if re.search(
             r"incorporated\s+by\s+reference\s+herein\s*$", text[m.end() : m.end() + 80], re.I
         ):
-            # ITRM negative trap — approval is real but test expects no *offering*; approval ok
+            # ITRM negative trap, approval is real but test expects no *offering*; approval ok
             pass
         drug = None
         if m.lastindex and m.group(1):
@@ -391,7 +391,7 @@ def _scan_adcom(text: str, items: list[str] | None) -> list[ExtractedEvent]:
 
 
 def _scan_offering(text: str, items: list[str] | None) -> list[ExtractedEvent]:
-    # Fixture: DROR offerings; negative ITRM — only exhibit incorporation, no offering terms
+    # Fixture: DROR offerings; negative ITRM, only exhibit incorporation, no offering terms
     if re.search(r"public\s+offering\s+it\s+completed", text, re.I):
         return []
     if re.search(r"Public\s+Offering\s+Warrants", text, re.I) and not re.search(
@@ -404,7 +404,7 @@ def _scan_offering(text: str, items: list[str] | None) -> list[ExtractedEvent]:
         ),
         re.compile(r"registered\s+direct\s+offering", re.I),
         re.compile(r"offering\s+of\s+(?:up\s+to\s+)?[\$\d]", re.I),
-        # Fixture: DROR_* — private placement debentures
+        # Fixture: DROR_*, private placement debentures
         re.compile(
             r"(?:sell\s+to\s+the\s+Purchasers\s+in\s+a\s+)?private\s+placement\s+(?:\([^)]+\))?",
             re.I,

@@ -390,7 +390,7 @@ CREATE INDEX IF NOT EXISTS idx_holdings_status ON portfolio_holdings(status);
 CREATE INDEX IF NOT EXISTS idx_holdings_ticker ON portfolio_holdings(ticker);
 CREATE INDEX IF NOT EXISTS idx_holdings_catalyst ON portfolio_holdings(catalyst_id);
 
--- Daily portfolio snapshots (Supabase — syncs across machines for analysis).
+-- Daily portfolio snapshots (Supabase: syncs across machines for analysis).
 -- Autopilot upserts one row per day; includes XBI benchmark for cross-device charts.
 CREATE TABLE IF NOT EXISTS portfolio_performance (
     snapshot_date DATE PRIMARY KEY,
@@ -445,7 +445,7 @@ CREATE INDEX IF NOT EXISTS idx_event_returns_hold ON event_returns(hold_days);
 -- Stable identity for ClinicalTrials.gov catalysts so re-ingestion can UPSERT
 -- (ON CONFLICT) instead of DELETE+INSERT. The old delete-replace pattern broke
 -- once edge_scores/portfolio_holdings/catalyst_outcomes referenced catalysts
--- (FK violation) — and violated the "idempotent upsert" rule. A ctgov catalyst
+-- (FK violation), and violated the "idempotent upsert" rule. A ctgov catalyst
 -- is identified by its trial + catalyst_type. Partial index: only ctgov_v2 rows.
 -- =====================================================================
 CREATE UNIQUE INDEX IF NOT EXISTS uq_catalysts_ctgov

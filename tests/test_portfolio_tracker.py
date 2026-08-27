@@ -1,4 +1,4 @@
-"""Tests for the pure portfolio math — focus on the sign conventions that bite."""
+"""Tests for the pure portfolio math, focused on the sign conventions that bite."""
 
 from datetime import date
 

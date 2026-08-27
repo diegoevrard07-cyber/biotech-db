@@ -40,7 +40,7 @@ def _xbi_base_close(cur, track_start: date) -> float | None:
     """Benchmark base = first close ON/AFTER the tracking start (the first day you
     could actually have deployed into XBI), falling back to the last close before it
     only if none exists after. Must match terminal._benchmark_base_close so the stored
-    metric and the dashboard chart agree — otherwise a weekend/holiday start date makes
+    metric and the dashboard chart agree, otherwise a weekend/holiday start date makes
     them pick different bases (e.g. 6/18 vs 6/22) and report different XBI returns."""
     cur.execute(
         """

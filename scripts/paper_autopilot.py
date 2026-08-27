@@ -1,5 +1,5 @@
 """
-Paper-trading autopilot — syncs the PAPER book to the capped Action Desk daily.
+Paper-trading autopilot: syncs the PAPER book to the capped Action Desk daily.
 
 Designed for Windows Task Scheduler (weekday evenings). Each run:
   1. Builds the risk-capped action book (same logic as Action Desk / action_sheet.py).
@@ -737,7 +737,7 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
                 raw.commit()
                 print("  Snapshot upserted -> portfolio_performance (Supabase)")
             else:
-                print("  (dry run — nothing written)")
+                print("  (dry run, nothing written)")
         finally:
             cur.close()
 
@@ -755,7 +755,7 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
 
 
 def _load_open_shorts_and_fades(cur) -> list[dict]:
-    """Every open short OR fade — not limited to notes='PAPER'.
+    """Every open short OR fade, not limited to notes='PAPER'.
 
     The Portfolio UI shows all open holdings; leftover fades from rogue runs
     must be coverable even if notes differ.
@@ -841,7 +841,7 @@ def cover_shorts(*, dry_run: bool = False) -> None:
                 raw.commit()
                 print("  Committed.")
             else:
-                print("  (dry run — nothing written)")
+                print("  (dry run, nothing written)")
         finally:
             cur.close()
     log.info(
@@ -853,7 +853,7 @@ def cover_shorts(*, dry_run: bool = False) -> None:
 
 def main() -> None:
     """CLI entry: run the paper-trading autopilot (daily sync / exits-only / cover-shorts)."""
-    ap = argparse.ArgumentParser(description="Paper autopilot — sync to capped action desk")
+    ap = argparse.ArgumentParser(description="Paper autopilot: sync to capped action desk")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument(
         "--exits-only", action="store_true", help="close due exits only; do not sync to action desk"

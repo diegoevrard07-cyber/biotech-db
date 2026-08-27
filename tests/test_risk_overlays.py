@@ -1,4 +1,4 @@
-"""Tests for layers/portfolio/risk.py — stop-loss, graded drawdown, regime filter."""
+"""Tests for layers/portfolio/risk.py: stop-loss, graded drawdown, regime filter."""
 
 import sys
 from pathlib import Path

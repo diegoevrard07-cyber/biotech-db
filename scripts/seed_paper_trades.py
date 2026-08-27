@@ -2,7 +2,7 @@
 Seed the portfolio tracker with PAPER positions for the near-term LONG book.
 
 Lets you practice the full workflow (entries, exit alerts, P&L, close) without
-real money. Only LONGS are seeded (buy_the_rumor / hold_through) — fades/shorts
+real money. Only LONGS are seeded (buy_the_rumor / hold_through); fades/shorts
 are excluded because the fade edge is weak/unvalidated. Positions are sized at
 the de-risked weight (suggested_weight x market-cap haircut) against a paper
 sleeve, priced at the latest close, and tagged notes='PAPER'.
@@ -108,7 +108,7 @@ def run(*, sleeve: float, days: int, reset: bool) -> None:
                 price = prices.get(t)
                 if not price:
                     print(
-                        f"{t:<7}{r['trade_type']:<14}{'— skip: no price (delisted/acquired?)':>40}"
+                        f"{t:<7}{r['trade_type']:<14}{'skip: no price (delisted/acquired?)':>40}"
                     )
                     seen.add(t)
                     continue

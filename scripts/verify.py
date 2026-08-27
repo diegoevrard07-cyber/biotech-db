@@ -118,7 +118,7 @@ def verify(phase: str = "0", expect_rows: dict[str, int] | None = None) -> bool:
             if orphans > 0:
                 anomalies.append(f"Orphan FKs: {child}.{fk_col} ({orphans})")
 
-        # 4. updated_at freshness (companies only — not all tables have it)
+        # 4. updated_at freshness (companies only, not all tables have it)
         if "companies" in existing:
             row = conn.execute(text("SELECT MAX(updated_at) FROM companies")).scalar()
             if row:
@@ -143,7 +143,7 @@ def verify(phase: str = "0", expect_rows: dict[str, int] | None = None) -> bool:
     print(f"\nChecked at: {datetime.now(timezone.utc).isoformat()}")
 
     if anomalies:
-        print(f"\nVERIFY FAILED — {len(anomalies)} anomaly(ies):")
+        print(f"\nVERIFY FAILED: {len(anomalies)} anomaly(ies):")
         for a in anomalies:
             print(f"  - {a}")
         log.warning("verify_failed", anomalies=anomalies)

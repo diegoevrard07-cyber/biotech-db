@@ -44,7 +44,7 @@ def main() -> None:
     config.preflight()
 
     if not PERF_CSV.exists():
-        print(f"No local CSV at {PERF_CSV} — nothing to import.")
+        print(f"No local CSV at {PERF_CSV}; nothing to import.")
         return
 
     rows: list[dict] = []

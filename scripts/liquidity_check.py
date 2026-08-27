@@ -139,7 +139,7 @@ def run(days: int = 60, sleeve: float | None = None) -> None:
     clean = 0
     for r in out:
         if r.get("skip"):
-            print(f"{r['ticker']:<7}{str(r['date']):<12}{r['trade']:<14}{'— ' + r['skip']:>40}")
+            print(f"{r['ticker']:<7}{str(r['date']):<12}{r['trade']:<14}{r['skip']:>40}")
             continue
         flags = ",".join(r["flags"]) if r["flags"] else "ok"
         if not r["flags"]:

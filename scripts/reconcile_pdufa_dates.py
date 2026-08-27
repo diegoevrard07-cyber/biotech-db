@@ -199,7 +199,7 @@ def create_catalysts_from_events(
 
         description = f"SEC {ev.event_type}"
         if ev.drug_name:
-            description += f" — {ev.drug_name}"
+            description += f": {ev.drug_name}"
 
         if dry_run:
             print(

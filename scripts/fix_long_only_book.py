@@ -45,7 +45,7 @@ def retire_fade_scores(*, dry_run: bool = False) -> int:
                 print("  Nothing to retire.")
                 return 0
             if dry_run:
-                print("  (dry run — nothing written)")
+                print("  (dry run, nothing written)")
                 return n
             cur.execute("""
                 UPDATE edge_scores

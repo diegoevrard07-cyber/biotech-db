@@ -200,7 +200,7 @@ GROUND_TRUTH: dict[str, dict] = {
     "lifted_clinical_hold_ADIL_000121390020032495": {
         "should_match": False,
         "event_type": "crl",
-        "notes": "Clinical hold lifted — opposite of CRL",
+        "notes": "Clinical hold lifted, opposite of CRL",
     },
 }
 

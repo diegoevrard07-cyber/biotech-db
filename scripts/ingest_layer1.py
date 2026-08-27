@@ -174,7 +174,7 @@ def ingest(
         companies = conn.execute(text(query), params).mappings().all()
 
     if not companies:
-        print("ERROR: no companies found — run load_companies.py first")
+        print("ERROR: no companies found; run load_companies.py first")
         sys.exit(1)
 
     for company in tqdm(companies, desc="Ingesting Layer 1"):
@@ -265,7 +265,7 @@ def ingest(
 
 
 def main() -> None:
-    """CLI entry: Layer 1 ingestion — CT.gov trials and upcoming catalysts into Postgres."""
+    """CLI entry: Layer 1 ingestion: CT.gov trials and upcoming catalysts into Postgres."""
     parser = argparse.ArgumentParser(description="Ingest Layer 1 trials and catalysts")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--ticker", type=str, help="Process single ticker")

@@ -3,7 +3,7 @@ Lever 2 (moneymaxxing) - Daily sized ACTION SHEET.
 
 Turns raw per-name edge scores into an executable, risk-capped long book:
   1. one best signal per ticker (avoids double-counting a name's catalysts)
-  2. drop every short/fade (negative weight) — fades are retired
+  2. drop every short/fade (negative weight); fades are retired
   3. sector caps (per indication_category) and a GBM-correlation cap
   4. gross-long / net exposure caps
   5. concrete action + timing per trade type
@@ -199,7 +199,7 @@ def compute_book(*, horizon_days: int = 365) -> dict:
     with get_connection() as conn:
         raw = conn.execute(text(_SIGNAL_SQL), {"h": horizon_days}).mappings().all()
     picks = _best_per_ticker(raw)
-    # Always drop shorts/fades — the fade edge is retired. LONG_ONLY also skips
+    # Always drop shorts/fades; the fade edge is retired. LONG_ONLY also skips
     # the net throttle so freed capital redeploys into longs.
     picks = [p for p in picks if p["weight"] > 0]
     apply_risk_haircut(picks)  # de-risk tiny-caps BEFORE applying portfolio caps
