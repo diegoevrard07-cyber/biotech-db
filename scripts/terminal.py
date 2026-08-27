@@ -98,10 +98,14 @@ def _inject_css() -> None:
           @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
           html, body, [class*="css"] {{ font-family: {t['font']}; color: {t['text']}; }}
           .stApp {{ background: {t['bg']}; }}
-          header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
-          [data-testid="stToolbar"] {{ right: 1rem; }}
+          /* Remove the Streamlit chrome entirely so the fixed toolbar/status
+             cannot float over the page title. Header is taken out of layout and
+             the content gets its own top padding instead. */
+          header[data-testid="stHeader"] {{ display: none !important; }}
+          [data-testid="stToolbar"], [data-testid="stStatusWidget"],
+          [data-testid="stDecoration"] {{ display: none !important; }}
           [data-testid="stAppDeployButton"] {{ display: none !important; }}
-          .block-container {{ padding: 2.6rem 1.6rem 2rem; max-width: 1500px; }}
+          .block-container {{ padding: 1.6rem 1.6rem 2rem; max-width: 1500px; }}
           #MainMenu, footer {{ visibility: hidden; }}
           /* single-page: no left nav bar */
           [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"],
