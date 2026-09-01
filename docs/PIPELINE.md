@@ -1,8 +1,5 @@
 # Pipeline reference
 
-The full script-by-script run order. Most readers want the
-[README quickstart](../README.md#quickstart) instead; this is the complete version.
-
 ## Prerequisites
 
 Copy `.env.example` → `.env` and fill in:
