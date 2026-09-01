@@ -1,4 +1,4 @@
-# Project handbook
+**# Project handbook
 
 > The intent, mental model, current state and known traps of the Biotech Catalyst
 > Edge Engine, in one place. Coding standards: certifi-verified HTTP, idempotent
@@ -276,15 +276,4 @@ reconstructed, so edge_gap itself is not backtestable yet.
 9. **[backlog] Apply the bulk-`execute_values` fix** to any other ingest/score
    script that is slow (same pooler round-trip pattern): check `ingest_positioning`,
    `ingest_insider`, `resolve_outcomes`, `calibrate`.
-
----
-
-## 7. Working principles
-
-- Speed plus correctness, with radical transparency: silent failures, shortcuts,
-  assumptions and skipped verification get reported, not hidden.
-- After any change: run the affected scripts and record what actually happened (row
-  counts, sample data, query results as proof), and flag silent failures and
-  fallback paths.
-- Scope discipline: oncology/CNS only, filtered at ingestion. Simple scripts over
-  frameworks.
+******
