@@ -11,7 +11,7 @@ between the move I expect and the move the options market has already priced.
 ![Tests](https://github.com/diegoevrard07-cyber/biotech-db/actions/workflows/tests.yml/badge.svg)
 
 ![Portfolio page: equity versus XBI, current allocation, and the next catalysts](docs/img/portfolio.png)
-*The paper book on 2026-08-27, drawn from the daily run: equity versus the XBI biotech index, how the capital is currently allocated, and the catalysts due next.*
+
 
 ## Why I built it
 
