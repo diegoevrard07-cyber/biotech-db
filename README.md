@@ -29,10 +29,7 @@ biotech, and it is why the folklore around these events, buy the run-up into a r
 before the print, annoyed me enough to test it properly.
 
 I did not want folklore, I wanted a number. So I built the pipeline around measuring my own ideas
-and throwing out the ones that failed. Every claim in here is backed by a script and a validation
-number, and where something did not work I left it in the repo with the result written next to
-it, rather than quietly deleting it. That is the opposite of a backtest that only shows its good
-days.
+and throwing out the ones that failed.
 
 ## How it works
 
