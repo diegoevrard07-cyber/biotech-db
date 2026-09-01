@@ -2,11 +2,11 @@
 
 I built this to answer one question: for a binary biotech event like a Phase 2 readout or an
 FDA decision, can you predict the stock's reaction well enough to trade it? The most useful
-thing I found is a negative result. On an out-of-sample study of roughly two thousand real
-8-K reactions, pre-event price action calls the direction of the move 47.6% of the time,
-worse than a coin flip. So the engine never bets on direction. It bets on two things I can
-actually measure: the historical base rate of a trial succeeding, and the gap between the
-move I expect and the move the options market has already priced.
+thing I found is a negative result. Working from about two thousand real 8-K reactions and
+testing on the 609 held out of sample, pre-event price action called the direction of the move
+47.6% of the time, worse than a coin flip. So the engine never bets on direction. It bets on
+two things I can actually measure: the historical base rate of a trial succeeding, and the gap
+between the move I expect and the move the options market has already priced.
 
 ![Tests](https://github.com/diegoevrard07-cyber/biotech-db/actions/workflows/tests.yml/badge.svg)
 
@@ -15,15 +15,24 @@ move I expect and the move the options market has already priced.
 
 ## Why I built it
 
-I wanted to know whether small-cap biotech catalyst trading is a real edge or just dressed-up
-variance. The folklore is that you buy the run-up into a readout and sell before the print. I
-did not want folklore, I wanted a number, so I built the whole pipeline around measuring my own
-ideas and throwing out the ones that failed.
+My brother was diagnosed with a rare heart condition. I could not do anything about the
+diagnosis itself, so I did the one thing I could and read everything I could find on it: papers,
+trial registries, regulatory filings. By the end of that I could read a clinical trial properly,
+and I had picked up something that mattered well beyond his illness. In a lot of medicine, years
+of work and a company's entire future come down to a single dated readout that either works or
+does not.
 
-The habit that came out of it is the part I am most happy with. Every claim in here is backed by
-a script and a validation number, and where something did not work I left it in the repo with the
-result written next to it, rather than quietly deleting it. That is the opposite of a backtest
-that only shows its good days.
+His condition is too rare to do statistics on, because a handful of trials is not a dataset. But
+the habit of reading trial data transferred to a corner of the market where there are thousands
+of those dated, binary events, each with real capital riding on it. That is what pulled me into
+biotech, and it is why the folklore around these events, buy the run-up into a readout and sell
+before the print, annoyed me enough to test it properly.
+
+I did not want folklore, I wanted a number. So I built the pipeline around measuring my own ideas
+and throwing out the ones that failed. Every claim in here is backed by a script and a validation
+number, and where something did not work I left it in the repo with the result written next to
+it, rather than quietly deleting it. That is the opposite of a backtest that only shows its good
+days.
 
 ## How it works
 
@@ -76,16 +85,20 @@ most volatile names down, never to pick a side.
 
 ## What it doesn't do
 
-The validated model predicts trial success, not stock returns, so it is a feature and not a
-profit-and-loss engine. The live paper book is young: over the window shown it is up 7.9% while
-XBI is up 15.4%, so it has trailed the index and shown negative alpha, and 442 closed trades is
-still far too small a sample to call an edge. The edge gap compares the size of the expected move
-against the implied move rather than a signed return, so it is a mispricing screen, not a return
-forecast. Historical implied-move and short-interest snapshots cannot be reconstructed, which
-means the edge gap itself is not yet backtestable; the universe is today's listed names, so it
-carries survivorship bias; and because it never touches real money there is no transaction-cost,
-borrow, or slippage model. The resolved-catalyst calibration sample is also still nearly empty,
-so that number will not mean much until the forward book actually resolves.
+The validated model predicts trial success, not stock returns. It is a feature, not a
+profit-and-loss engine.
+
+The live book is young and it is losing to its benchmark. Over the window shown it is up 7.9%
+while XBI is up 15.4%, so the alpha is negative, and 442 closed trades is nowhere near enough to
+call an edge either way. I would rather show that than a curve fitted after the fact.
+
+The edge gap measures the size of the expected move against the implied move, not a signed
+return, so it screens for mispricing rather than forecasting direction. Historical implied-move
+and short-interest snapshots cannot be reconstructed, so the edge gap itself is not yet
+backtestable. The universe is today's listed names, which carries survivorship bias, and since no
+real money is at risk there is no transaction-cost, borrow, or slippage model. The
+resolved-catalyst calibration sample is still nearly empty, so that number means little until the
+forward book actually resolves.
 
 ![Risk lab: Monte Carlo projection and index-shock scenarios](docs/img/risk.png)
 *The risk view on the same book: a 2,000-path Monte Carlo of the next six months, annualized volatility of 19.8%, a −7.5% max drawdown, and beta of 0.53 to XBI.*
@@ -117,9 +130,9 @@ The one real gotcha: SEC ingestion fails fast unless `SEC_USER_AGENT` is a descr
 
 ## Development
 
-`python -m pytest` runs the suite (about 220 tests; the database-backed ones skip automatically
-when `DATABASE_URL` is absent). Formatting is `black` and `isort`, linting is `pyflakes`, and the
-config lives in `pyproject.toml`. Every database write uses an idempotent upsert so the daily job
-can be re-run safely. If you want the deeper design notes and the specific database traps I hit,
-they are in [docs/HANDBOOK.md](docs/HANDBOOK.md), and the full run order is in
+`python -m pytest` runs the suite: 224 pass, and 7 database-backed tests skip automatically when
+`DATABASE_URL` is absent. Formatting is `black` and `isort`, linting is `pyflakes`, and the config
+lives in `pyproject.toml`. Every database write uses an idempotent upsert so the daily job can be
+re-run safely. If you want the deeper design notes and the specific database traps I hit, they are
+in [docs/HANDBOOK.md](docs/HANDBOOK.md), and the full run order is in
 [docs/PIPELINE.md](docs/PIPELINE.md).
