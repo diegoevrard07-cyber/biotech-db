@@ -25,7 +25,7 @@ auto-trading. All positions are paper trades.
 
 ---
 
-## 2. The core mental model
+## 2. The core model
 
 The money is in the GAP between the engine's grade and what the market has priced in.
 These are two distinct quantities, not one subtraction:
