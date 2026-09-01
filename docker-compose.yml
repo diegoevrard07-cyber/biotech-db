@@ -1,4 +1,4 @@
-# Optional local Postgres for development/demo — an alternative to Supabase.
+# Optional local Postgres for development/demo, an alternative to Supabase.
 #
 #   docker compose up -d
 #   # then set in .env:

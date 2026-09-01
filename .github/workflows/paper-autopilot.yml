@@ -36,7 +36,7 @@ jobs:
         run: |
           dow=$(date -u +%u)   # 1=Mon .. 7=Sun
           if [ "$dow" -ge 6 ]; then
-            echo "Weekend (dow=$dow) — no paper trade today."
+            echo "Weekend (dow=$dow), no paper trade today."
             echo "run=false" >> "$GITHUB_OUTPUT"
           else
             echo "run=true" >> "$GITHUB_OUTPUT"

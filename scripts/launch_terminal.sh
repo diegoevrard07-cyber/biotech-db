@@ -59,7 +59,7 @@ case "$existing_url" in
 esac
 
 if docker info >/dev/null 2>&1; then
-  echo "Docker is running — using docker compose Postgres."
+  echo "Docker is running, using docker compose Postgres."
   if [[ ! -f "$PROJ/.env" ]]; then
     cp "$PROJ/.env.example" "$PROJ/.env"
   fi
@@ -93,7 +93,7 @@ PY
     --server.headless false
 fi
 
-echo "No Docker daemon — using embedded Postgres (pgserver)."
+echo "No Docker daemon, using embedded Postgres (pgserver)."
 uv pip install pgserver
 export STREAMLIT_PORT="$PORT"
 exec "$PROJ/.venv/bin/python" "$PROJ/scripts/run_local_terminal.py"

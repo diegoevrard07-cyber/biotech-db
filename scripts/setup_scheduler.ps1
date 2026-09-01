@@ -12,7 +12,7 @@ $refreshPs1 = Join-Path $proj "scripts\run_weekly_refresh.ps1"
 $autopilotPs1 = Join-Path $proj "scripts\run_paper_autopilot.ps1"
 
 if (-not (Test-Path (Join-Path $proj ".env"))) {
-    Write-Error ".env not found in $proj — copy .env.example and set DATABASE_URL first."
+    Write-Error ".env not found in $proj. Copy .env.example and set DATABASE_URL first."
 }
 
 # Rewrite wrapper paths to this machine's project root + python

@@ -5,7 +5,7 @@ description = "Decision-support engine for small-cap biotech catalyst trading (G
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
-# Only collect the real test suite — scripts/ contains CLI utilities whose
+# Only collect the real test suite; scripts/ contains CLI utilities whose
 # names may match test patterns.
 testpaths = ["tests"]
 addopts = "-q"

@@ -6,7 +6,7 @@
 #   ./scripts/setup_scheduler.sh --remove     # remove biotech-db jobs
 #
 # NOTE: the supported automation path is GitHub Actions (see .github/workflows/);
-# this script is an optional self-hosting alternative. Use ONE execution venue —
+# this script is an optional self-hosting alternative. Use ONE execution venue,
 # running both double-trades the paper book.
 #
 # Defaults (override via env):
@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJ="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  echo "macOS: use GitHub Actions (.github/workflows/) — the supported scheduler." >&2
+  echo "macOS: use GitHub Actions (.github/workflows/), the supported scheduler." >&2
   exit 1
 fi
 

@@ -1,11 +1,11 @@
 # Pinned to the versions the pipeline is developed, tested, and run against
-# (Python 3.12; also verified on 3.14 — see docs/DATA.md "Python version notes").
+# (Python 3.12; also verified on 3.14; see docs/DATA.md "Python version notes").
 requests==2.32.3
 certifi==2026.4.22        # explicit TLS bundle for SEC/CT.gov calls (verify=certifi.where())
 psycopg2-binary==2.9.12
 python-dotenv==1.1.0
 pandas==2.3.3
-numpy==2.4.4              # pure-numpy models (logreg, returns regression) — no sklearn
+numpy==2.4.4              # pure-numpy models (logreg, returns regression), no sklearn
 tqdm==4.70.0              # progress bars in the long ingest scripts
 beautifulsoup4==4.12.3    # 8-K HTML parsing (uses stdlib html.parser)
 sqlalchemy==2.0.36
