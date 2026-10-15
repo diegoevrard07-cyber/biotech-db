@@ -15,7 +15,7 @@ between the move I expect and the move the options market has already priced.
 
 ## Why I built it
 
-My brother was diagnosed with a rare heart condition. I could not do anything about the
+A close friend was diagnosed with a rare heart condition. I could not do anything about the
 diagnosis itself, so I did the one thing I could and read everything I could find on it: papers,
 trial registries, regulatory filings. By the end of that I could read a clinical trial properly,
 and I had picked up something that mattered well beyond his illness. In a lot of medicine, years
