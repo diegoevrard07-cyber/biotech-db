@@ -101,8 +101,8 @@ _SIGNAL_SQL = """
       AND es.suggested_weight IS NOT NULL
       AND es.suggested_weight <> 0
       AND c.expected_date IS NOT NULL
-      AND c.expected_date >= CURRENT_DATE
-      AND c.expected_date <= CURRENT_DATE + (:h || ' days')::interval
+      AND c.expected_date >= CAST(:today AS date)
+      AND c.expected_date <= CAST(:today AS date) + (:h || ' days')::interval
 """
 
 
@@ -192,12 +192,17 @@ def size_book(rows: list[dict]) -> tuple[list[dict], dict]:
     return rows, summary
 
 
-def compute_book(*, horizon_days: int = 365) -> dict:
+def compute_book(*, horizon_days: int = 365, as_of: date | None = None) -> dict:
     """Query + size the book. Returns {rows, today, horizon_days, **summary}.
-    This is the reusable entrypoint (CLI and dashboard both call it)."""
-    today = date.today()
+    This is the reusable entrypoint (CLI and dashboard both call it). `as_of`
+    evaluates the catalyst window on a past date (outage replay)."""
+    today = as_of or date.today()
     with get_connection() as conn:
-        raw = conn.execute(text(_SIGNAL_SQL), {"h": horizon_days}).mappings().all()
+        raw = (
+            conn.execute(text(_SIGNAL_SQL), {"h": horizon_days, "today": today})
+            .mappings()
+            .all()
+        )
     picks = _best_per_ticker(raw)
     # Always drop shorts/fades; the fade edge is retired. LONG_ONLY also skips
     # the net throttle so freed capital redeploys into longs.

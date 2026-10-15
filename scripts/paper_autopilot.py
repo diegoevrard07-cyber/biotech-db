@@ -114,16 +114,17 @@ def _refresh_prices(cur, tickers: list[str]) -> int:
     return len(rows)
 
 
-def _latest_closes(cur, tickers: list[str]) -> dict[str, float]:
+def _latest_closes(cur, tickers: list[str], as_of: date | None = None) -> dict[str, float]:
     if not tickers:
         return {}
     cur.execute(
         """
         SELECT DISTINCT ON (ticker) ticker, close
         FROM price_history WHERE close IS NOT NULL AND ticker = ANY(%s)
+          AND (%s::date IS NULL OR date <= %s::date)
         ORDER BY ticker, date DESC
     """,
-        (list(set(tickers)),),
+        (list(set(tickers)), as_of, as_of),
     )
     return {t: float(c) for t, c in cur.fetchall()}
 
@@ -307,22 +308,27 @@ def _resize_position(cur, h: dict, tgt: dict, today: date, *, dry_run: bool) -> 
     return cash_delta, rp
 
 
-def _trailing_closes(cur, ticker: str, days: int) -> list[float]:
+def _trailing_closes(cur, ticker: str, days: int, as_of: date | None = None) -> list[float]:
     """Most-recent `days` daily closes for a ticker (newest first)."""
     cur.execute(
         """
         SELECT close FROM price_history
         WHERE ticker = %s AND close IS NOT NULL
+          AND (%s::date IS NULL OR date <= %s::date)
         ORDER BY date DESC LIMIT %s
         """,
-        (ticker, days),
+        (ticker, as_of, as_of, days),
     )
     return [float(r[0]) for r in cur.fetchall()]
 
 
-def _peak_equity(cur, current_equity: float) -> float:
+def _peak_equity(cur, current_equity: float, as_of: date | None = None) -> float:
     """Highest recorded equity (Supabase history), never below today's value."""
-    cur.execute("SELECT MAX(equity) FROM portfolio_performance")
+    cur.execute(
+        "SELECT MAX(equity) FROM portfolio_performance "
+        "WHERE (%s::date IS NULL OR snapshot_date < %s::date)",
+        (as_of, as_of),
+    )
     row = cur.fetchone()
     peak = float(row[0]) if row and row[0] is not None else 0.0
     return max(peak, float(current_equity))
@@ -380,7 +386,14 @@ def _profit_lock_trim(
 
 
 def _profit_lock_pass(
-    cur, holds: list[dict], closes: dict, targets: dict, today: date, *, dry_run: bool
+    cur,
+    holds: list[dict],
+    closes: dict,
+    targets: dict,
+    today: date,
+    *,
+    dry_run: bool,
+    as_of: date | None = None,
 ) -> tuple[float, float, int]:
     """Partial mean-reversion profit-take on extended long winners.
 
@@ -404,7 +417,7 @@ def _profit_lock_pass(
         ped = h.get("planned_exit_date")
         if ped is not None and (ped - today).days <= config.PROFIT_LOCK_MIN_DAYS_TO_CATALYST:
             continue  # let imminent catalysts play out
-        hist = _trailing_closes(cur, h["ticker"], config.PROFIT_LOCK_LOOKBACK_DAYS)
+        hist = _trailing_closes(cur, h["ticker"], config.PROFIT_LOCK_LOOKBACK_DAYS, as_of)
         z = pf.zscore(px, hist)
         if z is None or z < config.PROFIT_LOCK_ZSCORE:
             continue  # not stretched above its mean -> nothing to revert
@@ -446,10 +459,20 @@ def _update_metadata(cur, h: dict, tgt: dict, *, dry_run: bool) -> None:
         )
 
 
-def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | None = None) -> None:
+def run(
+    *,
+    dry_run: bool = False,
+    sync_book: bool = True,
+    horizon_days: int | None = None,
+    as_of: date | None = None,
+) -> None:
     """One daily autopilot cycle: refresh prices, close due exits, sync to the capped
-    book, and snapshot performance."""
-    today = date.today()
+    book, and snapshot performance.
+
+    `as_of` replays the cycle for a past session: no live price fetch, and every
+    price, peak-equity, and catalyst-window lookup is cut off at that date so the
+    run sees only what was knowable then."""
+    today = as_of or date.today()
     horizon = horizon_days or config.AUTOPILOT_HORIZON_DAYS
     tol = config.AUTOPILOT_REBALANCE_PCT
     closed = opened = resized = locked = 0
@@ -457,7 +480,7 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
     realized_today = 0.0
     summary: dict = {"equity": 0.0, "positions": 0, "unrealized_pnl_usd": 0.0}
 
-    book = compute_book(horizon_days=horizon)
+    book = compute_book(horizon_days=horizon, as_of=as_of)
     book_rows = book["rows"]
 
     with get_connection() as conn:
@@ -478,8 +501,8 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
             want = sorted(
                 {h["ticker"] for h in holds} | set(target_tickers) | {config.BENCHMARK_TICKER}
             )
-            n_px = 0 if dry_run else _refresh_prices(cur, want)
-            closes = _latest_closes(cur, want or ["XBI"])
+            n_px = 0 if dry_run or as_of else _refresh_prices(cur, want)
+            closes = _latest_closes(cur, want or ["XBI"], as_of)
 
             equity = pf.account_summary(_holding_dicts(holds), cash, closes)["equity"]
             if sleeve <= 0 and equity > 0:
@@ -489,7 +512,7 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
             # deepens; pause new opens once the scale hits the pause threshold.
             dd_scale = 1.0
             if config.DRAWDOWN_CIRCUIT_ENABLED:
-                peak = _peak_equity(cur, equity)
+                peak = _peak_equity(cur, equity, as_of)
                 dd_scale = risk.drawdown_scale(equity, peak, config.DRAWDOWN_TIERS)
                 if dd_scale < 1.0:
                     dd = (equity / peak - 1) if peak else 0.0
@@ -508,7 +531,11 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
             rg_scale = 1.0
             if config.REGIME_FILTER_ENABLED:
                 xbi_hist = list(
-                    reversed(_trailing_closes(cur, config.BENCHMARK_TICKER, config.REGIME_SMA_DAYS))
+                    reversed(
+                        _trailing_closes(
+                            cur, config.BENCHMARK_TICKER, config.REGIME_SMA_DAYS, as_of
+                        )
+                    )
                 )
                 rg_scale = risk.regime_scale(
                     xbi_hist, config.REGIME_SMA_DAYS, config.REGIME_DERISK_FACTOR
@@ -583,7 +610,7 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
 
                 # --- 1b) PARTIAL PROFIT-LOCK (mean reversion, longs only) ---
                 cd, rp, locked = _profit_lock_pass(
-                    cur, holds, closes, targets, today, dry_run=dry_run
+                    cur, holds, closes, targets, today, dry_run=dry_run, as_of=as_of
                 )
                 cash += cd
                 realized_today += rp
@@ -682,7 +709,7 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
                 f"Total return {ret_pct:+.1%} vs ${sleeve:,.0f} sleeve"
             )
 
-            if not dry_run:
+            if not dry_run and as_of is None:
                 PERF_CSV.parent.mkdir(parents=True, exist_ok=True)
                 _ensure_perf_header()
                 new_file = not PERF_CSV.exists() or PERF_CSV.stat().st_size == 0
@@ -707,6 +734,7 @@ def run(*, dry_run: bool = False, sync_book: bool = True, horizon_days: int | No
                     )
                 print(f"  Snapshot appended -> {PERF_CSV}")
 
+            if not dry_run:
                 xbi_px = closes.get(config.BENCHMARK_TICKER)
                 track_start = perf_store.tracking_start_date(cur)
                 xbi_ret, bench_eq = perf_store.benchmark_fields(
@@ -868,6 +896,12 @@ def main() -> None:
         default=None,
         help=f"action desk horizon (default {config.AUTOPILOT_HORIZON_DAYS})",
     )
+    ap.add_argument(
+        "--as-of",
+        type=date.fromisoformat,
+        default=None,
+        help="replay one cycle for a past session (YYYY-MM-DD), using stored prices only",
+    )
     args = ap.parse_args()
     exits_only = args.exits_only or args.no_open
     try:
@@ -875,7 +909,12 @@ def main() -> None:
         if args.cover_shorts:
             cover_shorts(dry_run=args.dry_run)
             return
-        run(dry_run=args.dry_run, sync_book=not exits_only, horizon_days=args.horizon_days)
+        run(
+            dry_run=args.dry_run,
+            sync_book=not exits_only,
+            horizon_days=args.horizon_days,
+            as_of=args.as_of,
+        )
     except Exception as exc:  # noqa: BLE001
         log.error("autopilot_failed", error=str(exc))
         print(f"ERROR: {exc}")
