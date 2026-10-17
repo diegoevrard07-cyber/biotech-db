@@ -17,6 +17,15 @@ evaluate it.
 
 ---
 
+## 2026-10-17: Catch-up replay for Oct 15–16 (GitHub secret out of date)
+
+The Oct 16 and Oct 17 GitHub runs failed with `password authentication failed`
+because the `DATABASE_URL` repo secret still holds the pre-reset password. Prices
+backfilled and both sessions replayed with `replay_autopilot.py` from a machine with
+the current `.env`. Oct 15: no trades. Oct 16: stops on IDYA, ARWR, BHVN. Equity
+$9,695, cash $8,597. Backup: `data/backups/pre_catchup_2026-10-17.json`. The daily
+jobs stay broken until the secret is updated to the session-pooler URI.
+
 ## 2026-10-15: Supabase outage, replay of 34 missed autopilot sessions
 
 The Supabase project was paused from Aug 27 to Oct 15. Every weekday Daily Data
