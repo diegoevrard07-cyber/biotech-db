@@ -17,6 +17,44 @@ evaluate it.
 
 ---
 
+## 2026-10-17: Catch-up replay for Oct 15–16 (GitHub secret out of date)
+
+The Oct 16 and Oct 17 GitHub runs failed with `password authentication failed`
+because the `DATABASE_URL` repo secret still holds the pre-reset password. Prices
+backfilled and both sessions replayed with `replay_autopilot.py` from a machine with
+the current `.env`. Oct 15: no trades. Oct 16: stops on IDYA, ARWR, BHVN. Equity
+$9,695, cash $8,597. Backup: `data/backups/pre_catchup_2026-10-17.json`. The daily
+jobs stay broken until the secret is updated to the session-pooler URI.
+
+## 2026-10-15: Supabase outage, replay of 34 missed autopilot sessions
+
+The Supabase project was paused from Aug 27 to Oct 15. Every weekday Daily Data
+Refresh and Paper Autopilot run in that window failed with
+`tenant/user ... not found`, so the paper book froze on the Aug 26 session.
+
+- Prices: `ingest_prices.py --since-last` plus a direct fetch for held names outside
+  `in_universe` (ACAD, ALKS, ARWR, BNTX, CELC, CGON, IBRX, KRYS, MIRM, PRAX, RYTM).
+  APGE (last print Sep 2) and CRNX (Aug 31) look acquired and stay marked at their
+  final close.
+- Code: `run(as_of=...)` / `--as-of` replays one cycle for a past session (no live
+  price fetch; prices, peak equity, trailing closes, and the book's catalyst window
+  are all cut off at that date; local CSV not appended). `compute_book(as_of=...)`
+  parameterises the catalyst window. `scripts/replay_autopilot.py` loops it over
+  every XBI session in a range.
+- Replayed Aug 27 → Oct 14 (34 sessions), trade date = session date. Signals are the
+  Aug 27 `edge_scores`, the last scoring before the outage; the refresh never ran
+  during it and options-implied moves cannot be reconstructed after the fact.
+- Result: 17 stop-losses, 9 planned exits, 1 drop, 11 opens, 88 adds, 77 trims, and
+  5 profit-locks; 110 closed/trim rows in the window (realized −$830), 16 positions
+  left open. Equity $10,760 → $9,719 (−9.7%) while XBI fell ~13%. The regime filter
+  fired from Sep 8 and the drawdown tier crossed −10% on Sep 23 (opens paused). Book
+  ends ~87% cash.
+- Known issue: FOLD and DAWN have had no prices since April but were reopened at their
+  stale April close (the live autopilot has the same gap). Their marks are flat, so
+  equity is unaffected.
+- Rollback: `data/backups/pre_outage_replay_2026-10-15.json` (all three portfolio
+  tables before replay). Log: `data/logs/replay_2026-10-15.log`.
+
 ## 2026-08-17: Public-release cleanup (GitHub-ready)
 
 Repo prepared for public release. No scientific logic, parameters, or results changed.
